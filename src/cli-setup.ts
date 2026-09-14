@@ -120,7 +120,7 @@ export async function setupCommands(cli: CAC): Promise<void> {
 
   // Uninstall ly-workflow-codex (codex host)
   cli
-    .command('uninstall', 'Uninstall ly-workflow-codex workflows (~/.codex/prompts/ly-*.md, ~/.ly/prompts/codex/)')
+    .command('uninstall', 'Uninstall ly-workflow-codex workflows (~/.agents/skills/lyx-*, ~/.ly/prompts/codex/)')
     .option('--yes, -y', 'Skip confirmation')
     .action(async (options: { yes?: boolean }) => {
       const installDir = join(homedir(), '.codex')
@@ -128,7 +128,7 @@ export async function setupCommands(cli: CAC): Promise<void> {
         const { confirm } = await inquirer.prompt([{
           type: 'confirm',
           name: 'confirm',
-          message: `确定要卸载 ${PACKAGE_NAME} 吗？将移除 ~/.codex/prompts/ly-*.md 与 ~/.ly/prompts/codex/；共享配置 ~/.ly/config.toml 与 ~/.ly/ 其余内容（含 worktrees）保留。`,
+          message: `确定要卸载 ${PACKAGE_NAME} 吗？将移除 ~/.agents/skills/lyx-*（含旧 ~/.agents/skills/ly-* 与 ~/.codex/prompts/ly-*.md 残留）与 ~/.ly/prompts/codex/；共享配置 ~/.ly/config.toml 与 ~/.ly/ 其余内容（含 worktrees）保留。`,
           default: false,
         }])
         if (!confirm) {
@@ -139,8 +139,10 @@ export async function setupCommands(cli: CAC): Promise<void> {
       const result = await uninstallWorkflows(installDir)
       if (result.success) {
         console.log(ansis.green(`✓ ${PACKAGE_NAME} uninstalled`))
-        if (result.removedCodexPrompts.length > 0)
-          console.log(ansis.gray(`  Codex prompts: ${result.removedCodexPrompts.length} removed`))
+        if (result.removedSkills.length > 0)
+          console.log(ansis.gray(`  lyx-* skills: ${result.removedSkills.length} removed`))
+        if (result.removedLegacyPrompts.length > 0)
+          console.log(ansis.gray(`  Legacy ~/.codex/prompts residue: ${result.removedLegacyPrompts.length} removed`))
         if (result.removedSharedPrompts)
           console.log(ansis.gray('  Shared prompts (~/.ly/prompts/codex/): removed'))
         if (result.configTomlKept)

@@ -1,16 +1,19 @@
 ---
+name: lyx-worktree
 description: '管理 Git Worktree：在 ~/.ly/worktrees/项目名/ 目录创建，支持 IDE 集成和内容迁移'
 argument-hint: '<add|list|remove|prune|migrate>'
 ---
 
 # Worktree - Git Worktree 管理
 
+> 调用方式：`@lyx-worktree` mention 后跟随的自然语言即参数（如 `@lyx-worktree` 带需求描述/选项）；无参数时直接 `@lyx-worktree`。
+
 在结构化目录管理 Git worktree，支持智能默认和 IDE 集成。
 
 ## 使用方法
 
 ```bash
-/ly:worktree <add|list|remove|prune|migrate> [options]
+@lyx-worktree <add|list|remove|prune|migrate> [options]
 ```
 
 ## 子命令
@@ -102,24 +105,24 @@ your-project/
 
 ```bash
 # 基本创建
-/ly:worktree add feature-ui
+@lyx-worktree add feature-ui
 
 # 创建并用 IDE 打开
-/ly:worktree add feature-ui -o
+@lyx-worktree add feature-ui -o
 
 # 创建指定分支
-/ly:worktree add hotfix -b fix/login -o
+@lyx-worktree add hotfix -b fix/login -o
 
 # 迁移未提交内容
-/ly:worktree migrate feature-ui --from main
+@lyx-worktree migrate feature-ui --from main
 
 # 迁移 stash 内容
-/ly:worktree migrate feature-ui --stash
+@lyx-worktree migrate feature-ui --stash
 
 # 管理操作
-/ly:worktree list
-/ly:worktree remove feature-ui
-/ly:worktree prune
+@lyx-worktree list
+@lyx-worktree remove feature-ui
+@lyx-worktree prune
 ```
 
 ## 输出示例
@@ -153,4 +156,4 @@ your-project/
 - 默认用户目录 `~/.ly/worktrees/` 下创建，不需要 `--local` 时不碰 `.gitignore`
 - `--local` 且 `.worktrees/` 未被忽略时会先写 `.gitignore` 并提交，再继续创建
 - 创建后会跑一次项目 setup + baseline 测试，确认新 worktree 干净可用
-- 隔离 worktree 的创建/切换统一由 `/ly:propose` 在**创建方案前**通过 `git worktree add`（从当前分支 HEAD 切出，目录 `~/.ly/worktrees/<项目名>/<开发分支名>`）触发；worktree 目录/分支锁定为开发分支名，不随 change 名重命名；孤儿 worktree（关联 worktree 已删除/重命名）需人工 `remove`/`prune`
+- 隔离 worktree 的创建/切换统一由 `@lyx-propose` 在**创建方案前**通过 `git worktree add`（从当前分支 HEAD 切出，目录 `~/.ly/worktrees/<项目名>/<开发分支名>`）触发；worktree 目录/分支锁定为开发分支名，不随 change 名重命名；孤儿 worktree（关联 worktree 已删除/重命名）需人工 `remove`/`prune`

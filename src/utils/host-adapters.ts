@@ -3,7 +3,7 @@ import fs from 'fs-extra'
 import { join } from 'pathe'
 import { LY_PROMPTS_DIR } from './config'
 import { injectConfigVariables } from './installer-template'
-import { CODE_PROMPTS_DIR } from './package-meta'
+import { AGENTS_SKILLS_DIR } from './package-meta'
 
 // ═══════════════════════════════════════════════════════
 // HostAdapter — codex 单宿主适配器契约
@@ -28,8 +28,8 @@ export interface HostAdapterContext {
   templateDir: string
   /** 共享角色词位置（~/.ly/prompts/，测试可注入） */
   promptsDir: string
-  /** codex custom prompts 目录（~/.codex/prompts/，测试可注入） */
-  codexPromptsDir: string
+  /** codex skills 安装目录（~/.agents/skills/，测试可注入） */
+  codexSkillsDir: string
   config: HostAdapterConfig
   result: InstallResult
 }
@@ -38,7 +38,7 @@ export interface HostAdapterContext {
 export interface HostTemplateTarget {
   sourceDir: string
   targetDir: string
-  /** 目标文件名前缀（codex 宿主 = 'ly-'，安装为 ly-<cmd>.md） */
+  /** 目标目录名前缀（codex 宿主 = 'lyx-'，安装为 <targetDir>/lyx-<cmd>/SKILL.md） */
   filePrefix?: string
 }
 
@@ -48,7 +48,7 @@ export interface HostAdapter {
   promptsTarget: (ctx: HostAdapterContext) => HostTemplateTarget
   /** 模板渲染规则：宿主可追加宿主专属变量处理（在共享 injectConfigVariables 之后） */
   renderTemplate: (content: string, ctx: HostAdapterContext) => string
-  /** 卸载清单：该宿主名下的产物路径清单（ly-*.md 绝对路径清单） */
+  /** 卸载清单：该宿主名下的产物路径清单（lyx-* 绝对路径清单） */
   uninstallList: (ctx: HostAdapterContext) => Promise<string[]>
   /** 可选：宿主专属的附加安装步骤（codex 无） */
   installExtras?: (ctx: HostAdapterContext) => Promise<void>
@@ -80,11 +80,11 @@ export function renderCodexTemplate(content: string, config: HostAdapterConfig):
 }
 
 // ═══════════════════════════════════════════════════════
-// codex adapter — 单 Agent 模式（custom prompt 形态）
+// codex adapter — 单 Agent 模式（SKILL.md 形态，Codex 官方 skill 机制）
 // ═══════════════════════════════════════════════════════
 
-export function getCodexPromptsDir(): string {
-  return CODE_PROMPTS_DIR
+export function getCodexSkillsDir(): string {
+  return AGENTS_SKILLS_DIR
 }
 
 /** codex 版审查命令模板依赖的共享角色词（ROLE_FILE 绝对路径目标） */
@@ -94,21 +94,27 @@ export const codexAdapter: HostAdapter = {
   id: 'codex',
 
   promptsTarget: ctx => ({
-    sourceDir: join(ctx.templateDir, 'commands-codex'),
-    targetDir: ctx.codexPromptsDir,
-    filePrefix: 'ly-',
+    sourceDir: join(ctx.templateDir, 'skills-codex'),
+    targetDir: ctx.codexSkillsDir,
+    filePrefix: 'lyx-',
   }),
 
   renderTemplate: (content, ctx) => renderCodexTemplate(content, ctx.config),
 
   uninstallList: async (ctx) => {
     try {
-      if (!(await fs.pathExists(ctx.codexPromptsDir)))
+      if (!(await fs.pathExists(ctx.codexSkillsDir)))
         return []
-      const files = await fs.readdir(ctx.codexPromptsDir)
-      return files
-        .filter(f => f.startsWith('ly-') && f.endsWith('.md'))
-        .map(f => join(ctx.codexPromptsDir, f))
+      const entries = await fs.readdir(ctx.codexSkillsDir)
+      const dirs: string[] = []
+      for (const entry of entries) {
+        if (!entry.startsWith('lyx-'))
+          continue
+        const full = join(ctx.codexSkillsDir, entry)
+        if ((await fs.stat(full)).isDirectory())
+          dirs.push(full)
+      }
+      return dirs
     }
     catch {
       return []

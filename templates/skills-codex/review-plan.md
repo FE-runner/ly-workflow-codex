@@ -1,4 +1,5 @@
 ---
+name: lyx-review-plan
 description: '读取 OpenSpec change 的 proposal/design/tasks，审查子会话（codex exec -m 配置模型）分级审查方案合理性，审查-修复循环直到 Critical 清零或触发终止条件'
 argument-hint: '[<change-name>] [--no-commit]'
 ---
@@ -7,7 +8,9 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 # Review Plan - 方案审查
 
-审查当前 OpenSpec change 的方案是否合理，聚焦遗漏边界、范围不清晰、风险点——不是逐行代码风格。输出 Critical/Warning/Info 分级结果（与 `/ly:review-code` 一致）。若存在 Critical，进入审查-修复循环：当前会话判断是否认可每条 Critical，认可则修改该 change 的 artifact 并自动重新审查，直到清零或触发终止条件。
+> 调用方式：`@lyx-review-plan` mention 后跟随的自然语言即参数（如 `@lyx-review-plan` 带需求描述/选项）；无参数时直接 `@lyx-review-plan`。
+
+审查当前 OpenSpec change 的方案是否合理，聚焦遗漏边界、范围不清晰、风险点——不是逐行代码风格。输出 Critical/Warning/Info 分级结果（与 `@lyx-review-code` 一致）。若存在 Critical，进入审查-修复循环：当前会话判断是否认可每条 Critical，认可则修改该 change 的 artifact 并自动重新审查，直到清零或触发终止条件。
 
 审查在 `codex exec` **独立子会话**中执行（无当前会话上下文），模型由安装期渲染的 `-m` 参数指定；未配置审查模型时不带 `-m`（回退当前会话模型）。Critical 判定/修复由当前会话执行。
 
@@ -19,7 +22,7 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 按优先级：
 
-1. 若 `$ARGUMENTS` 指定了 change 名称 → 使用该名称
+1. 若 `参数` 指定了 change 名称 → 使用该名称
 2. 否则枚举 `openspec/changes/` 下的目录，**排除 `archive/` 目录及其内容**
 3. 若恰好一个候选 → 直接使用
 4. 若多个候选且未指定 → 直接询问用户选哪个
@@ -29,7 +32,7 @@ argument-hint: '[<change-name>] [--no-commit]'
 ls -d openspec/changes/*/ 2>/dev/null | grep -v '/archive/'
 ```
 
-审查对象是目标 change 的 `propose:` commit（编排方 `/ly:propose` 在生成方案后立即提交，提交信息 `propose: <change-name>`）。审查基线 SHALL 用 `git log --grep="^propose: <change-name>"` 取 HEAD 侧最近一期匹配 commit，审查范围 = 该 commit 差异（`git show <commit>`）+ 当前 `git diff HEAD` + 未跟踪文件清单（`??`）——修复在审查-修复循环内未提交时不丢失。不存在 `propose:` commit（零 commit 仓库、或尚未生成方案提交）时，退化为 `git diff HEAD` + 未跟踪清单组合。审查期间新产生的修复改动（循环内每轮修复未提交）始终计入审查范围，不在中途产生新 commit（提交只发生在正常清零后的统一提交，见步骤 5）。
+审查对象是目标 change 的 `propose:` commit（编排方 `@lyx-propose` 在生成方案后立即提交，提交信息 `propose: <change-name>`）。审查基线 SHALL 用 `git log --grep="^propose: <change-name>"` 取 HEAD 侧最近一期匹配 commit，审查范围 = 该 commit 差异（`git show <commit>`）+ 当前 `git diff HEAD` + 未跟踪文件清单（`??`）——修复在审查-修复循环内未提交时不丢失。不存在 `propose:` commit（零 commit 仓库、或尚未生成方案提交）时，退化为 `git diff HEAD` + 未跟踪清单组合。审查期间新产生的修复改动（循环内每轮修复未提交）始终计入审查范围，不在中途产生新 commit（提交只发生在正常清零后的统一提交，见步骤 5）。
 
 ### 2. 枚举工件路径（仅首轮执行一次；不读取内容）
 
@@ -71,7 +74,7 @@ CODEAGENT_EOF
 
 对本轮全部 Critical，逐条执行：
 
-**4.1 当前会话先判断是否认可该 Critical**（同 `/ly:review-code`）
+**4.1 当前会话先判断是否认可该 Critical**（同 `@lyx-review-code`）
 
 - **认可**：判断问题确实存在，进入 4.2 修复。
 - **不认可**：判断为误报、对上下文理解有误、或建议本身有问题，则不修改任何文件，但必须在本轮报告里写明反驳理由。
@@ -103,7 +106,7 @@ CODEAGENT_EOF
 
 ### 循环终止条件（任一命中即停止，转步骤 5）
 
-复用 `/ly:review-code` 的同一套规则，全局轮数上限同样默认 5 轮（清零优先于轮数上限：本轮先判 Critical 是否清零，仅非清零时才检查是否达到 5 轮）：
+复用 `@lyx-review-code` 的同一套规则，全局轮数上限同样默认 5 轮（清零优先于轮数上限：本轮先判 Critical 是否清零，仅非清零时才检查是否达到 5 轮）：
 
 1. **正常清零**：某一轮审查 Critical 数为 0
 2. **熔断**：同一个 Critical（以"文件路径 + 问题类别 + 定位锚点（artifact 内的具体条目/章节）"三者共同判定为同一问题）在相邻两轮审查中都被判定为存在，且上一轮当前会话对它是"认可"状态
@@ -125,7 +128,7 @@ CODEAGENT_EOF
 
 **正常清零结束：**
 
-先执行统一提交：先 `git add` 该 change 目录下的 `proposal.md`/`design.md`/`tasks.md` 及全部 delta spec 文件（审查目标全部文件——编排方（`/ly:propose`）已暂存的产物与循环期间修复的改动一并暂存；若产物此前已在暂存区则保持，修复改动由本次 `git add` 覆盖进 index），再执行一次统一 commit（仅暂存并提交这些文件，不做范围外的 `git add`），提交信息形如 `fix: review-plan feedback (经 N 轮修复) - <change-name>`。**不存在"循环开始前已脏文件的隔离跳过"**——该 change 目录下的 artifact 与 delta spec 是合法审查对象，产物与修复是同一个待提交单元，全部一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若统一提交本身执行失败，在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
+先执行统一提交：先 `git add` 该 change 目录下的 `proposal.md`/`design.md`/`tasks.md` 及全部 delta spec 文件（审查目标全部文件——编排方（`@lyx-propose`）已暂存的产物与循环期间修复的改动一并暂存；若产物此前已在暂存区则保持，修复改动由本次 `git add` 覆盖进 index），再执行一次统一 commit（仅暂存并提交这些文件，不做范围外的 `git add`），提交信息形如 `fix: review-plan feedback (经 N 轮修复) - <change-name>`。**不存在"循环开始前已脏文件的隔离跳过"**——该 change 目录下的 artifact 与 delta spec 是合法审查对象，产物与修复是同一个待提交单元，全部一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若统一提交本身执行失败，在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
 
 ```
 📋 方案审查：<change-name>

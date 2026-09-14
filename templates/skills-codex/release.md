@@ -1,16 +1,19 @@
 ---
+name: lyx-release
 description: 'GitFlow 发版流程：feature/release/hotfix/dev-offline 四场景，SemVer 自动推导版本号'
 argument-hint: '<场景描述>'
 ---
 
 # Release - GitFlow 发版
 
+> 调用方式：`@lyx-release` mention 后跟随的自然语言即参数（如 `@lyx-release` 带需求描述/选项）；无参数时直接 `@lyx-release`。
+
 按场景执行 GitFlow 分支操作，版本号按 SemVer + Conventional Commits 自动推导建议，用户确认后执行。
 
 ## 使用方法
 
 ```bash
-/ly:release <场景描述>
+@lyx-release <场景描述>
 ```
 
 直接告诉 Codex 要做什么，例如："开始新功能"、"准备发版"、"线上有 bug 要 hotfix"、"发到线下"。
@@ -176,13 +179,13 @@ git add version.sh
 git commit -m "chore: bump version to <确认的版本号>"
 
 # 3. 更新 CHANGELOG（如有）
-# 若已安装 /ly:changelog：直接触发它生成/更新 CHANGELOG.md 并提交
+# 若已安装 @lyx-changelog：直接触发它生成/更新 CHANGELOG.md 并提交
 # 若未安装，按以下步骤手动执行：
 #
 # 检查项目根目录是否存在 CHANGELOG.md（或 CHANGELOG、CHANGELOG.txt）：
 #   ls CHANGELOG* 2>/dev/null
 #
-# 【如果不存在 CHANGELOG】：询问用户是否需要创建，如果需要则按 Keep a Changelog 格式建立（见 /ly:changelog）
+# 【如果不存在 CHANGELOG】：询问用户是否需要创建，如果需要则按 Keep a Changelog 格式建立（见 @lyx-changelog）
 # 【如果存在 CHANGELOG】：以本次 version.sh 的更新 commit 为节点，收集 commit 并按类型分组（Added/Fixed/Changed）写入
 #
 # 提交 CHANGELOG 变更：

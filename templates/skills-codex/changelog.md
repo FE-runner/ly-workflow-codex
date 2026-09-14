@@ -1,16 +1,19 @@
 ---
+name: lyx-changelog
 description: 'Keep a Changelog 格式生成 CHANGELOG.md：按 commit 前缀自动分组（Added/Fixed/Changed）'
 argument-hint: '[<版本号>]'
 ---
 
 # Changelog - 生成 CHANGELOG.md
 
+> 调用方式：`@lyx-changelog` mention 后跟随的自然语言即参数（如 `@lyx-changelog` 带需求描述/选项）；无参数时直接 `@lyx-changelog`。
+
 按 [Keep a Changelog](https://keepachangelog.com) 规范生成/更新 CHANGELOG.md，按 commit 类型分组而非简单罗列 commit message。
 
 ## 使用方法
 
 ```bash
-/ly:changelog
+@lyx-changelog
 ```
 
 告诉 Codex 要为哪次更新生成 changelog（通常是发版时），自动执行以下步骤。
@@ -159,4 +162,4 @@ git commit -m "docs: update CHANGELOG for v<版本号>"
 
 ---
 
-**注意：** 本命令只负责生成/更新 CHANGELOG 内容，不负责版本号修改、分支操作、PR 创建——那些属于 `/ly:release` 的职责。发版流程中，先由 release 完成版本号 bump commit，再触发本命令生成 CHANGELOG。
+**注意：** 本命令只负责生成/更新 CHANGELOG 内容，不负责版本号修改、分支操作、PR 创建——那些属于 `@lyx-release` 的职责。发版流程中，先由 release 完成版本号 bump commit，再触发本命令生成 CHANGELOG。

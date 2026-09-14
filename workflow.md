@@ -2,11 +2,11 @@
 
 > Codex 单 Agent 流程：同一会话内 propose/review/apply 编排；审查关卡走 `codex exec` 独立子会话（调用契约见 [docs/codex-exec-contract.md](./docs/codex-exec-contract.md)）。
 
-## 1. /ly:propose（编排入口）
+## 1. @lyx-propose（编排入口）
 
 ```mermaid
 flowchart TD
-    Start["/ly:propose 触发"] --> InWt{已在 worktree 内?}
+    Start["@lyx-propose 触发"] --> InWt{已在 worktree 内?}
     InWt -->|是| AskAuto["问: 全自动 / 手动?"]
     InWt -->|否| AskIso["问: 隔离方式(三选一)"]
     AskIso -->|隔离 worktree| WtDirty{"脏改动?<br/>(git status --porcelain)"}
@@ -33,26 +33,26 @@ flowchart TD
 
     Commit -->|手动分支| C3["问: 要不要跑 review-plan?"]
     C3 -->|否| C4["结束(方案已 commit,<br/>apply/review-code 日后手动)"]
-    C3 -->|是| C5["/ly:review-plan 审查-修复循环<br/>(审查对象: propose commit)"]
+    C3 -->|是| C5["@lyx-review-plan 审查-修复循环<br/>(审查对象: propose commit)"]
     C5 --> C6{终止原因}
     C6 -->|清零| C7["结束(修复已统一提交,<br/>日后自行 apply/review-code)"]
     C6 -->|其余终止条件| C8["输出终止报告,结束"]
 
-    Commit -->|全自动分支| B1["/ly:review-plan 审查-修复循环"]
+    Commit -->|全自动分支| B1["@lyx-review-plan 审查-修复循环"]
     B1 --> B2{终止原因}
-    B2 -->|清零| BApply["/ly:apply 本会话实施<br/>-> commit: apply: change-name"]
+    B2 -->|清零| BApply["@lyx-apply 本会话实施<br/>-> commit: apply: change-name"]
     B2 -->|其余终止条件| B6["输出终止报告,流水线停止"]
-    BApply --> BCode["/ly:review-code 审查-修复循环<br/>(审查对象: apply commit)"]
+    BApply --> BCode["@lyx-review-code 审查-修复循环<br/>(审查对象: apply commit)"]
     BCode --> B5{终止原因}
     B5 -->|清零| B7["结束(archive 仍手动)"]
     B5 -->|其余终止条件| B8["输出终止报告,停止"]
 ```
 
-## 2. /ly:apply（当前会话本人实施）
+## 2. @lyx-apply（当前会话本人实施）
 
 ```mermaid
 flowchart TD
-    Apply["/ly:apply 触发"] --> Resolve["解析 change 名:<br/>显式参数 -> 唯一未归档 change -> 询问"]
+    Apply["@lyx-apply 触发"] --> Resolve["解析 change 名:<br/>显式参数 -> 唯一未归档 change -> 询问"]
     Resolve --> SelfImpl["当前会话读 tasks.md<br/>逐任务实施 + 验证 + 勾 checkbox<br/>(无外部委托 / 无 wrapper)"]
     SelfImpl --> PreCheck{"有与本次无关的预存改动?"}
     PreCheck -->|是| PreNote["git add 仅限本次改动, 预存改动不提交"]

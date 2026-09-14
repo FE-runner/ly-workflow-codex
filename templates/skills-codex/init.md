@@ -1,23 +1,26 @@
 ---
+name: lyx-init
 description: '生成 AGENTS.md，初始化 OpenSpec 目录结构'
 argument-hint: '<项目摘要或名称>'
 ---
 
 # Init - 项目初始化
 
+> 调用方式：`@lyx-init` mention 后跟随的自然语言即参数（如 `@lyx-init` 带需求描述/选项）；无参数时直接 `@lyx-init`。
+
 两步初始化：生成/更新项目的 AGENTS.md 上下文文档，并搭建 OpenSpec 目录结构。
 
 ## 使用方法
 
 ```bash
-/ly:init <项目摘要或名称>
+@lyx-init <项目摘要或名称>
 ```
 
 ## 步骤
 
 ### 步骤 1：生成 AGENTS.md
 
-由当前会话直接生成/更新项目根目录的 `AGENTS.md`（单 Agent 模式，无外部技能委托）：以 `$ARGUMENTS`（项目摘要或名称）为线索，结合当前仓库结构，写清模块职责、入口与启动方式、核心类型、构建/测试命令、关键约定。已存在时增量更新，不推翻既有内容、不删除既有章节。
+由当前会话直接生成/更新项目根目录的 `AGENTS.md`（单 Agent 模式，无外部技能委托）：以 `参数`（项目摘要或名称）为线索，结合当前仓库结构，写清模块职责、入口与启动方式、核心类型、构建/测试命令、关键约定。已存在时增量更新，不推翻既有内容、不删除既有章节。
 
 ### 步骤 2：初始化 OpenSpec
 
@@ -55,6 +58,6 @@ git commit -m "chore: init AGENTS.md + openspec structure"
   openspec/    ✓/✗
 
 接下来可以：
-  /ly:propose "描述你要做什么"   — 起一个change
-  /ly:explore                    — 想清楚再动手
+  @lyx-propose "描述你要做什么"   — 起一个change
+  @lyx-explore                    — 想清楚再动手
 ```

@@ -5,8 +5,8 @@ import { join } from 'pathe'
 import { version as packageVersion } from '../../package.json'
 import { i18n } from '../i18n'
 import { LY_PROMPTS_DIR, readLyConfig } from '../utils/config'
-import { CODE_PROMPTS_DIR, PACKAGE_NAME } from '../utils/package-meta'
-import { detectCodexOpsxPrompts, detectOpenspecCli } from '../utils/preflight'
+import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
+import { detectOpenspecCli, detectOpenspecSkills } from '../utils/preflight'
 
 const OK = ansis.green('✓')
 const WARN = ansis.yellow('⚠')
@@ -49,13 +49,13 @@ export async function doctor(): Promise<void> {
     detail: config ? `v${config.general?.version || '?'}, lang=${config.general?.language || '?'}` : 'Not found (~/.ly/config.toml)',
   })
 
-  // 3. Commands (codex custom prompts)
-  const cmds = await dirFiles(CODE_PROMPTS_DIR)
-  const cmdCount = cmds.filter(f => f.startsWith('ly-') && f.endsWith('.md')).length
+  // 3. Commands (lyx-* SKILL.md under ~/.agents/skills)
+  const skillsEntries = await dirFiles(AGENTS_SKILLS_DIR)
+  const cmdCount = skillsEntries.filter(f => f.startsWith('lyx-')).length
   checks.push({
     label: 'Commands',
     status: cmdCount > 0 ? OK : FAIL,
-    detail: `${cmdCount} installed (~/.codex/prompts/ly-*.md)`,
+    detail: `${cmdCount} installed (~/.agents/skills/lyx-*/)`,
   })
 
   // 4. Role prompts (shared ~/.ly/prompts/codex/)
@@ -75,12 +75,12 @@ export async function doctor(): Promise<void> {
     detail: openspecCli.installed ? `v${openspecCli.version}` : i18n.t('common:doctor.openspecCliMissing'),
   })
 
-  // 6. OpenSpec skills (opsx prompts in ~/.codex/prompts)
-  const hasOpsxPrompts = detectCodexOpsxPrompts()
+  // 6. OpenSpec skills (openspec-* SKILL.md)
+  const hasOpenspecSkills = detectOpenspecSkills()
   checks.push({
     label: 'OpenSpec skills',
-    status: hasOpsxPrompts ? OK : WARN,
-    detail: hasOpsxPrompts ? i18n.t('common:doctor.skillsInitialized') : i18n.t('common:doctor.skillsMissing'),
+    status: hasOpenspecSkills ? OK : WARN,
+    detail: hasOpenspecSkills ? i18n.t('common:doctor.skillsInitialized') : i18n.t('common:doctor.skillsMissing'),
   })
 
   // Output
@@ -108,8 +108,8 @@ export async function status(): Promise<void> {
   const installedVer = config?.general?.version || 'unknown'
   const latestVer = execSafe(`npm view ${PACKAGE_NAME} version`) || 'unknown'
 
-  // Commands
-  const cmds = (await dirFiles(CODE_PROMPTS_DIR)).filter(f => f.startsWith('ly-') && f.endsWith('.md'))
+  // Commands (ly-* skills)
+  const cmds = (await dirFiles(AGENTS_SKILLS_DIR)).filter(f => f.startsWith('lyx-'))
 
   // Review model
   const reviewModel = config?.codexHost?.reviewModel || '未配置（回退当前会话模型）'
@@ -137,7 +137,7 @@ export async function status(): Promise<void> {
 
   // OpenSpec dependency (same detectors as installer preflight)
   const openspecCli = await detectOpenspecCli()
-  const hasOpsxPrompts = detectCodexOpsxPrompts()
+  const hasOpenspecSkills = detectOpenspecSkills()
 
   // Output
   console.log()
@@ -147,7 +147,7 @@ export async function status(): Promise<void> {
   console.log(`  ${ansis.bold('Commands')}       ${cmds.length}`)
   console.log(`  ${ansis.bold('Review model')}   ${reviewModel}`)
   console.log(`  ${ansis.bold('OpenSpec CLI')}   ${openspecCli.installed ? `v${openspecCli.version}` : ansis.yellow(i18n.t('common:doctor.openspecCliMissing'))}`)
-  console.log(`  ${ansis.bold('OpenSpec skills')}${hasOpsxPrompts ? ` ${i18n.t('common:doctor.skillsInitialized')}` : ansis.yellow(` ${i18n.t('common:doctor.skillsMissing')}`)}`)
+  console.log(`  ${ansis.bold('OpenSpec skills')}${hasOpenspecSkills ? ` ${i18n.t('common:doctor.skillsInitialized')}` : ansis.yellow(` ${i18n.t('common:doctor.skillsMissing')}`)}`)
   console.log(`  ${ansis.bold('Active tasks')}   ${activeTasks > 0 ? ansis.yellow(String(activeTasks)) : '0'}`)
   console.log()
 }

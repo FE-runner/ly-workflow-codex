@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initI18n } from '../../i18n'
 
-import { checkExternalDeps, detectCodexOpsxPrompts, detectOpenspecCli } from '../preflight'
+import { checkExternalDeps, detectOpenspecCli, detectOpenspecSkills } from '../preflight'
 
 const execFileMock = vi.fn()
 const spawnMock = vi.fn()
@@ -98,17 +98,17 @@ describe('detectOpenspecCli', () => {
   })
 })
 
-describe('detectCodexOpsxPrompts (codex host skills)', () => {
+describe('detectOpenspecSkills (codex host skills)', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it('returns true when any opsx-*.md exists under ~/.codex/prompts', () => {
-    existsSyncMock.mockImplementation((p: any) => String(p).includes('.codex') && String(p).includes('opsx-propose.md'))
-    expect(detectCodexOpsxPrompts()).toBe(true)
+  it('returns true when any openspec-* SKILL.md exists under ~/.agents/skills or project .agents/skills', () => {
+    existsSyncMock.mockImplementation((p: any) => String(p).includes('openspec-propose') && String(p).endsWith('/SKILL.md'))
+    expect(detectOpenspecSkills()).toBe(true)
   })
 
-  it('returns false when no opsx prompt exists on the codex side', () => {
-    existsSyncMock.mockImplementation((p: any) => !String(p).includes('.codex'))
-    expect(detectCodexOpsxPrompts()).toBe(false)
+  it('returns false when no openspec skill exists', () => {
+    existsSyncMock.mockImplementation((p: any) => !String(p).includes('openspec'))
+    expect(detectOpenspecSkills()).toBe(false)
   })
 })
 
@@ -151,7 +151,7 @@ describe('checkExternalDeps', () => {
     expect(errSpy).not.toHaveBeenCalled()
   })
 
-  it('warns once when CLI installed but codex opsx prompts missing', async () => {
+  it('warns once when CLI installed but openspec skills missing', async () => {
     mockExec()
     existsSyncMock.mockReturnValue(false)
     await checkExternalDeps()

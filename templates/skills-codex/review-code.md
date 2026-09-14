@@ -1,4 +1,5 @@
 ---
+name: lyx-review-code
 description: '读取 git diff，审查子会话（codex exec -m 配置模型）审查代码变更，审查-修复循环直到 Critical 清零或触发终止条件'
 argument-hint: '[<change-name>] [--no-commit]'
 ---
@@ -6,6 +7,8 @@ argument-hint: '[<change-name>] [--no-commit]'
 <!-- codex exec 子会话调用契约（调用命令形态/session_id 提取/resume 续聊/终止条件八条）详见 docs/codex-exec-contract.md；该契约随 codex CLI 版本漂移，升级 codex 时需复核 -->
 
 # Review Code - 代码审查
+
+> 调用方式：`@lyx-review-code` mention 后跟随的自然语言即参数（如 `@lyx-review-code` 带需求描述/选项）；无参数时直接 `@lyx-review-code`。
 
 审查当前代码变更，审查子会话单模型审查，输出 Critical/Warning/Info 分级结果。若存在 Critical，进入审查-修复循环：当前会话判断是否认可每条 Critical，认可则修复并自动重新审查，直到清零或触发终止条件。
 
@@ -17,9 +20,9 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 ### 1. 判定审查范围（仅首轮执行一次，后续轮次复用）
 
-按目标 change 的最近一期 `apply:` commit 作为审查基线（编排方 `/ly:apply` 在实施完成后立即提交，提交信息 `apply: <change-name>`）：
+按目标 change 的最近一期 `apply:` commit 作为审查基线（编排方 `@lyx-apply` 在实施完成后立即提交，提交信息 `apply: <change-name>`）：
 
-1. 解析目标 change（优先级同 `/ly:apply`：`$ARGUMENTS` 显式 change 名 → `openspec/changes/` 下唯一未归档 change → 询问用户）。
+1. 解析目标 change（优先级同 `@lyx-apply`：`参数` 显式 change 名 → `openspec/changes/` 下唯一未归档 change → 询问用户）。
 2. `git log --grep="^apply: <change-name>"` 取 HEAD 侧最近一期匹配 commit：
    - **存在** → 审查范围 = 该 `apply:` commit 差异（`git show <commit>`）+ 当前 `git diff HEAD`（循环修复）+ `git status --porcelain` 过滤 `??` 得到的未跟踪文件路径清单。工作区/暂存区干净时**仍按该 commit 审查**，不报"无变更可审查"。
    - **不存在**（零 commit 仓库，或该 change 尚未产生 apply commit）→ 退化为"有未提交变更"组合：`git diff HEAD`（覆盖已暂存+未暂存）+ `??` 未跟踪清单；仓库零 commit（`git rev-parse HEAD` 失败）→ 三条固定命令组合：`git diff --cached` + `git diff` + `??` 未跟踪路径清单。无未提交变更且也无相关 apply commit → 报告"无变更可审查"，直接结束。

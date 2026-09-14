@@ -1,11 +1,14 @@
 ---
+name: lyx-apply
 description: '当前会话自实施 tasks（单 Agent 模式，无外部委托）：读 tasks.md 逐任务实施+验证+勾选；全部任务完成后立即 commit apply: <change-name>；失败原样呈报转人工（不重试不兜底）'
 argument-hint: '[<change-name>]'
 ---
 
 # Apply
 
-由当前会话直接实施全部 tasks——单 Agent 模式，不委托任何外部 agent、无 wrapper 调用、无 OVERALL 解析、不读取任何实施后端配置。全部任务完成后立即 commit（`apply: <change-name>`），作为 `/ly:review-code` 的审查对象；未全部完成则原样呈报转人工，不重试、不兜底。隔离 worktree 的询问/新建统一收敛到 `/ly:propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
+> 调用方式：`@lyx-apply` mention 后跟随的自然语言即参数（如 `@lyx-apply` 带需求描述/选项）；无参数时直接 `@lyx-apply`。
+
+由当前会话直接实施全部 tasks——单 Agent 模式，不委托任何外部 agent、无 wrapper 调用、无 OVERALL 解析、不读取任何实施后端配置。全部任务完成后立即 commit（`apply: <change-name>`），作为 `@lyx-review-code` 的审查对象；未全部完成则原样呈报转人工，不重试、不兜底。隔离 worktree 的询问/新建统一收敛到 `@lyx-propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
 
 ## 步骤
 
@@ -13,7 +16,7 @@ argument-hint: '[<change-name>]'
 
 按固定优先级解析：
 
-1. `$ARGUMENTS` 中显式且合法的 change 名。
+1. `参数` 中显式且合法的 change 名。
 2. `openspec/changes/` 下唯一未归档的 change。
 3. 无法唯一确定 → 直接询问用户。
 
@@ -33,8 +36,8 @@ argument-hint: '[<change-name>]'
 ### 提交（全部任务完成时执行）
 
 1. `git commit -m "apply: <change-name>"`
-2. `apply: <change-name>` commit 即 `/ly:review-code` 的审查对象。
-3. 无可提交内容（如 tasks 本身无产出、或已被上一轮 `/ly:review-code` 审查循环提交）则跳过，不创建空 commit。
+2. `apply: <change-name>` commit 即 `@lyx-review-code` 的审查对象。
+3. 无可提交内容（如 tasks 本身无产出、或已被上一轮 `@lyx-review-code` 审查循环提交）则跳过，不创建空 commit。
 4. 若 `git commit` 失败，如实报告 Git 返回的原始错误，不中断后续提示。
 
 ### 失败处理（未全部完成时执行）

@@ -32,8 +32,8 @@
     "bin/lycx.mjs",
     "dist",
     "docs/codex-exec-contract.md",
-    "templates/commands-codex/",
-    "templates/prompts/codex/"
+    "templates/prompts/codex/",
+    "templates/skills-codex/"
   ],
   "engines": {
     "node": ">=20"

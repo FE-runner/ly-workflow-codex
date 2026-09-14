@@ -1,16 +1,19 @@
 ---
+name: lyx-clean-branches
 description: '清理 Git 分支：安全清理已合并或过期分支，默认 dry-run 模式'
 argument-hint: '[--stale <days>] [--remote] [--dry-run]'
 ---
 
 # Clean-Branches - 清理 Git 分支
 
+> 调用方式：`@lyx-clean-branches` mention 后跟随的自然语言即参数（如 `@lyx-clean-branches` 带需求描述/选项）；无参数时直接 `@lyx-clean-branches`。
+
 安全识别并清理已合并或长期未更新的分支。
 
 ## 使用方法
 
 ```bash
-/ly:clean-branches [options]
+@lyx-clean-branches [options]
 ```
 
 ## 选项
@@ -100,13 +103,13 @@ git config --get-all branch.cleanup.protected
 
 ```bash
 # 预览将清理的分支
-/ly:clean-branches --dry-run
+@lyx-clean-branches --dry-run
 
 # 清理已合并且超过 90 天未动的分支
-/ly:clean-branches --stale 90
+@lyx-clean-branches --stale 90
 
 # 清理已合并到 release/v2.1 的分支
-/ly:clean-branches --base release/v2.1 --remote --yes
+@lyx-clean-branches --base release/v2.1 --remote --yes
 ```
 
 ## 最佳实践

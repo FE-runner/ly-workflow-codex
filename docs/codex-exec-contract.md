@@ -1,6 +1,6 @@
 # codex exec 独立子会话调用契约
 
-> 适用范围：`templates/commands-codex/review-plan.md` 与 `templates/commands-codex/review-code.md` 的审查子会话调用。
+> 适用范围：`templates/skills-codex/review-plan.md` 与 `templates/skills-codex/review-code.md` 的审查子会话调用。
 > **该契约随 codex CLI 版本漂移，升级 codex 时需复核**（尤其是子命令形态、`--json` 事件名、resume 行为）。
 
 ---

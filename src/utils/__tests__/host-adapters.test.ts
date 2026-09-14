@@ -21,14 +21,14 @@ function findPackageRoot(): string {
 }
 
 const PACKAGE_ROOT = findPackageRoot()
-const CODEX_TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'commands-codex')
+const SKILLS_TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'skills-codex')
 
 // ─────────────────────────────────────────────────────────────
 // A. codex 模板集完整性（14 个单 Agent 版模板）
 // ─────────────────────────────────────────────────────────────
 describe('codex template set', () => {
   it('has exactly the 14 core commands as templates', () => {
-    const files = readdirSync(CODEX_TEMPLATES_DIR).filter(f => f.endsWith('.md'))
+    const files = readdirSync(SKILLS_TEMPLATES_DIR).filter(f => f.endsWith('.md'))
     const codexCommands = getAllCommandIds()
       .flatMap(id => getWorkflowById(id)!.commands)
     expect(files.sort()).toEqual(codexCommands.map(c => `${c}.md`).sort())
@@ -36,8 +36,8 @@ describe('codex template set', () => {
   })
 
   it('every codex template has argument-hint frontmatter', () => {
-    for (const file of readdirSync(CODEX_TEMPLATES_DIR).filter(f => f.endsWith('.md'))) {
-      const content = readFileSync(join(CODEX_TEMPLATES_DIR, file), 'utf-8')
+    for (const file of readdirSync(SKILLS_TEMPLATES_DIR).filter(f => f.endsWith('.md'))) {
+      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
       expect(content.startsWith('---\n'), file).toBe(true)
       expect(content, file).toMatch(/^argument-hint: '/m)
       expect(content, file).toMatch(/^description: '/m)
@@ -46,7 +46,7 @@ describe('codex template set', () => {
 
   it('review templates render codex exec orchestration (no wrapper residue)', () => {
     for (const name of ['review-plan.md', 'review-code.md']) {
-      const content = readFileSync(join(CODEX_TEMPLATES_DIR, name), 'utf-8')
+      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, name), 'utf-8')
       expect(content).toContain('codex exec -C "$WORKDIR" --json -m {{REVIEW_MODEL}} -')
       expect(content).toContain('codex exec -C "$WORKDIR" --json resume <session-id> -')
       expect(content).toContain('session_id')
@@ -61,7 +61,7 @@ describe('codex template set', () => {
   })
 
   it('apply template is self-implementation only (no delegation machinery)', () => {
-    const content = readFileSync(join(CODEX_TEMPLATES_DIR, 'apply.md'), 'utf-8')
+    const content = readFileSync(join(SKILLS_TEMPLATES_DIR, 'apply.md'), 'utf-8')
     expect(content).toContain('逐任务实施')
     expect(content).not.toContain('ly-wrapper')
     expect(content).not.toMatch(/OVERALL:\s*(PASS|FAIL)/)
@@ -71,8 +71,8 @@ describe('codex template set', () => {
   })
 
   it('no codex template contains wrapper/lite/routing residue', () => {
-    for (const file of readdirSync(CODEX_TEMPLATES_DIR).filter(f => f.endsWith('.md'))) {
-      const content = readFileSync(join(CODEX_TEMPLATES_DIR, file), 'utf-8')
+    for (const file of readdirSync(SKILLS_TEMPLATES_DIR).filter(f => f.endsWith('.md'))) {
+      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
       expect(content, file).not.toContain('ly-wrapper')
       expect(content, file).not.toContain('{{LITE_MODE_FLAG}}')
       expect(content, file).not.toContain('<!-- LY:IF')
@@ -120,7 +120,7 @@ function makeCtx(overrides: Record<string, unknown> = {}): any {
     force: true,
     templateDir: '/pkg/templates',
     promptsDir: '/tmp/ly-prompts',
-    codexPromptsDir: '/tmp/codex-prompts',
+    codexSkillsDir: '/tmp/codex-skills',
     config: {},
     result: { success: true, installedCommands: [], installedPrompts: [], errors: [], configPath: '' },
     ...overrides,
@@ -134,11 +134,11 @@ describe('adapters', () => {
     expect(Object.keys(ADAPTERS).sort()).toEqual(['codex'])
   })
 
-  it('codex adapter targets codexPromptsDir with ly- prefix', () => {
+  it('codex adapter targets codexSkillsDir with ly- prefix', () => {
     const target = ADAPTERS.codex.promptsTarget(baseCtx())
-    expect(target.sourceDir).toBe('/pkg/templates/commands-codex')
-    expect(target.targetDir).toBe('/tmp/codex-prompts')
-    expect(target.filePrefix).toBe('ly-')
+    expect(target.sourceDir).toBe('/pkg/templates/skills-codex')
+    expect(target.targetDir).toBe('/tmp/codex-skills')
+    expect(target.filePrefix).toBe('lyx-')
   })
 
   it('codex adapter verify checks ROLE_FILE targets exist', async () => {
@@ -155,7 +155,7 @@ describe('adapters', () => {
 // ─────────────────────────────────────────────────────────────
 describe('installWorkflows — codex host', () => {
   const base = mkdtempSync(join(tmpdir(), 'ly-test-codex-'))
-  const codexPromptsDir = join(base, 'codex-prompts')
+  const codexSkillsDir = join(base, 'codex-skills')
   const lyPromptsDir = join(base, 'ly-prompts')
   const codexDir = join(base, 'codex')
 
@@ -163,23 +163,24 @@ describe('installWorkflows — codex host', () => {
     await fs.remove(base)
   })
 
-  it('installs ly-*.md into codexPromptsDir and shared prompts into lyPromptsDir', async () => {
+  it('installs ly-* skill dirs (SKILL.md) into codexSkillsDir and shared prompts into lyPromptsDir', async () => {
     const result = await installWorkflows(
       getAllCommandIds(),
       codexDir,
       true,
-      { promptsDir: lyPromptsDir, codexPromptsDir },
+      { promptsDir: lyPromptsDir, codexSkillsDir },
     )
     expect(result.success).toBe(true)
     expect(result.errors).toEqual([])
 
-    const installed = readdirSync(codexPromptsDir).filter(f => f.endsWith('.md'))
+    const installed = readdirSync(codexSkillsDir)
     expect(installed.length).toBe(14)
-    expect(installed).toContain('ly-apply.md')
-    expect(installed).toContain('ly-review-plan.md')
+    expect(installed).toContain('lyx-apply')
+    expect(installed).toContain('lyx-review-plan')
+    expect(fs.existsSync(join(codexSkillsDir, 'lyx-apply', 'SKILL.md'))).toBe(true)
 
     // 渲染产物：REVIEW_MODEL 未配置 → -m 参数被剥离；无 wrapper 残留
-    const reviewPlan = readFileSync(join(codexPromptsDir, 'ly-review-plan.md'), 'utf-8')
+    const reviewPlan = readFileSync(join(codexSkillsDir, 'lyx-review-plan', 'SKILL.md'), 'utf-8')
     expect(reviewPlan).toContain('codex exec -C "$WORKDIR" --json -')
     expect(reviewPlan).toContain('session_id')
     expect(reviewPlan).not.toContain('ly-wrapper')
@@ -196,10 +197,10 @@ describe('installWorkflows — codex host', () => {
       getAllCommandIds(),
       codexDir,
       true,
-      { promptsDir: lyPromptsDir, codexPromptsDir, reviewModel: 'gpt-5.1-codex' },
+      { promptsDir: lyPromptsDir, codexSkillsDir, reviewModel: 'gpt-5.1-codex' },
     )
     expect(result.success).toBe(true)
-    const reviewPlan = readFileSync(join(codexPromptsDir, 'ly-review-plan.md'), 'utf-8')
+    const reviewPlan = readFileSync(join(codexSkillsDir, 'lyx-review-plan', 'SKILL.md'), 'utf-8')
     expect(reviewPlan).toContain('codex exec -C "$WORKDIR" --json -m gpt-5.1-codex -')
   })
 
@@ -215,16 +216,16 @@ describe('installWorkflows — codex host', () => {
 // ─────────────────────────────────────────────────────────────
 describe('uninstallWorkflows — codex single host', () => {
   const base = mkdtempSync(join(tmpdir(), 'ly-test-uninstall-'))
-  const codexPromptsDir = join(base, 'codex-prompts')
+  const codexSkillsDir = join(base, 'codex-skills')
   const lyPromptsDir = join(base, 'ly-prompts')
   const codexDir = join(base, 'codex')
   const cleanupDirs = { codexDir: join(base, '.codex'), homeDir: base }
   const lyDir = join(base, '.ly')
 
   async function seed(): Promise<void> {
-    await fs.ensureDir(codexPromptsDir)
-    await fs.writeFile(join(codexPromptsDir, 'ly-commit.md'), '# codex commit\n')
-    await fs.writeFile(join(codexPromptsDir, 'user-prompt.md'), '# user own prompt\n')
+    await fs.ensureDir(join(codexSkillsDir, 'lyx-commit'))
+    await fs.writeFile(join(codexSkillsDir, 'lyx-commit', 'SKILL.md'), '# codex commit\n')
+    await fs.writeFile(join(codexSkillsDir, 'user-prompt.md'), '# user own prompt\n')
     await fs.ensureDir(join(lyPromptsDir, 'codex'))
     await fs.writeFile(join(lyPromptsDir, 'codex', 'reviewer.md'), '# reviewer\n')
     // 第三方内容：~/.ly/worktrees/ 真实 checkout 与共享配置必须保留
@@ -241,15 +242,15 @@ describe('uninstallWorkflows — codex single host', () => {
     await seed()
     const result = await uninstallWorkflows(codexDir, {
       lyPromptsDir,
-      codexPromptsDir,
+      codexSkillsDir,
       lyDir,
       legacyCleanupDirs: cleanupDirs,
     })
     expect(result.success).toBe(true)
-    expect(result.removedCodexPrompts).toContain('ly-commit.md')
-    expect(fs.existsSync(join(codexPromptsDir, 'ly-commit.md'))).toBe(false)
+    expect(result.removedSkills).toContain('lyx-commit')
+    expect(fs.existsSync(join(codexSkillsDir, 'lyx-commit'))).toBe(false)
     // 用户自己的 prompt 不误删
-    expect(fs.existsSync(join(codexPromptsDir, 'user-prompt.md'))).toBe(true)
+    expect(fs.existsSync(join(codexSkillsDir, 'user-prompt.md'))).toBe(true)
     // 共享角色词：仅删 codex 子目录，父目录与其余内容保留
     expect(result.removedSharedPrompts).toBe(true)
     expect(fs.existsSync(join(lyPromptsDir, 'codex'))).toBe(false)
@@ -263,7 +264,7 @@ describe('uninstallWorkflows — codex single host', () => {
   it('succeeds on empty dirs', async () => {
     const result = await uninstallWorkflows(join(base, 'empty'), {
       lyPromptsDir: join(base, 'no-prompts'),
-      codexPromptsDir: join(base, 'no-codex'),
+      codexSkillsDir: join(base, 'no-codex'),
       lyDir: join(base, 'no-ly'),
       legacyCleanupDirs: cleanupDirs,
     })

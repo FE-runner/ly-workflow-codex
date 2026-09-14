@@ -1,16 +1,19 @@
 ---
+name: lyx-commit
 description: '智能 Git 提交：分析改动生成 Conventional Commit 信息，支持拆分建议'
 argument-hint: '[--all] [--amend] [--type <type>] [--scope <scope>]'
 ---
 
 # Commit - 智能 Git 提交
 
+> 调用方式：`@lyx-commit` mention 后跟随的自然语言即参数（如 `@lyx-commit` 带需求描述/选项）；无参数时直接 `@lyx-commit`。
+
 分析当前改动，生成 Conventional Commits 风格的提交信息。
 
 ## 使用方法
 
 ```bash
-/ly:commit [options]
+@lyx-commit [options]
 ```
 
 ## 选项
@@ -100,19 +103,19 @@ git commit [-S] [--no-verify] [-s] -F .git/COMMIT_EDITMSG
 
 ```bash
 # 基本提交
-/ly:commit
+@lyx-commit
 
 # 暂存所有并提交
-/ly:commit --all
+@lyx-commit --all
 
 # 带 emoji 提交
-/ly:commit --emoji
+@lyx-commit --emoji
 
 # 指定类型和作用域
-/ly:commit --scope ui --type feat --emoji
+@lyx-commit --scope ui --type feat --emoji
 
 # 修补上次提交
-/ly:commit --amend --signoff
+@lyx-commit --amend --signoff
 ```
 
 ## 关键规则

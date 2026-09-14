@@ -10,22 +10,22 @@
 
 | 目录 | 用途 | 安装目标 |
 |------|------|----------|
-| `commands-codex/` | 14 个 slash command（codex 宿主单 Agent 版，argument-hint frontmatter；审查走 `codex exec` 独立子会话 + resume 续聊，apply 当前会话自实施，无 wrapper/OVERALL/条件块） | `~/.codex/prompts/ly-*.md` |
+| `skills-codex/` | 14 个 SKILL.md 模板（codex 宿主单 Agent 版，`name`/`description`/`argument-hint` frontmatter；审查走 `codex exec` 独立子会话 + resume 续聊，apply 当前会话自实施，无 wrapper/OVERALL/条件块） | `~/.agents/skills/lyx-*/SKILL.md` |
 | `prompts/codex/` | 2 个审查角色提示词（plan-reviewer/reviewer），审查命令 ROLE_FILE 引用 | `~/.ly/prompts/codex/` |
 
-## commands-codex/（14 个）
+## skills-codex/（14 个）
 
 | 命令 | 类型 | 说明 |
 |------|------|------|
 | `init.md` | 真逻辑 | 生成 AGENTS.md + `openspec init` + 自动 commit |
-| `explore.md` | 薄壳委托 | 直接调用 `opsx:explore`，收敛到方案时提示转 `/ly:propose` |
-| `propose.md` | 真逻辑 | 委托 `opsx:propose` + 创建方案前隔离三选一（隔离 worktree【同会话 cd 续跑】/本项目切新分支/留在当前分支）+ 全自动/手动两路径 + commit 前方案自审 |
+| `explore.md` | 薄壳委托 | 直接调用 `@openspec-explore skill`，收敛到方案时提示转 `@lyx-propose` |
+| `propose.md` | 真逻辑 | 委托 `@openspec-propose skill` + 创建方案前隔离三选一（隔离 worktree【同会话 cd 续跑】/本项目切新分支/留在当前分支）+ 全自动/手动两路径 + commit 前方案自审 |
 | `apply.md` | 真逻辑 | 当前会话本人读 tasks.md 逐任务实施+验证+勾 checkbox → commit `apply: <change-name>`；无外部委托 |
-| `archive.md` | 真逻辑 | 委托 `opsx:archive` 归档 + 自动 commit |
+| `archive.md` | 真逻辑 | 委托 `@openspec-archive-change skill` 归档 + 自动 commit |
 | `review-plan.md` | 真逻辑 | `codex exec` 独立子会话审方案（`plan-reviewer.md`），审查-修复循环（全局轮数上限 5，清零优先），清零后统一提交 |
 | `review-code.md` | 真逻辑 | `codex exec` 独立子会话审代码（`reviewer.md`），Critical/Warning/Info 分级，审查-修复循环，清零后统一提交 |
 | `commit.md` `rollback.md` `clean-branches.md` | Git 工具 | 不变 |
-| `worktree.md` | Git 工具 | 默认 `~/.ly/worktrees/<项目名>/` 单层平铺；`switch` 子命令已移除，隔离切换由 `/ly:propose` 触发 |
+| `worktree.md` | Git 工具 | 默认 `~/.ly/worktrees/<项目名>/` 单层平铺；`switch` 子命令已移除，隔离切换由 `@lyx-propose` 触发 |
 | `release.md` | 真逻辑 | GitFlow 四场景（feature/release/hotfix/dev-offline），SemVer + Conventional Commits 自动推导版本号 |
 | `changelog.md` | 真逻辑 | Keep a Changelog 格式生成/更新 CHANGELOG.md |
 | `publish.md` | 真逻辑 | npm 发布四场景（bmc Nexus/GitHub Packages/npmjs+GitHub Release/CI），前置检查→版本号推导→构建→发布→验证 |

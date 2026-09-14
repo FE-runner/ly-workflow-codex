@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2026-09-14
+
+命令形态从「斜杠命令」迁移为 Codex 官方 skill 机制：Codex CLI 的 `/` 命令为内置硬编码，不支持从文件系统加载自定义命令，因此 14 个命令模板由 slash command 格式改造为 `SKILL.md`（frontmatter：`name`/`description`/`argument-hint`），安装位移位到 Codex 官方 skill 发现目录；命令前缀统一为 `lyx`，与上游 ly-workflow 的 `ly` 命令区分。
+
+### Changed
+
+- **命令调用形态 `/ly:*` → `@lyx-*`**：14 个命令以 `@lyx-<cmd>` mention 调用（`~/.agents/skills/lyx-<cmd>/SKILL.md`），参数为 mention 后跟随的自然语言；`/ly:*` 旧形态不再可用
+- **安装位 `~/.codex/prompts/ly-*.md` → `~/.agents/skills/lyx-*/SKILL.md`**：`~/.codex/prompts/` 为死目录（Codex CLI 不读取），`~/.agents/skills/<name>/SKILL.md` 为 skill 发现目录（用户级 + 项目级 `.agents/skills/`）
+- **模板源 `templates/commands-codex/` → `templates/skills-codex/`**：每份模板增加 `name: lyx-<cmd>` frontmatter 与调用方式说明
+- **openspec 依赖检测改为 openspec-* skills**：preflight/doctor 检测 `~/.agents/skills/` 或项目 `.agents/skills/` 下的 `openspec-*` SKILL.md（旧 `~/.codex/prompts/opsx-*.md` 检测移除）
+- **卸载/更新兼容旧安装位**：`uninstall` 与 `update` 在清理/备份新安装位 `~/.agents/skills/lyx-*` 的同时回收旧安装位残留（`~/.agents/skills/ly-*` 目录与 `~/.codex/prompts/ly-*.md`）
+
+### Fixed
+
+- 修复「`/ly` no matches」根因：Codex CLI 的斜杠命令为内置硬编码，无法从文件系统加载自定义 `/` 命令；现改为官方 `@mention skills` 机制
+
+### Removed
+
+- 旧迁移产物 `source-command-opsx-*` skills（`@opsx-*` 已由 openspec CLI 生成的 `openspec-*` skills 取代）
+
 ## [0.1.0] - 2026-09-14
 
 首个版本：从 ly-workflow 拆分，codex 单宿主化——砍掉 claude 宿主、wrapper、Web UI 与 routing/implementer 概念，审查关卡改为 `codex exec` 独立子会话。

@@ -19,14 +19,14 @@ function findPackageRoot(): string {
 }
 
 const PACKAGE_ROOT = findPackageRoot()
-// codex 单宿主：实际命令模板源为 templates/commands-codex/
-const TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'commands-codex')
+// codex 单宿主：实际命令模板源为 templates/skills-codex/
+const TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'skills-codex')
 
 // ─────────────────────────────────────────────────────────────
 // Integration test with real templates
 // ─────────────────────────────────────────────────────────────
 describe('integration: real templates have no MCP placeholders', () => {
-  // Collect all .md files under templates/commands-codex/
+  // Collect all .md files under templates/skills-codex/
   function collectTemplateFiles(dir: string): string[] {
     const files: string[] = []
     for (const entry of readdirSync(dir, { withFileTypes: true })) {

@@ -1,16 +1,19 @@
 ---
+name: lyx-rollback
 description: '交互式 Git 回滚：安全回滚分支到历史版本，支持 reset/revert 模式'
 argument-hint: '[--branch <branch>] [--target <rev>] [--mode reset|revert]'
 ---
 
 # Rollback - 交互式 Git 回滚
 
+> 调用方式：`@lyx-rollback` mention 后跟随的自然语言即参数（如 `@lyx-rollback` 带需求描述/选项）；无参数时直接 `@lyx-rollback`。
+
 安全地将分支回滚到指定历史版本，默认 dry-run 模式。
 
 ## 使用方法
 
 ```bash
-/ly:rollback [options]
+@lyx-rollback [options]
 ```
 
 ## 选项
@@ -98,16 +101,16 @@ git revert --no-edit <target>..HEAD
 
 ```bash
 # 全交互模式（dry-run）
-/ly:rollback
+@lyx-rollback
 
 # 指定分支
-/ly:rollback --branch dev
+@lyx-rollback --branch dev
 
 # 完整指定，一键执行
-/ly:rollback --branch main --target v1.2.0 --mode reset --yes
+@lyx-rollback --branch main --target v1.2.0 --mode reset --yes
 
 # 生成反向提交
-/ly:rollback --branch release/v2.1 --target v2.0.5 --mode revert
+@lyx-rollback --branch release/v2.1 --target v2.0.5 --mode revert
 ```
 
 ## 注意事项

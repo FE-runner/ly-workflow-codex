@@ -11,7 +11,7 @@ import { version } from '../../package.json'
 import { i18n } from '../i18n'
 import { getConfigPath, readLyConfig, sanitizeReviewModel, writeLyConfig } from '../utils/config'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows, uninstallWorkflows } from '../utils/installer'
-import { CODE_PROMPTS_DIR, PACKAGE_NAME } from '../utils/package-meta'
+import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
 import { init } from './init'
 import { update } from './update'
 
@@ -232,11 +232,18 @@ function showHelp(): void {
   const section = (title: string) => console.log(ansis.yellow.bold(`  ${title}`))
   const cmd = (name: string, desc: string) => console.log(`  ${ansis.green(name.padEnd(col1))} ${ansis.gray(desc)}`)
 
-  const commandsDir = CODE_PROMPTS_DIR
+  const commandsDir = AGENTS_SKILLS_DIR
 
   let installedFiles: string[] = []
   try {
-    installedFiles = fs.readdirSync(commandsDir).filter(f => f.startsWith('ly-') && f.endsWith('.md'))
+    installedFiles = fs.readdirSync(commandsDir).filter((f) => {
+      if (!f.startsWith('lyx-'))
+        return false
+      try {
+        return fs.statSync(join(commandsDir, f)).isDirectory()
+      }
+      catch { return false }
+    })
   }
   catch {
     console.log(ansis.yellow(`  ${isZh ? '未找到已安装的命令。' : 'No installed commands found.'}`))
@@ -248,13 +255,13 @@ function showHelp(): void {
   const coreConfigs = getWorkflowConfigs()
   const coreCommandNames = new Set(coreConfigs.flatMap(w => w.commands))
 
-  const coreFiles = installedFiles.map(f => f.replace(/^ly-/, '').replace('.md', ''))
+  const coreFiles = installedFiles.map(f => f.replace(/^lyx-/, ''))
 
   section(isZh ? '核心命令' : 'Core commands')
   for (const config_ of coreConfigs) {
     for (const cmdName of config_.commands) {
       if (coreFiles.includes(cmdName) && coreCommandNames.has(cmdName)) {
-        cmd(`/ly:${cmdName}`, (isZh ? config_.description : config_.descriptionEn) || '')
+        cmd(`@lyx-${cmdName}`, (isZh ? config_.description : config_.descriptionEn) || '')
       }
     }
   }
@@ -395,10 +402,18 @@ async function uninstall(): Promise<void> {
   if (result.success) {
     console.log(ansis.green(`  ✅ ${i18n.t('menu:uninstall.success')}`))
 
-    if (result.removedCodexPrompts.length > 0) {
+    if (result.removedSkills.length > 0) {
       console.log()
-      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedCodexPrompts')}`))
-      for (const file of result.removedCodexPrompts) {
+      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedSkills')}`))
+      for (const file of result.removedSkills) {
+        console.log(`    ${ansis.gray('•')} ${file}`)
+      }
+    }
+
+    if (result.removedLegacyPrompts.length > 0) {
+      console.log()
+      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedLegacyPrompts')}`))
+      for (const file of result.removedLegacyPrompts) {
         console.log(`    ${ansis.gray('•')} ${file}`)
       }
     }

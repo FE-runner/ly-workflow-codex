@@ -7,7 +7,7 @@ import { getLyDir, hasCoexistingLegacyLyProducts, LY_PROMPTS_DIR } from './confi
 import { ADAPTERS } from './host-adapters'
 import { getWorkflowById } from './installer-data'
 import { injectConfigVariables, PACKAGE_ROOT, replaceHomePathsInTemplate } from './installer-template'
-import { CODE_PROMPTS_DIR } from './package-meta'
+import { AGENTS_SKILLS_DIR, CODE_PROMPTS_DIR } from './package-meta'
 
 // ═══════════════════════════════════════════════════════
 // Re-exports — all consumers import from './installer'
@@ -32,15 +32,15 @@ export { injectConfigVariables } from './installer-template'
 
 /**
  * installWorkflows 的配置入参。
- * promptsDir / codexPromptsDir 供测试注入，缺省用真实 homedir 路径。
+ * promptsDir / codexSkillsDir 供测试注入，缺省用真实 homedir 路径。
  */
 export interface InstallWorkflowsConfig {
   /** codex 宿主审查模型（LyConfig.codexHost.reviewModel） */
   reviewModel?: string
   /** 共享角色词目录（默认 ~/.ly/prompts/） */
   promptsDir?: string
-  /** codex custom prompts 目录（默认 ~/.codex/prompts/） */
-  codexPromptsDir?: string
+  /** codex skills 安装目录（默认 ~/.agents/skills/，测试可注入） */
+  codexSkillsDir?: string
 }
 
 type InstallContext = HostAdapterContext
@@ -89,8 +89,8 @@ async function copyMdTemplates(
 // ═══════════════════════════════════════════════════════
 
 /**
- * Install slash command .md files for the codex host adapter.
- * codex:  templates/commands-codex/<cmd>.md → ~/.codex/prompts/ly-<cmd>.md
+ * Install SKILL.md files for the codex host adapter.
+ * codex:  templates/skills-codex/<cmd>.md → ~/.agents/skills/ly-<cmd>/SKILL.md
  */
 async function installCommandFiles(
   ctx: InstallContext,
@@ -110,7 +110,8 @@ async function installCommandFiles(
 
     for (const cmd of workflow.commands) {
       const srcFile = join(target.sourceDir, `${cmd}.md`)
-      const destFile = join(target.targetDir, `${filePrefix}${cmd}.md`)
+      const destDir = join(target.targetDir, `${filePrefix}${cmd}`)
+      const destFile = join(destDir, 'SKILL.md')
 
       try {
         if (await fs.pathExists(srcFile)) {
@@ -118,6 +119,7 @@ async function installCommandFiles(
             let content = await fs.readFile(srcFile, 'utf-8')
             content = adapter.renderTemplate(content, ctx)
             content = replaceHomePathsInTemplate(content, ctx.installDir)
+            await fs.ensureDir(destDir)
             await fs.writeFile(destFile, content, 'utf-8')
             ctx.result.installedCommands.push(cmd)
           }
@@ -129,13 +131,15 @@ async function installCommandFiles(
         }
         else {
           const placeholder = `---
+name: ${filePrefix}${cmd}
 description: "${workflow.descriptionEn}"
 ---
 
-# /ly:${cmd}
+# ${filePrefix}${cmd}
 
 ${workflow.description}
 `
+          await fs.ensureDir(destDir)
           await fs.writeFile(destFile, placeholder, 'utf-8')
           ctx.result.installedCommands.push(cmd)
         }
@@ -237,7 +241,7 @@ export async function installWorkflows(
     },
     templateDir: join(PACKAGE_ROOT, 'templates'),
     promptsDir: config.promptsDir || LY_PROMPTS_DIR,
-    codexPromptsDir: config.codexPromptsDir || CODE_PROMPTS_DIR,
+    codexSkillsDir: config.codexSkillsDir || AGENTS_SKILLS_DIR,
     result: {
       success: true,
       installedCommands: [],
@@ -288,7 +292,7 @@ export async function installWorkflows(
     }
   }
 
-  ctx.result.configPath = ctx.codexPromptsDir
+  ctx.result.configPath = ctx.codexSkillsDir
   return ctx.result
 }
 
@@ -298,8 +302,10 @@ export async function installWorkflows(
 
 export interface UninstallResult {
   success: boolean
-  /** 移除的 ~/.codex/prompts/ly-*.md 文件名 */
-  removedCodexPrompts: string[]
+  /** 移除的 ~/.agents/skills/lyx-* skill 目录名 */
+  removedSkills: string[]
+  /** 清理的旧安装位残留 ~/.codex/prompts/ly-*.md 文件名 */
+  removedLegacyPrompts: string[]
   /** 是否清除了共享角色词子目录 ~/.ly/prompts/codex/（父目录与其余子目录保留） */
   removedSharedPrompts: boolean
   /** 共享配置 ~/.ly/config.toml 是否保留（保守策略：一律保留，仅提示） */
@@ -309,7 +315,7 @@ export interface UninstallResult {
 
 /**
  * Uninstall workflows（codex 单宿主）：
- * - 移除 ~/.codex/prompts/ly-*.md
+ * - 移除 ~/.agents/skills/ly-* skill 目录，并清理旧安装位 ~/.codex/prompts/ly-*.md 残留
  * - 仅移除共享角色词子目录 ~/.ly/prompts/codex/（本包归属产物；父目录与其余子目录保留）
  * - 保留共享配置 ~/.ly/config.toml（~/.ly 为 ly-workflow 共享命名空间，含 worktrees 等真实数据）
  * - 触发 codex 侧残留清理（AGENTS.md 区块 / config.toml 旧区块 / 旧 agents）
@@ -319,27 +325,29 @@ export async function uninstallWorkflows(
   options?: {
     legacyCleanupDirs?: { codexDir?: string, homeDir?: string }
     lyPromptsDir?: string
-    codexPromptsDir?: string
+    /** codex skills 安装目录（默认 ~/.agents/skills/，测试可注入） */
+    codexSkillsDir?: string
     /** 共享配置目录（默认 ~/.ly，测试可注入） */
     lyDir?: string
   },
 ): Promise<UninstallResult> {
   const result: UninstallResult = {
     success: true,
-    removedCodexPrompts: [],
+    removedSkills: [],
+    removedLegacyPrompts: [],
     removedSharedPrompts: false,
     configTomlKept: false,
     errors: [],
   }
 
-  // ── codex 宿主产物：~/.codex/prompts/ly-*.md ──
-  const codexPromptsDir = options?.codexPromptsDir || CODE_PROMPTS_DIR
+  // ── codex 宿主产物：~/.agents/skills/lyx-* skill 目录 ──
+  const codexSkillsDir = options?.codexSkillsDir || AGENTS_SKILLS_DIR
   const stubCtx: HostAdapterContext = {
     installDir,
     force: false,
     templateDir: '',
     promptsDir: options?.lyPromptsDir || LY_PROMPTS_DIR,
-    codexPromptsDir,
+    codexSkillsDir,
     config: {},
     result: {
       success: true,
@@ -353,12 +361,49 @@ export async function uninstallWorkflows(
     const files = await ADAPTERS.codex.uninstallList(stubCtx)
     for (const file of files) {
       await fs.remove(file)
-      result.removedCodexPrompts.push(basename(file))
+      result.removedSkills.push(basename(file))
     }
   }
   catch (error) {
-    result.errors.push(`Failed to remove codex prompts: ${error}`)
+    result.errors.push(`Failed to remove codex skills: ${error}`)
     result.success = false
+  }
+
+  // ── 旧安装位残留：~/.agents/skills/ly-* 目录（lyx- 前缀启用前形态）+ ~/.codex/prompts/ly-*.md（v0.2.0 前产物），升级清理 ──
+  try {
+    if (await fs.pathExists(AGENTS_SKILLS_DIR)) {
+      const entries = await fs.readdir(AGENTS_SKILLS_DIR)
+      for (const entry of entries) {
+        if (!entry.startsWith('ly-'))
+          continue
+        const full = join(AGENTS_SKILLS_DIR, entry)
+        if ((await fs.stat(full)).isDirectory()) {
+          await fs.remove(full)
+          result.removedLegacyPrompts.push(`${entry}/SKILL.md`)
+        }
+      }
+    }
+  }
+  catch (error) {
+    result.errors.push(`Failed to clean legacy ly-* skills: ${error}`)
+  }
+
+  try {
+    if (await fs.pathExists(CODE_PROMPTS_DIR)) {
+      const files = await fs.readdir(CODE_PROMPTS_DIR)
+      for (const file of files) {
+        if (!file.startsWith('ly-') || !file.endsWith('.md'))
+          continue
+        const full = join(CODE_PROMPTS_DIR, file)
+        if ((await fs.stat(full)).isFile()) {
+          await fs.remove(full)
+          result.removedLegacyPrompts.push(file)
+        }
+      }
+    }
+  }
+  catch (error) {
+    result.errors.push(`Failed to clean legacy codex prompts: ${error}`)
   }
 
   // ── 共享角色词：仅删本包归属的 ~/.ly/prompts/codex/ 子目录，严禁整删 ~/.ly/prompts/ 或 ~/.ly/ ──

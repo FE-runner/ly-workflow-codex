@@ -4,19 +4,21 @@ import ansis from 'ansis'
 import inquirer from 'inquirer'
 import { join } from 'pathe'
 import { i18n } from '../i18n'
-import { CODE_PROMPTS_DIR } from './package-meta'
+import { AGENTS_SKILLS_DIR } from './package-meta'
 
 /**
  * External dependency preflight checks.
  *
- * OpenSpec lifecycle commands (/ly:init /ly:explore /ly:propose /ly:review-plan
- * /ly:archive) depend on the global `openspec` CLI and the opsx skills it
- * installs during `openspec init`. Detection runs at installer entry points
+ * OpenSpec lifecycle commands (@lyx-init /@lyx-explore /@lyx-propose /@lyx-review-plan
+ * /@lyx-archive) depend on the global `openspec` CLI and the openspec skills
+ * (`openspec-*` SKILL.md) it installs into `~/.agents/skills/` or the project
+ * `.agents/skills/` during `openspec init`. Detection runs at installer entry points
  * (default / init / menu) so missing-dependency failures surface early
  * instead of at first command invocation.
  *
- * codex 单宿主：技能存在性判定只检测 ~/.codex/prompts/ 下的 opsx 自定义
- * prompt（opsx-explore/propose/apply/archive 任一存在即可）。
+ * codex 单宿主：技能存在性判定检测用户级 ~/.agents/skills/ 与项目 .agents/skills/
+ * 下的 openspec-* skill（openspec-explore/propose/apply-change/archive-change
+ * 任一存在 SKILL.md 即可）。
  */
 
 export interface OpenspecCliStatus {
@@ -24,30 +26,39 @@ export interface OpenspecCliStatus {
   version?: string
 }
 
-/** Commands that directly require the openspec CLI / opsx skills. */
-const DEPENDENT_COMMANDS = ['/ly:init', '/ly:explore', '/ly:propose', '/ly:review-plan', '/ly:archive']
+/** Commands that directly require the openspec CLI / openspec skills. */
+const DEPENDENT_COMMANDS = ['@lyx-init', '@lyx-explore', '@lyx-propose', '@lyx-review-plan', '@lyx-archive']
 
 const INSTALL_CMD = ['npm', 'install', '-g', '@fission-ai/openspec@latest']
 
 /** Windows needs shell:true to resolve npm-generated .cmd shims. */
 const SHELL_OPT = process.platform === 'win32' ? { shell: true } : {}
 
-/** codex 宿主的 opsx 自定义 prompt 文件（任一存在即视为 codex 侧技能齐备） */
-const CODEX_OPSX_PROMPT_FILES = [
-  'opsx-explore.md',
-  'opsx-propose.md',
-  'opsx-apply.md',
-  'opsx-archive.md',
+/** openspec-* skill 目录名（任一存在 SKILL.md 即视为 codex 侧技能齐备） */
+const OPENSPEC_SKILL_NAMES = [
+  'openspec-explore',
+  'openspec-propose',
+  'openspec-apply-change',
+  'openspec-archive-change',
 ]
 
-/** codex custom prompts directory — defaults to ~/.codex/prompts. */
-export function getCodexPromptsDir(): string {
-  return CODE_PROMPTS_DIR
+/** codex skills 安装目录 — defaults to ~/.agents/skills. */
+export function getCodexSkillsDir(): string {
+  return AGENTS_SKILLS_DIR
 }
 
-/** Detect whether codex-side opsx custom prompts exist (i.e. openspec init was run for codex). */
-export function detectCodexOpsxPrompts(): boolean {
-  return CODEX_OPSX_PROMPT_FILES.some(f => existsSync(join(getCodexPromptsDir(), f)))
+/**
+ * Detect whether openspec skills exist (user-level ~/.agents/skills or the
+ * current project's .agents/skills), i.e. openspec init has been run.
+ */
+export function detectOpenspecSkills(): boolean {
+  const roots = [
+    AGENTS_SKILLS_DIR,
+    join(process.cwd(), '.agents', 'skills'),
+  ]
+  return OPENSPEC_SKILL_NAMES.some(name =>
+    roots.some(root => existsSync(join(root, name, 'SKILL.md'))),
+  )
 }
 
 /** Detect the global openspec CLI via `openspec --version`. */
@@ -95,7 +106,7 @@ export async function checkExternalDeps(options?: { skipPrompt?: boolean }): Pro
     const cli = await detectOpenspecCli()
 
     if (cli.installed) {
-      if (!detectCodexOpsxPrompts()) {
+      if (!detectOpenspecSkills()) {
         console.log(ansis.yellow(`⚠ ${i18n.t('common:preflight.skillsMissingCodex')}`))
       }
       return
@@ -136,7 +147,7 @@ export async function checkExternalDeps(options?: { skipPrompt?: boolean }): Pro
       console.log(ansis.yellow(`⚠ ${i18n.t('common:preflight.installNotInPath')}`))
       return
     }
-    if (detectCodexOpsxPrompts()) {
+    if (detectOpenspecSkills()) {
       console.log(ansis.green(`✓ ${i18n.t('common:preflight.installSuccessWithSkills')}`))
     }
     else {

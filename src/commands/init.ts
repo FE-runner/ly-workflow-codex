@@ -333,7 +333,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     console.log()
     console.log(`  ${ansis.cyan(i18n.t('init:installedCommands'))}`)
     for (const cmd of result.installedCommands) {
-      console.log(`    ${ansis.green('✓')} ly-${cmd}.md ${ansis.gray('→ ~/.codex/prompts/')}`)
+      console.log(`    ${ansis.green('✓')} lyx-${cmd} ${ansis.gray('→ ~/.agents/skills/')}`)
     }
     if (result.installedPrompts.length > 0) {
       console.log()

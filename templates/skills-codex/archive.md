@@ -1,11 +1,14 @@
 ---
+name: lyx-archive
 description: '按 opsx:archive 编排流程归档完成的 change，完成后 commit'
 argument-hint: '[<change-name>]'
 ---
 
 # Archive
 
-按 `~/.codex/prompts/opsx-archive.md`（opsx archive 编排 prompt）定义的流程归档指定 change（`$ARGUMENTS` 未指定时按 opsx:archive 流程的默认规则确定目标）。
+> 调用方式：`@lyx-archive` mention 后跟随的自然语言即参数（如 `@lyx-archive` 带需求描述/选项）；无参数时直接 `@lyx-archive`。
+
+按 `@openspec-archive-change skill`（opsx archive 编排 prompt）定义的流程归档指定 change（`参数` 未指定时按 opsx:archive 流程的默认规则确定目标）。
 
 ## 提交归档改动
 

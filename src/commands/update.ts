@@ -8,7 +8,7 @@ import ora from 'ora'
 import { basename, join } from 'pathe'
 import { i18n } from '../i18n'
 import { readLyConfig } from '../utils/config'
-import { CODE_PROMPTS_DIR, PACKAGE_NAME } from '../utils/package-meta'
+import { AGENTS_SKILLS_DIR, CODE_PROMPTS_DIR, PACKAGE_NAME } from '../utils/package-meta'
 import { checkForUpdates, compareVersions } from '../utils/version'
 
 const execAsync = promisify(exec)
@@ -196,29 +196,50 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
 
   const BACKUP_SUFFIX = '.ly-update-bak'
 
-  // codex 单宿主：只备份 ~/.codex/prompts/ly-*.md 命令文件
+  // codex 单宿主：备份新安装位 ~/.agents/skills/lyx-* skill 目录（含旧 ly-* 开发形态残留），
+  // 以及旧安装位 ~/.codex/prompts/ly-*.md 残留（v0.2.0 前产物，升级清理）。
   // （共享角色词 ~/.ly/prompts/ 与配置 ~/.ly/config.toml 由 init --force 重装/保留，
-  //   用户自己的 ~/.codex/prompts 下非 ly- 文件一律不动）
-  const codexPromptsDir = CODE_PROMPTS_DIR
-  const backupDir = join(codexPromptsDir + BACKUP_SUFFIX)
+  //   用户自己的 ~/.agents/skills 下非 lyx-/ly- 内容与 ~/.codex/prompts 下非 ly- *.md 一律不动）
+  const codexSkillsDir = AGENTS_SKILLS_DIR
+  const legacyPromptsDir = CODE_PROMPTS_DIR
+  const backupDir = join(codexSkillsDir + BACKUP_SUFFIX)
 
-  // Step 3: Back up existing ly-*.md files
+  // Step 3: Back up existing lyx-* skill dirs (and legacy ly-* residue)
   spinner = ora(i18n.t('update:removingOld')).start()
 
   const backedUp: string[] = []
   try {
-    if (await fs.pathExists(codexPromptsDir)) {
+    if (await fs.pathExists(codexSkillsDir) || await fs.pathExists(legacyPromptsDir)) {
       // Clean up leftover backups from previous failed update
       if (await fs.pathExists(backupDir)) {
         await fs.remove(backupDir)
       }
       await fs.ensureDir(backupDir)
-      const files = await fs.readdir(codexPromptsDir)
-      for (const f of files) {
-        if (!f.startsWith('ly-') || !f.endsWith('.md'))
-          continue
-        await fs.move(join(codexPromptsDir, f), join(backupDir, f))
-        backedUp.push(join(codexPromptsDir, f))
+      // 新安装位：~/.agents/skills/lyx-* 目录（含旧 ly-* 开发形态残留，一并备份以便回滚）
+      if (await fs.pathExists(codexSkillsDir)) {
+        const entries = await fs.readdir(codexSkillsDir)
+        for (const entry of entries) {
+          if (!entry.startsWith('lyx-') && !entry.startsWith('ly-'))
+            continue
+          const full = join(codexSkillsDir, entry)
+          if ((await fs.stat(full)).isDirectory()) {
+            await fs.move(full, join(backupDir, entry))
+            backedUp.push(full)
+          }
+        }
+      }
+      // 旧安装位残留：~/.codex/prompts/ly-*.md
+      if (await fs.pathExists(legacyPromptsDir)) {
+        const files = await fs.readdir(legacyPromptsDir)
+        for (const f of files) {
+          if (!f.startsWith('ly-') || !f.endsWith('.md'))
+            continue
+          const full = join(legacyPromptsDir, f)
+          if ((await fs.stat(full)).isFile()) {
+            await fs.move(full, join(backupDir, f))
+            backedUp.push(full)
+          }
+        }
       }
     }
     spinner.succeed(i18n.t('update:oldRemoved'))
@@ -253,8 +274,21 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
     })
 
     // Step 5: Verify new installation actually produced files
-    const hasInstalled = await fs.pathExists(codexPromptsDir)
-      && (await fs.readdir(codexPromptsDir)).some(f => f.startsWith('ly-') && f.endsWith('.md'))
+    let hasInstalled = false
+    if (await fs.pathExists(codexSkillsDir)) {
+      const entries = await fs.readdir(codexSkillsDir)
+      for (const entry of entries) {
+        if (!entry.startsWith('lyx-'))
+          continue
+        try {
+          if ((await fs.stat(join(codexSkillsDir, entry))).isDirectory()) {
+            hasInstalled = true
+            break
+          }
+        }
+        catch { /* race: entry vanished */ }
+      }
+    }
 
     if (hasInstalled) {
       installSuccess = true
@@ -266,7 +300,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
         console.log()
         console.log(ansis.cyan(i18n.t('update:installed', { count: config.workflows.installed.length })))
         for (const cmd of config.workflows.installed) {
-          console.log(`  ${ansis.gray('•')} /ly:${cmd}`)
+          console.log(`  ${ansis.gray('•')} @lyx-${cmd}`)
         }
       }
     }

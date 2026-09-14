@@ -22,8 +22,8 @@ function findPackageRoot(): string {
 }
 
 const PACKAGE_ROOT = findPackageRoot()
-// codex 单宿主：实际安装源为 templates/commands-codex/
-const TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'commands-codex')
+// codex 单宿主：实际安装源为 templates/skills-codex/
+const TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'skills-codex')
 
 // ─────────────────────────────────────────────────────────────
 // A. Workflow registry consistency
@@ -189,7 +189,7 @@ describe('template variable completeness', () => {
 // ─────────────────────────────────────────────────────────────
 describe('installWorkflows — prompts installation', () => {
   const base = mkdtempSync(join(tmpdir(), 'ly-test-prompts-'))
-  const codexPromptsDir = join(base, 'codex-prompts')
+  const codexSkillsDir = join(base, 'codex-skills')
   const lyPromptsDir = join(base, 'ly-prompts')
   const codexDir = join(base, 'codex')
 
@@ -197,12 +197,12 @@ describe('installWorkflows — prompts installation', () => {
     await fs.remove(base)
   })
 
-  it('installs commands into codexPromptsDir and only codex prompts', async () => {
+  it('installs commands into codexSkillsDir and only codex prompts', async () => {
     const result = await installWorkflows(
       getAllCommandIds(),
       codexDir,
       true,
-      { promptsDir: lyPromptsDir, codexPromptsDir },
+      { promptsDir: lyPromptsDir, codexSkillsDir },
     )
     expect(result.success).toBe(true)
     expect(result.installedCommands.length).toBe(14)
@@ -224,7 +224,7 @@ describe('installWorkflows — prompts installation', () => {
 // ─────────────────────────────────────────────────────────────
 describe('installWorkflows — non-force skip counting', () => {
   const base = mkdtempSync(join(tmpdir(), 'ly-test-skip-'))
-  const codexPromptsDir = join(base, 'codex-prompts')
+  const codexSkillsDir = join(base, 'codex-skills')
   const lyPromptsDir = join(base, 'ly-prompts')
   const codexDir = join(base, 'codex')
 
@@ -236,14 +236,16 @@ describe('installWorkflows — non-force skip counting', () => {
     // 预置全部 14 个目标文件（模拟 ly-workflow 旧安装残留）
     const templateFiles = readdirSync(join(TEMPLATES_DIR)).filter(f => f.endsWith('.md'))
     expect(templateFiles.length).toBe(14)
-    await fs.ensureDir(codexPromptsDir)
+    await fs.ensureDir(codexSkillsDir)
     for (const f of templateFiles) {
-      await fs.writeFile(join(codexPromptsDir, `ly-${f}`), '# old content\n')
+      const dir = join(codexSkillsDir, `lyx-${f.replace('.md', '')}`)
+      await fs.ensureDir(dir)
+      await fs.writeFile(join(dir, 'SKILL.md'), '# old content\n')
     }
 
     const result = await installWorkflows(getAllCommandIds(), codexDir, false, {
       promptsDir: lyPromptsDir,
-      codexPromptsDir,
+      codexSkillsDir,
     })
 
     expect(result.success).toBe(true)
@@ -253,13 +255,13 @@ describe('installWorkflows — non-force skip counting', () => {
     expect(result.skippedCommands?.length).toBe(14)
     expect(result.errors).toEqual([])
     // 旧文件内容未被覆盖
-    expect(readFileSync(join(codexPromptsDir, 'ly-commit.md'), 'utf-8')).toBe('# old content\n')
+    expect(readFileSync(join(codexSkillsDir, 'lyx-commit', 'SKILL.md'), 'utf-8')).toBe('# old content\n')
   })
 
   it('force install overwrites existing files and counts all as installed', async () => {
     const result = await installWorkflows(getAllCommandIds(), codexDir, true, {
       promptsDir: lyPromptsDir,
-      codexPromptsDir,
+      codexSkillsDir,
     })
     expect(result.success).toBe(true)
     expect(result.installedCommands.length).toBe(14)

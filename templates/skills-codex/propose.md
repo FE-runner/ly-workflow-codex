@@ -1,9 +1,12 @@
 ---
+name: lyx-propose
 description: '按 opsx:propose 编排流程生成方案；创建方案前先问隔离方式（worktree / 本项目切新分支 / 留在当前分支）与全自动/手动（各只一次）；产物生成后 commit 前执行方案自审（闭环+全面性），自审修复随 propose: commit 一次落库；全自动 = 自动流水线到审完代码，手动 = 逐步确认'
 argument-hint: '<需求描述>'
 ---
 
 # Propose
+
+> 调用方式：`@lyx-propose` mention 后跟随的自然语言即参数（如 `@lyx-propose` 带需求描述/选项）；无参数时直接 `@lyx-propose`。
 
 收尾编排入口。创建方案前先问两件事（各只一次）：本次开发的隔离方式（隔离 worktree / 本项目切新分支 / 留在当前分支，不在 worktree 内才问）、本次走全自动还是手动。产物生成后、commit 前由方案提出者执行一次方案自审（逻辑闭环 + 业务全面性，见步骤 5），自审修复随 `propose: <change-name>` commit 一次干净落库；全自动路径在同一会话内自动跑 review-plan → apply → review-code 直到审完代码，手动路径逐步确认。
 
@@ -31,11 +34,11 @@ argument-hint: '<需求描述>'
        git worktree add -b <开发分支名> ~/.ly/worktrees/<项目名>/<开发分支名> <当前分支HEAD>
        ```
        （`<项目名>` 以 `git rev-parse --git-common-dir` 反推主仓库目录名；多级分支名按 `/` 展开路径，仍保持无来源前缀的单层语义。）
-    4. 自动复制环境文件（`.env` 等，复用 `/ly:worktree add` 规则），跑一次项目 baseline 验证。
-    5. **baseline 失败** → 报告失败摘要并询问用户"仍继续 / 放弃"：**仍继续** → 同会话 cd 进 worktree 继续编排（失败摘要作为已知风险带入后续流程，按本步 6/7 执行）；**放弃** → 保留已创建的 worktree 与分支（不自动清理，需要时用 `/ly:worktree remove` 显式删除），打印携带失败摘要的兜底续接命令（同 6 的格式），会话结束，change 尚未生成。
+    4. 自动复制环境文件（`.env` 等，复用 `@lyx-worktree add` 规则），跑一次项目 baseline 验证。
+    5. **baseline 失败** → 报告失败摘要并询问用户"仍继续 / 放弃"：**仍继续** → 同会话 cd 进 worktree 继续编排（失败摘要作为已知风险带入后续流程，按本步 6/7 执行）；**放弃** → 保留已创建的 worktree 与分支（不自动清理，需要时用 `@lyx-worktree remove` 显式删除），打印携带失败摘要的兜底续接命令（同 6 的格式），会话结束，change 尚未生成。
     6. 打印**兜底续接命令**（绝对路径 + shell 安全转义）——正常路径不使用，仅当本会话意外死亡（崩溃、终端关闭等）时，用于在新 worktree 中恢复：
        ```
-       cd ~/.ly/worktrees/<项目名>/<开发分支名> && codex "继续 在隔离 worktree 中 /ly:propose <同一需求>"
+       cd ~/.ly/worktrees/<项目名>/<开发分支名> && codex "继续 在隔离 worktree 中 @lyx-propose <同一需求>"
        ```
     7. **同一会话续跑（不结束会话）**——当前会话直接 `cd` 进新 worktree 并继续本编排（worktree 先于 change 创建的时序不变，change 尚未生成）：
        1. 以绝对路径 `cd "$HOME/.ly/worktrees/<项目名>/<开发分支名>"` 切换工作目录。
@@ -67,15 +70,15 @@ argument-hint: '<需求描述>'
 
 ### 3. 按 opsx:propose 编排流程生成方案
 
-读取 `~/.codex/prompts/opsx-propose.md`（opsx propose 编排 prompt）并按其定义的完整流程，围绕 `$ARGUMENTS`（需求描述）生成 proposal/design/tasks 全部 artifacts。生成过程中遵循该编排 prompt 的全部步骤与约束（本命令的步骤 4-9 在其后继续编排）。
+读取 `@openspec-propose skill`（opsx propose 编排 prompt）并按其定义的完整流程，围绕 `参数`（需求描述）生成 proposal/design/tasks 全部 artifacts。生成过程中遵循该编排 prompt 的全部步骤与约束（本命令的步骤 4-9 在其后继续编排）。
 
 ### 4. 确定真实 change 名（前后快照比对）
 
-调用前记录一次 `openspec list --json` 的候选 change 名集合（快照 A，若步骤 3 之前尚未记录则在生成前先记录）；生成完成后再查询一次（快照 B）。取快照 B 相对快照 A 新增的那一条作为本次实际生成的 change 名。**不依赖 `$ARGUMENTS`、不单纯依赖全局 `lastModified` 最新一条**——opsx:propose 会把用户输入的原始描述转成 kebab-case slug，两者不保证一致。若新增条目不唯一，或没有新增条目，**不猜测**，直接询问用户本次生成的 change 名，待确认后再继续。
+调用前记录一次 `openspec list --json` 的候选 change 名集合（快照 A，若步骤 3 之前尚未记录则在生成前先记录）；生成完成后再查询一次（快照 B）。取快照 B 相对快照 A 新增的那一条作为本次实际生成的 change 名。**不依赖 `参数`、不单纯依赖全局 `lastModified` 最新一条**——opsx:propose 会把用户输入的原始描述转成 kebab-case slug，两者不保证一致。若新增条目不唯一，或没有新增条目，**不猜测**，直接询问用户本次生成的 change 名，待确认后再继续。
 
 ### 5. 方案自审（commit 前，由方案提出者执行）
 
-在确定真实 change 名（步骤 4）之后、暂存并 commit（步骤 6）之前，由当前会话（方案提出者）对该 change 的全部 artifacts（`proposal.md`/`design.md`/`tasks.md`/全部 delta spec）执行一次**方案自审**。提出者刚完成方案生成、上下文最全，负责查"逻辑闭环"与"业务全面性"这两类依赖上下文的问题；独立视角的"一致性 + 风险"仍归 `/ly:review-plan` 的外部审查（职责分工，不重复）。
+在确定真实 change 名（步骤 4）之后、暂存并 commit（步骤 6）之前，由当前会话（方案提出者）对该 change 的全部 artifacts（`proposal.md`/`design.md`/`tasks.md`/全部 delta spec）执行一次**方案自审**。提出者刚完成方案生成、上下文最全，负责查"逻辑闭环"与"业务全面性"这两类依赖上下文的问题；独立视角的"一致性 + 风险"仍归 `@lyx-review-plan` 的外部审查（职责分工，不重复）。
 
 **四项检查（逐项执行，粒度按条目对齐，不做段落级语义对齐）：**
 
@@ -108,7 +111,7 @@ argument-hint: '<需求描述>'
 4. 用 `git show --name-only --format=` 校验这次 commit 的实际文件集合严格属于 `openspec/changes/<change-name>/` 目录（含 `.openspec.yaml`）。
 5. 若该目录下无可提交内容、`git commit` 失败，或校验发现文件集合超出该目录范围，**停止后续自动化步骤**，报告具体原因。
 
-`propose: <change-name>` commit（含自审修复）即 `/ly:review-plan` 的审查对象（见 `/ly:review-plan` 的审查范围判定：`git log --grep="^propose: <change-name>"` 取 HEAD 侧最近一期，`git show <commit>` + `git diff HEAD` + 未跟踪清单）。
+`propose: <change-name>` commit（含自审修复）即 `@lyx-review-plan` 的审查对象（见 `@lyx-review-plan` 的审查范围判定：`git log --grep="^propose: <change-name>"` 取 HEAD 侧最近一期，`git show <commit>` + `git diff HEAD` + 未跟踪清单）。
 
 ### 7. 按第 2 步选择分支
 
@@ -119,12 +122,12 @@ argument-hint: '<需求描述>'
 
 **全程无隔离方式询问、不自动 archive。**
 
-1. 自动执行 `/ly:review-plan <change-name>` 编排流程（完整指示见 `~/.codex/prompts/ly-review-plan.md`，按其指示逐轮执行审查-修复循环；审查对象为 `propose:` commit，清零时由循环统一提交修复）。
+1. 自动执行 `@lyx-review-plan <change-name>` 编排流程（完整指示见 `@ly@lyx-review-plan skill 的指示`，按其指示逐轮执行审查-修复循环；审查对象为 `propose:` commit，清零时由循环统一提交修复）。
    - Critical 清零 → 进入下一步。
    - 其余任一种终止（熔断、分歧未决、无法安全修复、验证失败、审查调用失败、达到轮数上限）→ **停止流水线**，复用该循环已产出的终止报告（不重新生成或重复一份）报告终止原因，结束，不执行后续步骤。
-2. 自动执行 `/ly:apply <change-name>` 编排流程（完整指示见 `~/.codex/prompts/ly-apply.md`；实施，产物立即 commit `apply: <change-name>`）。
-3. 自动执行 `/ly:review-code <change-name>` 编排流程（完整指示见 `~/.codex/prompts/ly-review-code.md`；审查对象为 `apply:` commit，清零时由循环统一提交修复）。
-   - Critical 清零 → 流水线结束，提示可手动 `/ly:archive` 归档。
+2. 自动执行 `@lyx-apply <change-name>` 编排流程（完整指示见 `@ly@lyx-apply skill 的指示`；实施，产物立即 commit `apply: <change-name>`）。
+3. 自动执行 `@lyx-review-code <change-name>` 编排流程（完整指示见 `@ly@lyx-review-code skill 的指示`；审查对象为 `apply:` commit，清零时由循环统一提交修复）。
+   - Critical 清零 → 流水线结束，提示可手动 `@lyx-archive` 归档。
    - 其余任一种终止 → **停止流水线**，复用该循环已产出的终止报告报告终止原因，结束。
 4. 流水线执行过程中任一环节 `git commit` 失败：如实报告 Git 原始错误，停止流水线。
 
@@ -134,10 +137,10 @@ argument-hint: '<需求描述>'
    ```
    "要不要现在跑一次 review-plan 审查循环？"
    ```
-   - **否** → 编排结束。方案已 commit；日后由用户自行 `/ly:apply` 实施、`/ly:review-code` 审查。
+   - **否** → 编排结束。方案已 commit；日后由用户自行 `@lyx-apply` 实施、`@lyx-review-code` 审查。
    - **是** → 继续步骤 2。
-2. 执行 `/ly:review-plan <change-name>` 编排流程（审查对象为 `propose:` commit，清零时由循环统一提交修复）。
-3. 循环终止（无论何种原因）后编排结束，**不再询问隔离方式、不再询问提交、不自动衔接 apply**——日后的实施与代码审查由用户另行 `/ly:apply`、`/ly:review-code` 触发。
+2. 执行 `@lyx-review-plan <change-name>` 编排流程（审查对象为 `propose:` commit，清零时由循环统一提交修复）。
+3. 循环终止（无论何种原因）后编排结束，**不再询问隔离方式、不再询问提交、不自动衔接 apply**——日后的实施与代码审查由用户另行 `@lyx-apply`、`@lyx-review-code` 触发。
 
 ---
 

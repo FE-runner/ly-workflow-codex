@@ -1,16 +1,19 @@
 ---
+name: lyx-publish
 description: 'npm 包发布：bmc 私域 Nexus / GitHub Packages / npmjs + GitHub Release / CI 自动发布 四场景'
 argument-hint: '<场景描述>'
 ---
 
 # Publish - npm 包发布
 
+> 调用方式：`@lyx-publish` mention 后跟随的自然语言即参数（如 `@lyx-publish` 带需求描述/选项）；无参数时直接 `@lyx-publish`。
+
 覆盖四个发布场景：bmc 私域 Nexus、GitHub Packages、公开 npmjs.org + GitHub Release、CI 自动发布（tag push 触发）。发布前走前置检查 → 版本号自动推导 → 构建 → 发布 → 验证完整流程。
 
 ## 使用方法
 
 ```bash
-/ly:publish <场景描述>
+@lyx-publish <场景描述>
 ```
 
 **🔴 CHECKPOINT：先确认发布目标，问用户，别猜。**
@@ -64,7 +67,7 @@ ls scripts/*publish* scripts/*release* 2>/dev/null
 
 ## 版本号确定规则（SemVer + Conventional Commits 自动推导）
 
-**不要直接问用户「patch 还是 minor」，先分析 commit 历史给出建议，再让用户确认/覆盖。**（与 `/ly:release` 共享同一套规则）
+**不要直接问用户「patch 还是 minor」，先分析 commit 历史给出建议，再让用户确认/覆盖。**（与 `@lyx-release` 共享同一套规则）
 
 ### 自动分析步骤
 
@@ -110,7 +113,7 @@ echo "$COMMITS" | grep -i "BREAKING CHANGE" || true      # 破坏性变更
 - **覆盖**：按用户输入的档位执行
 - **不存在以往的 commit**：回退到直接询问版本号
 
-若已装 `/ly:changelog`，version bump 后触发它更新 CHANGELOG，再补一次 commit；没装则询问用户要不要更新日志。
+若已装 `@lyx-changelog`，version bump 后触发它更新 CHANGELOG，再补一次 commit；没装则询问用户要不要更新日志。
 
 ---
 
@@ -161,7 +164,7 @@ pnpm lint            # 有则跑，失败先询问是否继续
 - 将建议展示给用户确认/覆盖
 - 确认后执行 `npm version <patch|minor|major>`（会自动更新 package.json + 打 git tag + commit）
 
-若项目已装 `/ly:changelog`，version bump 后触发它更新 CHANGELOG，再补一次 commit；没装则询问用户要不要更新日志。
+若项目已装 `@lyx-changelog`，version bump 后触发它更新 CHANGELOG，再补一次 commit；没装则询问用户要不要更新日志。
 
 ### 5. 发布
 
@@ -282,7 +285,7 @@ gh release create v<新版本号> --title "v<新版本号>" --notes-file <(sed -
 cat .github/workflows/*.yml 2>/dev/null | grep -A3 "^on:"
 ```
 
-没有 workflow 文件就先帮用户写一个（`.github/workflows/ly:publish.yml`），核心结构：
+没有 workflow 文件就先帮用户写一个（`.github/workflows@lyx-publish.yml`），核心结构：
 
 ```yaml
 name: Publish
@@ -321,7 +324,7 @@ pnpm type-check
 # 版本号 bump（按上方「版本号确定规则」自动推导 + 确认）
 npm version <patch|minor|major>
 
-# 若装了 /ly:changelog，此时更新 CHANGELOG 并补 commit；没装则询问用户
+# 若装了 @lyx-changelog，此时更新 CHANGELOG 并补 commit；没装则询问用户
 ```
 
 ### 4. 推送触发
@@ -382,4 +385,4 @@ npm view <包名> versions --registry=<对应registry>   # 确认新版本已出
 
 ---
 
-**注意：** 版本号 bump（`npm version`）、tag、push 若项目已装 `/ly:release` 和 `/ly:changelog`，优先复用那两个命令的规则，避免重复定义流程；本命令专注 registry 认证配置 + `npm publish` 本身这一环。不引入 changesets。
+**注意：** 版本号 bump（`npm version`）、tag、push 若项目已装 `@lyx-release` 和 `@lyx-changelog`，优先复用那两个命令的规则，避免重复定义流程；本命令专注 registry 认证配置 + `npm publish` 本身这一环。不引入 changesets。
