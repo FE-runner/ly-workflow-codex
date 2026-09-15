@@ -39,6 +39,9 @@ linux-do-post-update.md
 .ace-tool/
 .claude/
 .magi/
+.agents/
+.codex/
+.hermes/
 
 # Lock files
 # pnpm-lock.yaml is committed for CI reproducibility
