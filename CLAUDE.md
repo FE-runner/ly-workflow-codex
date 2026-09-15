@@ -2,7 +2,7 @@
 
 > ⚠️ **权威文档是 [AGENTS.md](./AGENTS.md)**：本仓库的开发指导、模块职责、关键设计决策以 AGENTS.md 为准；本文件只做精简导航，内容与 AGENTS.md 对齐，双向漂移时以 AGENTS.md 为准。对外说明见 [README.md](./README.md)。
 
-**Last Updated**: 2026-09-14 (v0.1.0)
+**Last Updated**: 2026-09-15 (v0.2.0)
 
 ---
 
