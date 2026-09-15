@@ -48,8 +48,6 @@ export const PACKAGE_ROOT = findPackageRoot(__dirname)
 export interface InjectConfig {
   /** 审查 agent A 模型（历史占位 {{REVIEW_MODEL}} 兼容；codex 单宿主恒渲染 codex） */
   reviewModel?: string
-  /** spawnableModels（透传；{{SPAWNABLE_MODELS_DEFAULT}} 仅注入内置默认列表文本，见下） */
-  spawnableModels?: string[]
 }
 
 /**

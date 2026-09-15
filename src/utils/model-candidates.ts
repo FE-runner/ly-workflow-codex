@@ -27,7 +27,7 @@ export function buildModelFieldChoices(input: { models: string[], current?: stri
   const inList = hasCurrent && models.includes(currentClean!)
 
   const choices: ModelFieldChoice[] = [
-    { name: ansis.gray(`0 ${i18n.t('init:model.unsetChoice')}`), value: MODEL_CHOICE_UNSET },
+    { name: ansis.gray(i18n.t('init:model.unsetChoice')), value: MODEL_CHOICE_UNSET },
     ...models.map(id => ({ name: id, value: id })),
   ]
   let defaultChoice = MODEL_CHOICE_UNSET

@@ -149,6 +149,7 @@ async function collectCodexHostConfig(options: {
 
   if (provider.type === 'existing') {
     // 直接选用既有 provider（不再拉取 /models：模型候选与校验仅以 spawnableModels 为来源）
+    console.log(ansis.gray(`  ✓ ${i18n.t('init:mode.providerExistingSelected', { name: provider.provider.name })}`))
   }
   else if (provider.type === 'custom') {
     console.log()
@@ -340,7 +341,6 @@ export async function init(options: InitOptions = {}): Promise<void> {
     // Install codex host commands + shared role prompts
     const result = await installWorkflows(selectedWorkflows, '', options.force, {
       reviewModel: collectedModels.reviewModel,
-      spawnableModels,
     })
 
     spinner.succeed(ansis.green(i18n.t('init:installSuccess')))

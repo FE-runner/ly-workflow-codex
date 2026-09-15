@@ -54,4 +54,36 @@ describe('assessSubagentModelConfig (codex-model-config)', () => {
     expect(result.status).toBe('fail')
     expect(result.spawnState).toBe('invalid')
   })
+
+  it('cross-checks the inherited current-session model when a field is unset', () => {
+    // 主会话模型可检测到且 ∈ 生效清单 → ok，不额外提示
+    const inList = assessSubagentModelConfig(undefined, { currentModel: 'gpt-5.6-luna' })
+    expect(inList.status).toBe('ok')
+    expect(inList.inheritedModel).toBeUndefined()
+    // 主会话模型 ∉ 生效清单且存在留空字段 → warn + inheritedModel（W5 交叉校验）
+    const warnResult = assessSubagentModelConfig(undefined, { currentModel: 'deepseek-v4-flash' })
+    expect(warnResult.status).toBe('warn')
+    expect(warnResult.inheritedModel).toEqual({ model: 'deepseek-v4-flash' })
+    // 主会话模型未检测到 → ok，不提示
+    expect(assessSubagentModelConfig(undefined, { currentModel: undefined }).status).toBe('ok')
+    expect(assessSubagentModelConfig(undefined, {}).status).toBe('ok')
+  })
+
+  it('does not warn on unset inheritance when every field is explicitly in-list', () => {
+    const result = assessSubagentModelConfig(
+      { reviewModel: 'gpt-5.6-luna', reviewModelB: 'gpt-5.6-luna', codingModel: 'gpt-5.6-luna' },
+      { currentModel: 'deepseek-v4-flash' },
+    )
+    expect(result.status).toBe('ok')
+    expect(result.inheritedModel).toBeUndefined()
+  })
+
+  it('field out-of-list keeps priority over the inherited-model WARN (fail wins)', () => {
+    const result = assessSubagentModelConfig(
+      { reviewModel: 'deepseek-v4-flash' },
+      { currentModel: 'deepseek-v4-flash' },
+    )
+    expect(result.status).toBe('fail')
+    expect(result.fields[0].okKind).toBe('out-of-list')
+  })
 })

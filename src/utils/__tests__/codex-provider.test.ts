@@ -2,13 +2,14 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'smol-toml'
-import { describe, expect, it, vi } from 'vitest'
-import { fetchCodexModels, listModelProviders, readCodexCurrentModel, readModelsJson, sanitizeProviderName, upsertModelProvider } from '../codex-provider'
+import { describe, expect, it } from 'vitest'
+import { listModelProviders, readCodexCurrentModel, readModelsJson, sanitizeProviderName, upsertModelProvider } from '../codex-provider'
 
 /**
  * codex-provider 单测——全部在 mkdtemp 临时目录运行，不触碰真实 ~/.codex。
  * 覆盖：config.toml 解析/空列表回退、增量写入（追加新块保注释 / 已存在块不重复写 /
- * 写入后 parse 合法 / 顶层 model_provider 原位替换与文件头插入）、/models 拉取成功与失败回退。
+ * 写入后 parse 合法 / 顶层 model_provider 原位替换与文件头插入）、Codex 现状读取
+ * （顶层 model / models.json 解析）。
  */
 
 function makeTmp(): string {
@@ -227,74 +228,6 @@ multi_agent = true
   })
 })
 
-describe('fetchCodexModels', () => {
-  it('returns deduped model ids on OpenAI-compatible response', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ id: 'gpt-x' }, { id: 'gpt-y' }, { id: 'gpt-x' }, { id: ' ' }] }),
-    })
-    vi.stubGlobal('fetch', fetchMock)
-    try {
-      const result = await fetchCodexModels({ baseUrl: 'https://proxy.example.com/v1/', apiKey: 'sk-test' })
-      expect(result).toEqual({ ok: true, models: ['gpt-x', 'gpt-y'] })
-      // URL 归一化：去掉尾斜杠，带 Bearer 头
-      expect(fetchMock).toHaveBeenCalledWith(
-        'https://proxy.example.com/v1/models',
-        expect.objectContaining({ method: 'GET', headers: { Authorization: 'Bearer sk-test' } }),
-      )
-    }
-    finally {
-      vi.unstubAllGlobals()
-    }
-  })
-
-  it('fails on non-2xx HTTP status', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }))
-    try {
-      const result = await fetchCodexModels({ baseUrl: 'https://x.com/v1' })
-      expect(result).toEqual({ ok: false, error: 'HTTP 401' })
-    }
-    finally {
-      vi.unstubAllGlobals()
-    }
-  })
-
-  it('fails on network error and propagates the reason', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED')))
-    try {
-      const result = await fetchCodexModels({ baseUrl: 'https://x.com/v1' })
-      expect(result.ok).toBe(false)
-      if (!result.ok)
-        expect(result.error).toContain('ECONNREFUSED')
-    }
-    finally {
-      vi.unstubAllGlobals()
-    }
-  })
-
-  it('fails on non-standard JSON shape (missing data[])', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ models: ['gpt-x'] }) }))
-    try {
-      const result = await fetchCodexModels({ baseUrl: 'https://x.com/v1' })
-      expect(result.ok).toBe(false)
-    }
-    finally {
-      vi.unstubAllGlobals()
-    }
-  })
-
-  it('tolerates a bare-array response', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ['a', { id: 'b' }] }))
-    try {
-      const result = await fetchCodexModels({ baseUrl: 'https://x.com/v1' })
-      expect(result).toEqual({ ok: true, models: ['a', 'b'] })
-    }
-    finally {
-      vi.unstubAllGlobals()
-    }
-  })
-})
-
 describe('readCodexCurrentModel (codex-model-config)', () => {
   it('reads the top-level model from config.toml', async () => {
     const dir = makeTmp()
@@ -374,6 +307,10 @@ describe('readModelsJson (codex-model-config)', () => {
       const empty = join(dir, 'empty.json')
       writeFileSync(empty, '{"models": []}', 'utf-8')
       expect(await readModelsJson(empty)).toEqual([])
+      // 合法 JSON 但无 models 键（{}）→ 未检测到（undefined，与空注册集合区分）
+      const noKey = join(dir, 'nokey.json')
+      writeFileSync(noKey, '{}', 'utf-8')
+      expect(await readModelsJson(noKey)).toBeUndefined()
     }
     finally {
       cleanup(dir)

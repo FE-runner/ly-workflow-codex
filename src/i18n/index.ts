@@ -87,6 +87,7 @@ const zhCN = {
     mode: {
       providerSelect: '选择 API 提供方',
       providerExisting: '已有 provider：{{name}}',
+      providerExistingSelected: '已选用 provider: {{name}}',
       providerOfficial: 'OpenAI 官方',
       providerCustom: '自定义（输入名称 / base_url）',
       customNamePrompt: 'provider 名称（写入 [model_providers.<name>]）',
@@ -155,6 +156,7 @@ const zhCN = {
       listBuiltin: '生效清单=内置默认：{{list}}',
       listConfigured: '生效清单=用户配置：{{list}}',
       warnInvalid: 'spawnableModels 字段格式非法/清洗后为空，已回退内置默认（请修复字段形态）',
+      warnInheritNotInList: '留空字段继承的当前会话模型 {{model}} 不在可 spawn 清单，建议在模型三连中显式选择清单内模型',
     },
   },
   update: {
@@ -319,6 +321,7 @@ const en: typeof zhCN = {
     mode: {
       providerSelect: 'Select API provider',
       providerExisting: 'Existing provider: {{name}}',
+      providerExistingSelected: 'Selected provider: {{name}}',
       providerOfficial: 'OpenAI official',
       providerCustom: 'Custom (name / base_url)',
       customNamePrompt: 'Provider name (written to [model_providers.<name>])',
@@ -387,6 +390,7 @@ const en: typeof zhCN = {
       listBuiltin: 'effective list = built-in default: {{list}}',
       listConfigured: 'effective list = user config: {{list}}',
       warnInvalid: 'spawnableModels is malformed / empty after cleaning; fell back to the built-in default (please fix the field shape)',
+      warnInheritNotInList: 'an empty field inherits the current session model {{model}}, which is not in the spawnable list — set an in-list model explicitly in the model trio',
     },
   },
   update: {

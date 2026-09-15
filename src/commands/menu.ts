@@ -347,7 +347,8 @@ async function configReviewModel(): Promise<void> {
   console.log(ansis.green(`  ✓ ${i18n.t('init:model.routingUpdated')}`))
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelCodex'))} ${next || i18n.t('init:host.reviewModelUnset')}`)
 
-  // reviewModel 渲染进 codex 版审查命令模板（-m 参数），改配置后按新值重装 codex 模板
+  // 改配置后重装命令模板（codex 单宿主：模型经"模板指示 + 宿主 spawn 能力"落实，无 -m 参数；
+  // 重装用于刷新模板正文与内置默认清单占位）
   await reinstallTemplates()
 }
 
@@ -357,8 +358,7 @@ async function reinstallTemplates(): Promise<void> {
   try {
     const config = await readLyConfig()
     const reviewModel = sanitizeReviewModel(config?.codexHost?.reviewModel)
-    const spawnableModels = resolveSpawnableModels(config?.codexHost)
-    const result = await installWorkflows(getCoreCommandIds(), '', true, { reviewModel, spawnableModels })
+    const result = await installWorkflows(getCoreCommandIds(), '', true, { reviewModel })
     if (result.success) {
       spinner.succeed(i18n.t('init:model.reinstallDone'))
     }

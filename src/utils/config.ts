@@ -151,8 +151,8 @@ export function createDefaultConfig(options: {
     },
   }
   const reviewModel = sanitizeReviewModel(options.codexHost?.reviewModel)
-  // 新字段（reviewModelB/codingModel）直接透传：仅做 trim、空白视为未配置（回退当前会话模型），
-  // 不做字符白名单清洗——它们不再拼进 shell 命令串，由模板指示 + 宿主 spawn 能力落实
+  // 三个模型字段统一仅 trim（sanitizeReviewModel 与 sanitizeModelField 同口径）、空白视为未配置
+  // （回退当前会话模型）：不再拼进 shell 命令串，由模板指示 + 宿主 spawn 能力落实
   const reviewModelB = sanitizeModelField(options.codexHost?.reviewModelB)
   const codingModel = sanitizeModelField(options.codexHost?.codingModel)
   // spawnableModels 透传并保全：不改写、不静默丢弃存量值（含格式非法的存量形态由 doctor WARN 暴露），
@@ -171,14 +171,15 @@ export function createDefaultConfig(options: {
 
 /**
  * codex 宿主审查模型（codexHost.reviewModel）清洗：
- * 非字符串 → undefined；先 trim，再按白名单 [A-Za-z0-9._:/-] 剔除非法字符
- * （该值作为审查 agent A 的模型指定写入模板指示，只允许模型名安全字符）；
- * 剔除后为空 → undefined（回退当前会话模型）。
+ * 非字符串 → undefined；仅 trim，空白视为未配置（回退当前会话模型）。
+ * 与 reviewModelB/codingModel 的 sanitizeModelField 口径一致——模型指定经"模板指示 + 宿主
+ * spawn 能力"落实，不再拼进 shell 命令串，无需字符白名单清洗；同时保证与 spawnableModels
+ * 生效清单按原文比对时不发生清洗前后值错位（如清单内含 `@` 等字符的模型 id）。
  */
 export function sanitizeReviewModel(value: unknown): string | undefined {
   if (typeof value !== 'string')
     return undefined
-  const cleaned = value.trim().replace(/[^\w.:/-]/g, '')
+  const cleaned = value.trim()
   return cleaned === '' ? undefined : cleaned
 }
 

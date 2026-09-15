@@ -180,22 +180,12 @@ describe('sanitizeReviewModel', () => {
     expect(sanitizeReviewModel(undefined)).toBeUndefined()
   })
 
-  // 白名单 [A-Za-z0-9._:/-]——该值作为审查 agent A 模型指定写入模板指示
-  it('keeps whitelist characters (letters/digits/dot/underscore/colon/slash/hyphen)', () => {
-    expect(sanitizeReviewModel('gpt-5.1-codex')).toBe('gpt-5.1-codex')
+  // 与 sanitizeModelField 同口径：仅 trim、不做字符白名单清洗（不再拼进 shell 命令串，
+  // 由模板指示 + 宿主 spawn 能力落实），保证与 spawnableModels 生效清单按原文比对不偏差
+  it('preserves characters outside the whitelist (no whitelist cleaning)', () => {
+    expect(sanitizeReviewModel('gpt 5.1')).toBe('gpt 5.1')
+    expect(sanitizeReviewModel('vendor/model@beta')).toBe('vendor/model@beta')
     expect(sanitizeReviewModel('openai/gpt-5.1:high')).toBe('openai/gpt-5.1:high')
-    expect(sanitizeReviewModel('qwen3_coder-480b')).toBe('qwen3_coder-480b')
-  })
-
-  it('strips characters outside the whitelist', () => {
-    expect(sanitizeReviewModel('gpt 5.1')).toBe('gpt5.1')
-    expect(sanitizeReviewModel('gpt;rm -rf /')).toBe('gptrm-rf/')
-    expect(sanitizeReviewModel('model"x')).toBe('modelx')
-  })
-
-  it('returns undefined when only illegal characters remain', () => {
-    expect(sanitizeReviewModel('***')).toBeUndefined()
-    expect(sanitizeReviewModel(' ; ')).toBeUndefined()
   })
 })
 

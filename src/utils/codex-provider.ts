@@ -93,7 +93,8 @@ export async function readCodexCurrentModel(filePath: string = codexConfigPath()
 /**
  * 读取 `~/.codex/models.json` 注册模型集合（OpenAI 兼容缓存，仅作现状展示）：
  * - 解析成功 → 模型名数组（宽容处理 `{"models": [{slug}]}`、`{"models": [string]}`、裸数组）
- * - 缺文件 / 坏 JSON → undefined，与"注册 0 个模型"（返回空数组）可区分，展示层据实标注"未检测到"
+ * - 缺文件 / 坏 JSON / 合法 JSON 但形状不含 models 数组（如 `{}`、`{"models": 42}`）→ undefined，
+ *   与"注册 0 个模型"（返回空数组）可区分，展示层据实标注"未检测到"
  *
  * 返回结构仅含模型名字符串，不包含 provider 的 API key / env_key 等敏感字段。
  */
@@ -130,7 +131,7 @@ export async function readModelsJson(filePath: string = codexModelsJsonPath()): 
     : (json && typeof json === 'object' && Array.isArray((json as any).models))
         ? (json as any).models
         : null
-  return items === null ? [] : collect(items)
+  return items === null ? undefined : collect(items)
 }
 
 export type UpsertProviderResult
@@ -219,67 +220,4 @@ export async function upsertModelProvider(
     return { status: 'error', error: error instanceof Error ? error.message : String(error) }
   }
   return { status: 'written', path: filePath }
-}
-
-export type FetchModelsResult
-  = | { ok: true, models: string[] }
-    | { ok: false, error: string }
-
-/**
- * 拉取 OpenAI 兼容的模型列表：GET {base_url}/models（Authorization: Bearer <key>，
- * key 可空——部分网关不鉴权），默认 10s 超时。非标响应/网络失败返回 ok:false 与原因，
- * 调用方据此回退 inquirer input 自由输入。
- */
-export async function fetchCodexModels(input: {
-  baseUrl: string
-  apiKey?: string
-  timeoutMs?: number
-}): Promise<FetchModelsResult> {
-  const base = input.baseUrl.trim().replace(/\/+$/, '')
-  const url = `${base}/models`
-  const headers: Record<string, string> = {}
-  if (input.apiKey)
-    headers.Authorization = `Bearer ${input.apiKey}`
-
-  let res: Response
-  try {
-    res = await fetch(url, {
-      method: 'GET',
-      headers,
-      signal: AbortSignal.timeout(input.timeoutMs ?? 10_000),
-    })
-  }
-  catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
-  }
-
-  if (!res.ok)
-    return { ok: false, error: `HTTP ${res.status}` }
-
-  let json: any
-  try {
-    json = await res.json()
-  }
-  catch {
-    return { ok: false, error: 'response is not valid JSON' }
-  }
-
-  // OpenAI 兼容形态：{ data: [{ id }] }；宽容处理裸数组与字符串元素
-  const arr = Array.isArray(json)
-    ? json
-    : Array.isArray(json?.data) ? json.data : null
-  if (!arr)
-    return { ok: false, error: 'unexpected response shape (missing data[])' }
-
-  const models: string[] = []
-  for (const item of arr) {
-    const id = typeof item === 'string' ? item : typeof item?.id === 'string' ? item.id : ''
-    const trimmed = id.trim()
-    if (trimmed !== '' && !models.includes(trimmed))
-      models.push(trimmed)
-  }
-  if (models.length === 0)
-    return { ok: false, error: 'empty model list' }
-
-  return { ok: true, models }
 }
