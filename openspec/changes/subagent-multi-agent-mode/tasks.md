@@ -1,0 +1,10 @@
+- [ ] T1 配置类型：`src/types/index.ts` 的 `codexHost` 增加可选字段 `codingModel?` / `reviewModelB?`（与 `reviewModel?` 并列），新字段直接透传不做 sanitize 扩展
+- [ ] T2 渲染说明：确认 `src/utils/host-adapters.ts` / `installer-template.ts` 对新字段无剥离需求（模型经模板指示 + 宿主能力落实），补充渲染相关注释/文档说明
+- [ ] T3 模板 review-plan.md：将 `cat <<'CODEAGENT_EOF' | codex exec ... --json -m {{REVIEW_MODEL}} -` 与 `resume <session-id>` 编排改写为"双审查 subagent"指示——spawn ×2（fork 上下文）、各自独立审（范围点名：只审 change 产物）、交换结论、共识判定、分歧→主会话拍板 + 显式提示用户→不能确认 Critical、修复循环/终止条件/统一提交语义保留、任务继续引用 plan-reviewer.md
+- [ ] T4 模板 review-code.md：同上改写（审查对象 = `apply:`/`propose:` commit 对应 diff + 未跟踪清单，任务继续引用 reviewer.md）
+- [ ] T5 模板 apply.md：将"当前会话自实施"改写为"coding subagent 实施"——spawn coding subagent（fork 上下文 + 范围点名：只实施 tasks.md 范围）、模型取 codingModel（未配置用当前会话模型）、实施+验证+勾选、回传不 commit、主会话统一提交 `apply: <change-name>`、失败原样呈报转人工
+- [ ] T6 模板 propose.md：全自动流水线段落同步——review-plan/apply/review-code 的执行主体表述一致化（双审查 subagent / coding subagent），保留每步 commit 与终止停止语义
+- [ ] T7 契约文档：`docs/codex-exec-contract.md` 顶部加 DEPRECATED 标注（历史参考，模板不再引用）；review-plan/review-code 模板删除对它的引用注释
+- [ ] T8 测试更新：`src/utils/__tests__/host-adapters.test.ts` 与 `installer.test.ts` 中 `codex exec`/`resume` 契约断言更新为 subagent 语义（渲染产物不含 `codex exec`/`CODEAGENT_EOF`，含双审查 subagent 编排指示）；`config.test.ts` 增加 `codingModel`/`reviewModelB` 字段断言
+- [ ] T9 文档同步：根 CLAUDE.md（审查执行模型、模块职责）与 templates/CLAUDE.md 中 exec 契约引用与"无 implementer 概念"表述更新为 subagent 多 Agent 模式；README 相关段落同步
+- [ ] T10 验证：`openspec validate --changes subagent-multi-agent-mode`（本 change 全部 delta specs）通过；`pnpm typecheck && pnpm build && pnpm test` 全绿；安装产物抽查渲染后的 review-plan/review-code/apply 不含 exec 残留
