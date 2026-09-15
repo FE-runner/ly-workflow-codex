@@ -10,7 +10,7 @@
 - [ ] 2.1 在 `src/commands/init.ts` 用 `sanitizeCodexHostExtras(existingConfig?.codexHost)` 把既有三个推理档字段与 `spawnableModels` 一同透传给 `createDefaultConfig`，并在 `src/i18n/index.ts` 更新 `init:codexStatus.reasoningHint` 文案指向 `[codexHost]` 维护入口；通过 1.4 的 helper 单测验证保留语义。
 - [ ] 2.2 在 `src/commands/menu.ts` 的审查模型写回路径中用 `sanitizeCodexHostExtras(fresh.codexHost)` 保留三个推理档字段，确保仅编辑 `reviewModel` 时不会被清除；通过 1.4 的 helper 单测验证保留语义。
 - [ ] 2.3 在 `src/commands/doctor.ts` 扩展子代理模型配置判定结果，在每条模型字段旁展示对应推理档值或“未配置”，且推理档不改变 OK/WARN 判定；在 `src/i18n/index.ts` 同步 zh-CN/en 文案，验证 `src/commands/__tests__/doctor.test.ts` 通过。
-- [ ] 2.4 更新 `README.md`、`CLAUDE.md`、`templates/CLAUDE.md`，写明三字段名称、非空传入/空白不传语义、手改配置维护方式及不做枚举强校验；验证文档中三字段名称与实际类型、doctor 文案一致。
+- [ ] 2.4 更新 `README.md`、`CLAUDE.md`、`AGENTS.md`、`templates/CLAUDE.md`，写明三字段名称、非空传入/空白不传语义、手改配置维护方式及不做枚举强校验；验证文档中三字段名称与实际类型、doctor 文案一致。
 
 ## 3. 模板执行指示
 

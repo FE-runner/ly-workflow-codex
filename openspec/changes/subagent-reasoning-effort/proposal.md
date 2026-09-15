@@ -31,5 +31,5 @@
 - `src/commands/doctor.ts`：模型配置检查项 detail 展示已配置推理档
 - `templates/skills-codex/{review-plan,review-code,apply}.md`：spawn 指示段补充推理档读取与传入规则
 - `src/i18n/`：提示文案更新（zh-CN/en）
-- `README.md` / `CLAUDE.md` / `templates/CLAUDE.md`：字段与维护方式说明
+- `README.md` / `CLAUDE.md` / `AGENTS.md` / `templates/CLAUDE.md`：字段与维护方式说明
 - 测试：`src/utils/__tests__/`、`src/commands/__tests__/`、模板渲染断言补对应用例
