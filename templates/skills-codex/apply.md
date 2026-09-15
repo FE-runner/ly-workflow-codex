@@ -26,8 +26,8 @@ argument-hint: '[<change-name>]'
 
 主会话 spawn 一个 coding subagent（由运行环境的宿主 spawn 能力落实），并给它下述任务指示：
 
-1. **模型** = `~/.ly/config.toml` 的 `[codexHost] codingModel`；未配置或空白 → 继承当前会话模型。模型指定只写在任务指示里，由宿主 spawn 能力执行，SHALL NOT 依赖任何 shell 层模型参数。
-2. **agent 模型需额外配置（spawn 前确认字段，不做清单强校验）**：coding 模型能否 spawn 由运行环境实际能力决定，SHALL NOT 依赖任何硬编码清单或 `/models` 结果预判。spawn 前 SHALL 读取 `~/.ly/config.toml` 确认 `codingModel` 取值；读取失败（缺文件/解析错误）→ 视为**配置状态未知**：明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承回退。留空 → 回退继承当前会话模型。spawn 失败报错原文含 `Unknown model` 与 `Available models: ...` 时如实展示，提示"该模型当前不支持 spawn，请改用报错中 Available models 列表内的模型"——能否 spawn 以宿主实际报错为准，SHALL NOT 以配置猜测绕过。**验证某模型是否可 spawn 的示例 prompt**：让 Codex 用该模型 spawn 一个子代理执行简单任务（如回复 ok），报错原文即判定依据。
+1. **模型与推理档** = `~/.ly/config.toml` 的 `[codexHost] codingModel` 与 `codingReasoningEffort`；模型未配置或空白 → 继承当前会话模型，推理档非空时将其值作为宿主 spawn 的 `reasoning_effort` 随 `codingModel` 一并传入，未配置或空白 → 不传该参数。模型与推理档指定只写在任务指示里，由宿主 spawn 能力执行，SHALL NOT 依赖任何 shell 层模型参数，SHALL NOT 内置任何"模型名 → 推理档"的硬编码映射。
+2. **agent 模型需额外配置（含推理档；spawn 前确认字段，不做清单强校验）**：coding 模型能否 spawn 由运行环境实际能力决定，SHALL NOT 依赖任何硬编码清单或 `/models` 结果预判。spawn 前 SHALL 读取 `~/.ly/config.toml` 确认 `codingModel` 与 `codingReasoningEffort` 取值；读取失败（缺文件/解析错误）→ 视为**配置状态未知**：明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承回退。模型留空 → 回退继承当前会话模型；推理档留空 → 不传 `reasoning_effort`。spawn 失败报错原文含 `Unknown model` 与 `Available models: ...` 时如实展示，提示"该模型当前不支持 spawn，请改用报错中 Available models 列表内的模型"；推理档被宿主/上游拒绝时同样如实展示报错原文并按既有 spawn 失败口径处理，SHALL NOT 把取值预判为"配置无效"——能否 spawn 以宿主实际报错为准，SHALL NOT 以配置猜测绕过。**验证某模型是否可 spawn 的示例 prompt**：让 Codex 用该模型 spawn 一个子代理执行简单任务（如回复 ok），报错原文即判定依据。
 3. **fork 当前会话上下文**：coding subagent 以当前会话（含 propose 阶段上下文）fork 启动——关键决策、取舍、已知边界等"软上下文"随 fork 到达实施模型。
 4. **范围点名（只实施 change 范围）**：任务点名"只实施 change 范围"——读取 `openspec/changes/<change-name>/tasks.md`，按需读取同目录 `proposal.md`/`design.md` 及任务引用的上下文文件，理解现有模式；SHALL NOT 改动范围外文件。
 5. **实施规范**（coding subagent 内部执行）：

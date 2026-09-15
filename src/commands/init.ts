@@ -11,6 +11,7 @@ import {
   createDefaultConfig,
   ensureLyDir,
   readLyConfig,
+  sanitizeCodexHostExtras,
   sanitizeModelField,
   sanitizeReviewModel,
   writeLyConfig,
@@ -273,10 +274,11 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
   const selectedWorkflows = getCoreCommandIds()
   // 既有配置中的三个模型字段作为交互/非交互默认值（空白等价未配置；保真写回不丢）
+  const existingExtras = sanitizeCodexHostExtras(existingConfig?.codexHost)
   const defaultModels: CodexHostModels = {
     reviewModel: sanitizeReviewModel(existingConfig?.codexHost?.reviewModel),
-    reviewModelB: sanitizeModelField(existingConfig?.codexHost?.reviewModelB),
-    codingModel: sanitizeModelField(existingConfig?.codexHost?.codingModel),
+    reviewModelB: existingExtras.reviewModelB,
+    codingModel: existingExtras.codingModel,
   }
   // 模型三连候选 = 默认继承（留空）+ 自定义输入 + 既有值；agent 模型需额外配置，
   // 能否 spawn 由宿主实际能力决定（详见模板与 lycx doctor 提示）
@@ -320,11 +322,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
       language,
       installedWorkflows: selectedWorkflows,
       codexHost: {
+        ...existingExtras,
         reviewModel: collectedModels.reviewModel,
         reviewModelB: collectedModels.reviewModelB,
         codingModel: collectedModels.codingModel,
-        // 透传保全：init 不编辑 spawnableModels（维护方式 = 手改 config.toml），存量值原样保留
-        spawnableModels: existingConfig?.codexHost?.spawnableModels,
       },
       installedHosts: ['codex'],
     })

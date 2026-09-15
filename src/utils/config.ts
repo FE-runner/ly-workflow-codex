@@ -128,7 +128,15 @@ export async function writeLyConfig(config: LyConfig): Promise<void> {
 export function createDefaultConfig(options: {
   language: SupportedLang
   installedWorkflows: string[]
-  codexHost?: { reviewModel?: string, reviewModelB?: string, codingModel?: string, spawnableModels?: string[] }
+  codexHost?: {
+    reviewModel?: string
+    reviewModelB?: string
+    codingModel?: string
+    reviewReasoningEffort?: string
+    reviewReasoningEffortB?: string
+    codingReasoningEffort?: string
+    spawnableModels?: string[]
+  }
   /** 已安装宿主集合（兼容旧配置；codex 单宿主缺省 ['codex']） */
   installedHosts?: HostId[]
 }): LyConfig {
@@ -155,14 +163,28 @@ export function createDefaultConfig(options: {
   // （回退当前会话模型）：不再拼进 shell 命令串，由模板指示 + 宿主 spawn 能力落实
   const reviewModelB = sanitizeModelField(options.codexHost?.reviewModelB)
   const codingModel = sanitizeModelField(options.codexHost?.codingModel)
+  const reviewReasoningEffort = sanitizeReasoningEffort(options.codexHost?.reviewReasoningEffort)
+  const reviewReasoningEffortB = sanitizeReasoningEffort(options.codexHost?.reviewReasoningEffortB)
+  const codingReasoningEffort = sanitizeReasoningEffort(options.codexHost?.codingReasoningEffort)
   // spawnableModels 透传并保全：不改写、不静默丢弃存量值（含格式非法的存量形态由 doctor WARN 暴露），
   // 避免"重装即丢失非法值、下次 doctor 不再告警"掩盖配置问题
   const spawnableModels = options.codexHost?.spawnableModels
-  if (reviewModel || reviewModelB || codingModel || spawnableModels !== undefined) {
+  if (
+    reviewModel
+    || reviewModelB
+    || codingModel
+    || reviewReasoningEffort
+    || reviewReasoningEffortB
+    || codingReasoningEffort
+    || spawnableModels !== undefined
+  ) {
     config.codexHost = {
       ...(reviewModel ? { reviewModel } : {}),
       ...(reviewModelB ? { reviewModelB } : {}),
       ...(codingModel ? { codingModel } : {}),
+      ...(reviewReasoningEffort ? { reviewReasoningEffort } : {}),
+      ...(reviewReasoningEffortB ? { reviewReasoningEffortB } : {}),
+      ...(codingReasoningEffort ? { codingReasoningEffort } : {}),
       ...(spawnableModels !== undefined ? { spawnableModels } : {}),
     }
   }
@@ -193,6 +215,47 @@ export function sanitizeModelField(value: unknown): string | undefined {
     return undefined
   const cleaned = value.trim()
   return cleaned === '' ? undefined : cleaned
+}
+
+/**
+ * 推理档字段清洗（codexHost 三个 *ReasoningEffort）：
+ * 非字符串 → undefined；仅 trim，空白视为未配置（不传 reasoning_effort）。
+ * 不做枚举白名单校验——合法档位由宿主/上游实际能力决定。
+ */
+export function sanitizeReasoningEffort(value: unknown): string | undefined {
+  if (typeof value !== 'string')
+    return undefined
+  const cleaned = value.trim()
+  return cleaned === '' ? undefined : cleaned
+}
+
+export type CodexHostExtras = Pick<
+  NonNullable<LyConfig['codexHost']>,
+  'reviewModelB' | 'codingModel' | 'reviewReasoningEffort' | 'reviewReasoningEffortB' | 'codingReasoningEffort' | 'spawnableModels'
+>
+
+/**
+ * 清洗并返回 init/menu 编辑 reviewModel 时需要保留的 codexHost 其余字段。
+ * spawnableModels 按原形态透传（含格式非法或显式空数组），避免重写时静默丢失。
+ */
+export function sanitizeCodexHostExtras(codexHost: LyConfig['codexHost']): CodexHostExtras {
+  if (!codexHost)
+    return {}
+
+  const reviewModelB = sanitizeModelField(codexHost.reviewModelB)
+  const codingModel = sanitizeModelField(codexHost.codingModel)
+  const reviewReasoningEffort = sanitizeReasoningEffort(codexHost.reviewReasoningEffort)
+  const reviewReasoningEffortB = sanitizeReasoningEffort(codexHost.reviewReasoningEffortB)
+  const codingReasoningEffort = sanitizeReasoningEffort(codexHost.codingReasoningEffort)
+
+  return {
+    ...(reviewModelB ? { reviewModelB } : {}),
+    ...(codingModel ? { codingModel } : {}),
+    ...(reviewReasoningEffort ? { reviewReasoningEffort } : {}),
+    ...(reviewReasoningEffortB ? { reviewReasoningEffortB } : {}),
+    ...(codingReasoningEffort ? { codingReasoningEffort } : {}),
+    ...(codexHost.spawnableModels !== undefined ? { spawnableModels: codexHost.spawnableModels } : {}),
+  }
 }
 
 /** spawnableModels 清洗结果的形态判定（doctor 与 init 共用，避免两处口径漂移） */
@@ -230,5 +293,4 @@ export function sanitizeSpawnableModels(value: unknown): SpawnableModelsSanitize
     return { state: 'empty', models: [] }
   return { state: 'ok', models }
 }
-
 

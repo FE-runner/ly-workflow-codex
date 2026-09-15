@@ -184,15 +184,28 @@ describe('template variable completeness', () => {
   }
 
   it('rendered review/apply templates contain subagent orchestration, no exec residue', () => {
-    const cases: Array<[string, string]> = [
-      ['review-plan.md', 'subagent'],
-      ['review-code.md', 'subagent'],
-      ['apply.md', 'coding subagent'],
+    const cases: Array<[string, string, string[], string[]]> = [
+      ['review-plan.md', 'subagent', ['reviewReasoningEffort', 'reviewReasoningEffortB'], ['codingReasoningEffort']],
+      ['review-code.md', 'subagent', ['reviewReasoningEffort', 'reviewReasoningEffortB'], ['codingReasoningEffort']],
+      ['apply.md', 'coding subagent', ['codingReasoningEffort'], ['reviewReasoningEffort', 'reviewReasoningEffortB']],
     ]
-    for (const [file, marker] of cases) {
+    for (const [file, marker, reasoningFields, forbiddenFields] of cases) {
       const content = readFileSync(join(TEMPLATES_DIR, file), 'utf-8')
       const rendered = renderCodexTemplate(content, { reviewModel: 'gpt-5.1' })
       expect(rendered, file).toContain(marker)
+      for (const field of reasoningFields) {
+        expect(rendered, `${file} missing ${field}`).toContain(field)
+      }
+      for (const field of forbiddenFields) {
+        expect(rendered, `${file} unexpectedly references ${field}`).not.toContain(field)
+      }
+      expect(rendered, file).toContain('reasoning_effort')
+      expect(rendered, file).toContain('非空时')
+      expect(rendered, file).toContain('不传该参数')
+      expect(rendered, file).toContain('硬编码映射')
+      expect(rendered, file).not.toContain('glm-5.3-flash')
+      expect(rendered, file).not.toContain('deepseek-v4.1-flash')
+      expect(rendered, file).not.toContain('qwen3.7-flash')
       expect(rendered, file).not.toContain('codex exec')
       expect(rendered, file).not.toContain('CODEAGENT_EOF')
       expect(rendered, file).not.toContain('resume')

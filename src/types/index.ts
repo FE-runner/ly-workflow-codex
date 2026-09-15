@@ -28,6 +28,12 @@ export interface LyConfig {
     reviewModelB?: string
     // coding subagent（实施）模型；未配置或空白时回退当前会话模型
     codingModel?: string
+    // 审查 agent A 推理档；非空时随 reviewModel spawn 传入，未配置或空白时不传
+    reviewReasoningEffort?: string
+    // 审查 agent B 推理档；非空时随 reviewModelB spawn 传入，未配置或空白时不传
+    reviewReasoningEffortB?: string
+    // coding subagent 推理档；非空时随 codingModel spawn 传入，未配置或空白时不传
+    codingReasoningEffort?: string
     // 提示参考：本机实测可 spawn 的模型清单（不作候选/校验来源，agent 模型可用性
     // 由环境实际能力决定）；未配置或清洗后为空时提示口径回退 SPAWNABLE_MODELS_DEFAULT
     spawnableModels?: string[]

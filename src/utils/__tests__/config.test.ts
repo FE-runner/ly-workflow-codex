@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultConfig, migrateLegacyConfig, readLyConfig, sanitizeInstalledHosts, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
+import { createDefaultConfig, migrateLegacyConfig, readLyConfig, sanitizeCodexHostExtras, sanitizeInstalledHosts, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
 
 // 模块顶层常量（CONFIG_FILE / LY_DIR 等）在 import 时基于 homedir() 求值，
 // 因此 hoisted 阶段就创建固定临时 home，再 mock homedir() 指向它——
@@ -154,6 +154,66 @@ describe('createDefaultConfig (codex 单宿主)', () => {
     const config = createDefaultConfig({ ...baseOptions, codexHost: { reviewModel: '  ' } })
     expect(config.codexHost).toBeUndefined()
   })
+
+  it('stores all three reasoning effort fields when provided', () => {
+    const config = createDefaultConfig({
+      ...baseOptions,
+      codexHost: {
+        reviewModel: 'glm-5.3-flash',
+        reviewModelB: 'qwen3.7-flash',
+        codingModel: 'deepseek-v4.1-flash',
+        reviewReasoningEffort: 'low',
+        reviewReasoningEffortB: 'high',
+        codingReasoningEffort: 'max',
+      },
+    })
+    expect(config.codexHost?.reviewReasoningEffort).toBe('low')
+    expect(config.codexHost?.reviewReasoningEffortB).toBe('high')
+    expect(config.codexHost?.codingReasoningEffort).toBe('max')
+  })
+
+  it('stores a reasoning effort field even when the corresponding model is blank', () => {
+    const config = createDefaultConfig({
+      ...baseOptions,
+      codexHost: { reviewReasoningEffort: 'low' },
+    })
+    expect(config.codexHost).toEqual({ reviewReasoningEffort: 'low' })
+  })
+
+  it('trims reasoning effort fields and omits blank values', () => {
+    const config = createDefaultConfig({
+      ...baseOptions,
+      codexHost: {
+        reviewModel: 'glm-5.3-flash',
+        reviewReasoningEffort: ' low ',
+        reviewReasoningEffortB: '   ',
+        codingReasoningEffort: '',
+      },
+    })
+    expect(config.codexHost?.reviewReasoningEffort).toBe('low')
+    expect(config.codexHost?.reviewReasoningEffortB).toBeUndefined()
+    expect(config.codexHost?.codingReasoningEffort).toBeUndefined()
+  })
+
+  it('keeps reasoning effort fields alongside other codexHost fields', () => {
+    const config = createDefaultConfig({
+      ...baseOptions,
+      codexHost: {
+        reviewModel: 'glm-5.3-flash',
+        reviewModelB: 'qwen3.7-flash',
+        codingModel: 'deepseek-v4.1-flash',
+        reviewReasoningEffort: 'low',
+        spawnableModels: ['glm-5.3-flash'],
+      },
+    })
+    expect(config.codexHost).toEqual({
+      reviewModel: 'glm-5.3-flash',
+      reviewModelB: 'qwen3.7-flash',
+      codingModel: 'deepseek-v4.1-flash',
+      reviewReasoningEffort: 'low',
+      spawnableModels: ['glm-5.3-flash'],
+    })
+  })
 })
 
 describe('sanitizeInstalledHosts', () => {
@@ -204,6 +264,77 @@ describe('sanitizeModelField', () => {
   it('preserves characters outside the whitelist (no whitelist cleaning)', () => {
     expect(sanitizeModelField('gpt 5.1')).toBe('gpt 5.1')
     expect(sanitizeModelField('vendor/model@beta')).toBe('vendor/model@beta')
+  })
+})
+
+describe('sanitizeReasoningEffort', () => {
+  it('trims non-empty reasoning effort values', () => {
+    expect(sanitizeReasoningEffort(' low ')).toBe('low')
+    expect(sanitizeReasoningEffort('max')).toBe('max')
+  })
+
+  it('returns undefined for blank/invalid values without enum validation', () => {
+    expect(sanitizeReasoningEffort('')).toBeUndefined()
+    expect(sanitizeReasoningEffort('   ')).toBeUndefined()
+    expect(sanitizeReasoningEffort(42)).toBeUndefined()
+    expect(sanitizeReasoningEffort(undefined)).toBeUndefined()
+    expect(sanitizeReasoningEffort('custom-tier')).toBe('custom-tier')
+  })
+})
+
+describe('sanitizeCodexHostExtras', () => {
+  it('returns all fields except reviewModel with sanitized text values', () => {
+    expect(sanitizeCodexHostExtras({
+      reviewModel: 'a',
+      reviewModelB: ' b ',
+      codingModel: ' c ',
+      reviewReasoningEffort: ' low ',
+      reviewReasoningEffortB: ' high ',
+      codingReasoningEffort: ' max ',
+      spawnableModels: ['glm-5.3-flash'],
+    })).toEqual({
+      reviewModelB: 'b',
+      codingModel: 'c',
+      reviewReasoningEffort: 'low',
+      reviewReasoningEffortB: 'high',
+      codingReasoningEffort: 'max',
+      spawnableModels: ['glm-5.3-flash'],
+    })
+  })
+
+  it('preserves spawnableModels exact shape while dropping blank text fields', () => {
+    const spawnableModels = ['', 'glm-5.3-flash'] as unknown as string[]
+    expect(sanitizeCodexHostExtras({
+      reviewModelB: ' ',
+      codingModel: '',
+      reviewReasoningEffort: ' ',
+      codingReasoningEffort: '',
+      spawnableModels,
+    })).toEqual({ spawnableModels })
+  })
+
+  it('round-trips extras through createDefaultConfig', async () => {
+    const extras = sanitizeCodexHostExtras({
+      reviewModel: 'old',
+      reviewModelB: 'qwen3.7-flash',
+      codingModel: 'deepseek-v4.1-flash',
+      reviewReasoningEffort: 'low',
+      reviewReasoningEffortB: 'high',
+      codingReasoningEffort: 'max',
+      spawnableModels: ['glm-5.3-flash'],
+    })
+    const config = createDefaultConfig({
+      language: 'zh-CN',
+      installedWorkflows: ['propose'],
+      codexHost: { ...extras, reviewModel: 'glm-5.3-flash' },
+    })
+    await writeLyConfig(config)
+
+    const readBack = await readLyConfig()
+    expect(readBack?.codexHost).toEqual({
+      ...extras,
+      reviewModel: 'glm-5.3-flash',
+    })
   })
 })
 

@@ -9,6 +9,12 @@ describe('assessSubagentModelConfig (codex-model-config)', () => {
     expect(result.status).toBe('ok')
     expect(result.spawnState).toBe('unset')
     expect(result.fields.every(f => f.status === 'ok' && f.okKind === 'unset')).toBe(true)
+    expect(result.fields.map(f => f.reasoningEffortKey)).toEqual([
+      'reviewReasoningEffort',
+      'reviewReasoningEffortB',
+      'codingReasoningEffort',
+    ])
+    expect(result.fields.every(f => f.reasoningEffort === undefined)).toBe(true)
   })
 
   it('configured field values → ok with okKind = configured (提示型，不做清单校验)', () => {
@@ -47,6 +53,34 @@ describe('assessSubagentModelConfig (codex-model-config)', () => {
   it('blank field values are treated as unset', () => {
     const result = assessSubagentModelConfig({ reviewModel: '  ', reviewModelB: '', codingModel: undefined })
     expect(result.fields.every(f => f.okKind === 'unset')).toBe(true)
+    expect(result.status).toBe('ok')
+  })
+
+  it('shows matching reasoning effort values without changing ok status', () => {
+    const result = assessSubagentModelConfig({
+      reviewModel: 'glm-5.3-flash',
+      reviewModelB: 'qwen3.7-flash',
+      codingModel: 'deepseek-v4.1-flash',
+      reviewReasoningEffort: ' low ',
+      reviewReasoningEffortB: 'custom-tier',
+      codingReasoningEffort: 'max',
+    })
+    expect(result.status).toBe('ok')
+    expect(result.fields[0]).toMatchObject({ reasoningEffortKey: 'reviewReasoningEffort', reasoningEffort: 'low' })
+    expect(result.fields[1]).toMatchObject({ reasoningEffortKey: 'reviewReasoningEffortB', reasoningEffort: 'custom-tier' })
+    expect(result.fields[2]).toMatchObject({ reasoningEffortKey: 'codingReasoningEffort', reasoningEffort: 'max' })
+    expect(result.fields.every(f => f.status === 'ok')).toBe(true)
+  })
+
+  it('treats blank reasoning effort as unset and keeps custom values without enum validation', () => {
+    const result = assessSubagentModelConfig({
+      reviewReasoningEffort: '   ',
+      reviewReasoningEffortB: '',
+      codingReasoningEffort: 'not-a-standard-tier',
+    })
+    expect(result.fields[0].reasoningEffort).toBeUndefined()
+    expect(result.fields[1].reasoningEffort).toBeUndefined()
+    expect(result.fields[2].reasoningEffort).toBe('not-a-standard-tier')
     expect(result.status).toBe('ok')
   })
 })

@@ -6,7 +6,7 @@ import { join } from 'pathe'
 import { version as packageVersion } from '../../package.json'
 import { i18n } from '../i18n'
 import { readCodexCurrentModel } from '../utils/codex-provider'
-import { LY_PROMPTS_DIR, readLyConfig, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels } from '../utils/config'
+import { LY_PROMPTS_DIR, readLyConfig, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, sanitizeSpawnableModels } from '../utils/config'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
 import { detectOpenspecCli, detectOpenspecSkills } from '../utils/preflight'
 
@@ -38,6 +38,10 @@ export interface SubagentModelFieldResult {
   status: 'ok'
   /** 判定原因：'unset' 留空 | 'configured' 已配置 */
   okKind: 'unset' | 'configured'
+  /** 与该模型字段一一对应的推理档字段名 */
+  reasoningEffortKey: string
+  /** 推理档值（清洗后）；undefined = 未配置（不传 reasoning_effort） */
+  reasoningEffort?: string
 }
 
 export interface SubagentModelConfigResult {
@@ -59,14 +63,31 @@ export function assessSubagentModelConfig(codexHost: LyConfig['codexHost']): Sub
   const spawn = sanitizeSpawnableModels(codexHost?.spawnableModels)
 
   const fields: SubagentModelFieldResult[] = [
-    { key: 'reviewModel', value: sanitizeReviewModel(codexHost?.reviewModel) },
-    { key: 'reviewModelB', value: sanitizeModelField(codexHost?.reviewModelB) },
-    { key: 'codingModel', value: sanitizeModelField(codexHost?.codingModel) },
+    {
+      key: 'reviewModel',
+      value: sanitizeReviewModel(codexHost?.reviewModel),
+      reasoningEffortKey: 'reviewReasoningEffort',
+      reasoningEffort: sanitizeReasoningEffort(codexHost?.reviewReasoningEffort),
+    },
+    {
+      key: 'reviewModelB',
+      value: sanitizeModelField(codexHost?.reviewModelB),
+      reasoningEffortKey: 'reviewReasoningEffortB',
+      reasoningEffort: sanitizeReasoningEffort(codexHost?.reviewReasoningEffortB),
+    },
+    {
+      key: 'codingModel',
+      value: sanitizeModelField(codexHost?.codingModel),
+      reasoningEffortKey: 'codingReasoningEffort',
+      reasoningEffort: sanitizeReasoningEffort(codexHost?.codingReasoningEffort),
+    },
   ].map((f) => ({
     key: f.key,
     value: f.value,
     status: 'ok' as const,
     okKind: f.value ? 'configured' as const : 'unset' as const,
+    reasoningEffortKey: f.reasoningEffortKey,
+    reasoningEffort: f.reasoningEffort,
   }))
 
   const spawnWarn = spawn.state === 'empty' || spawn.state === 'invalid'
@@ -79,11 +100,15 @@ export function assessSubagentModelConfig(codexHost: LyConfig['codexHost']): Sub
 
 /** 第 7 项检查详情（单行）：逐字段提示 + spawnableModels 形态 WARN */
 function buildSubagentModelCheckDetail(result: SubagentModelConfigResult): string {
-  const parts = result.fields.map((f) =>
-    f.value
+  const parts = result.fields.flatMap((f) => {
+    const modelPart = f.value
       ? i18n.t('doctor:modelConfig.okConfigured', { key: f.key, model: f.value })
-      : i18n.t('doctor:modelConfig.okUnset', { key: f.key }),
-  )
+      : i18n.t('doctor:modelConfig.okUnset', { key: f.key })
+    const reasoningPart = f.reasoningEffort
+      ? i18n.t('doctor:modelConfig.okReasoningConfigured', { key: f.reasoningEffortKey, effort: f.reasoningEffort })
+      : i18n.t('doctor:modelConfig.okReasoningUnset', { key: f.reasoningEffortKey })
+    return [modelPart, reasoningPart]
+  })
   if (result.spawnState === 'empty' || result.spawnState === 'invalid')
     parts.push(i18n.t('doctor:modelConfig.warnInvalid'))
   return parts.join('; ')

@@ -9,7 +9,7 @@ import { join } from 'pathe'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import { getConfigPath, readLyConfig, sanitizeModelField, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import { getConfigPath, readLyConfig, sanitizeCodexHostExtras, sanitizeReviewModel, writeLyConfig } from '../utils/config'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows, uninstallWorkflows } from '../utils/installer'
 import { buildModelFieldChoices, MODEL_CHOICE_CUSTOM, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
@@ -337,16 +337,12 @@ async function configReviewModel(): Promise<void> {
     console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized`)
     return
   }
-  // 写回保留既有 reviewModelB / codingModel / spawnableModels（本次仍只编辑审查 agent A）
-  const existingB = sanitizeModelField(fresh.codexHost?.reviewModelB)
-  const existingCoding = sanitizeModelField(fresh.codexHost?.codingModel)
-  const existingSpawnable = fresh.codexHost?.spawnableModels
-  if (next || existingB || existingCoding || existingSpawnable !== undefined) {
+  // 写回保留既有 reviewModelB / codingModel / spawnableModels / 三个推理档（本次仍只编辑审查 agent A）
+  const existingExtras = sanitizeCodexHostExtras(fresh.codexHost)
+  if (next || Object.keys(existingExtras).length > 0) {
     fresh.codexHost = {
+      ...existingExtras,
       ...(next ? { reviewModel: next } : {}),
-      ...(existingB ? { reviewModelB: existingB } : {}),
-      ...(existingCoding ? { codingModel: existingCoding } : {}),
-      ...(existingSpawnable !== undefined ? { spawnableModels: existingSpawnable } : {}),
     }
   }
   else {
