@@ -8,3 +8,4 @@
 - [ ] T8 测试更新：`src/utils/__tests__/host-adapters.test.ts` 与 `installer.test.ts` 中 `codex exec`/`resume` 契约断言更新为 subagent 语义（渲染产物不含 `codex exec`/`CODEAGENT_EOF`，含双审查 subagent 编排指示）；`config.test.ts` 增加 `codingModel`/`reviewModelB` 字段断言
 - [ ] T9 文档同步：根 CLAUDE.md（审查执行模型、模块职责）与 templates/CLAUDE.md 中 exec 契约引用与"无 implementer 概念"表述更新为 subagent 多 Agent 模式；README 相关段落同步
 - [ ] T10 验证：`openspec validate --changes subagent-multi-agent-mode`（本 change 全部 delta specs）通过；`pnpm typecheck && pnpm build && pnpm test` 全绿；安装产物抽查渲染后的 review-plan/review-code/apply 不含 exec 残留
+- [ ] T11 升级路径验证：核查 `lycx update`（`init --force --skip-prompt` 重装）后 `~/.agents/skills/lyx-review-plan|review-code|apply` 渲染产物不含 `codex exec`/`resume` 残留且含 subagent 编排指示，旧 exec 契约引用随重装移除

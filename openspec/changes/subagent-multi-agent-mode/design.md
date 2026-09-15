@@ -35,11 +35,10 @@
 ### D-F: 范围控制
 - 角色词（`plan-reviewer.md` / `reviewer.md`）内容不重写，审查 subagent 任务继续引用 ROLE_FILE——改动面收敛到模板 + 配置 + 契约标注。
 - `init` 向导本次不加新模型字段的交互步骤（仅配置读取与模板渲染支持），避免向导改动放大范围；如需向导化，作为后续 change。
-- 不改现有 spec 语义：审查分级输出、终止条件、轮数上限、统一提交保持原样（见 `ly-review-gates` delta 的 MODIFIED 幅度）。
+- 语义保留、机制改写：审查分级输出、终止条件、轮数上限、统一提交等既有语义保持，承载机制改为 subagent 编排（见 `ly-review-gates` / `ly-lifecycle-commands` delta 的 MODIFIED 幅度）。
 
 ## 验证
 
 - `openspec validate --changes subagent-multi-agent-mode` 结构合法。
 - `pnpm typecheck && pnpm build && pnpm test` 全绿（更新 host-adapters/installer/config 相关断言为 subagent 语义）。
 - 安装产物抽查：`@lyx-review-plan` / `@lyx-review-code` / `@lyx-apply` 渲染后不含 `codex exec`、`resume`、`CODEAGENT_EOF` 残留；含双审查 subagent 编排指示。
-

@@ -1,7 +1,13 @@
 ## ADDED Requirements
 
 ### Requirement: 审查关卡以双审查 subagent 执行
-review-plan 与 review-code 两个审查关卡 SHALL 各 spawn 2 个审查 subagent 执行：两个 agent SHALL 并行且各自独立审查（互不见对方结论），随后交换结论并讨论以达成共识。每个审查 subagent SHALL fork 当前会话上下文，并在任务中点名审查范围（review-plan 为"只审 change 产物：proposal/design/specs/tasks"，review-code 为"只审 `apply:`/`propose:` commit 对应 diff 及未跟踪清单"），SHALL NOT 超出点名范围作业。审查任务 SHALL 继续引用各自 ROLE_FILE（`~/.ly/prompts/codex/plan-reviewer.md` / `reviewer.md`），角色词内容不重写。
+review-plan 与 review-code 两个审查关卡 SHALL 各 spawn 2 个审查 subagent 执行：两个 agent SHALL 并行且各自独立审查（互不见对方结论），随后交换结论并讨论以达成共识。每个审查 subagent SHALL fork 当前会话上下文，并在任务中点名审查范围（review-plan 为"只审 change 产物：proposal/design/specs/tasks"，review-code 为"只审最近一次相关 commit 对应 diff（`apply:` commit，未有 `apply:` 时退化为 `propose:` commit）及未跟踪清单"），SHALL NOT 超出点名范围作业。审查任务 SHALL 继续引用各自 ROLE_FILE（`~/.ly/prompts/codex/plan-reviewer.md` / `reviewer.md`），角色词内容不重写。
+
+**旧调用形态废止**：基线 Requirement"代码审查读取 git diff 并分级输出发现"与"方案审查分级输出发现"中关于"通过 `codex exec` 独立子会话调用（形态与模型渲染见 docs/codex-exec-contract.md）"、"复用 session_id 以 resume 续聊"、"`codex exec` 调用不带 `-m` 回退当前会话模型"的调用形态要求，SHALL 自本 change 起视为被本 Requirement 取代（废止）；两条基线 Requirement 的其余语义（审查范围确定、首轮 TASK 只传路径清单不拼贴全文、基线引用检测、分级输出）保持不变。基线正文及其关联 Scenario 中凡与本段冲突的表述，以本段为准。
+
+**共识归并**：两 agent 结论合并去重后作为本轮审查结论；部分重叠或冲突的条目 SHALL 一并列出交主会话判定，SHALL NOT 静默丢弃任一 agent 的独立发现。
+
+**分歧时序**：双 agent 首次分歧且主会话不能确认 → 判定 Critical 进入修复循环；下一轮复审双 agent 仍分歧且主会话仍不能确认 → 触发"分歧未决"终止条件。
 
 #### Scenario: 双审查 agent 均通过
 - **WHEN** 两个审查 subagent 独立审查后达成一致，均未提出 Critical
@@ -20,7 +26,7 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn 2 个审查 subag
 2. 熔断：同一个 Critical（以"文件路径 + 问题类型 + 定位锚点（`/ly:review-code` 为函数名/路由/调用点；`/ly:review-plan` 为 artifact 内的具体条目/章节）"三者共同判定为同一问题, 不要求问题描述文字完全一致）在相邻两轮审查中都判定仍存在——即上一轮判定为 Critical 并已尝试修复的问题, 在紧接的下一轮复审中仍被判定未解决。若 当前会话 在上一轮对它的判断是"不认可"（未修复）, 相邻两轮再次出现 SHALL NOT 走熔断而走"分歧未决"（见下）
 3. 无法安全自动修复：某个 Critical 的修复需要产品/业务决策、依赖当前会话不具备的外部凭据、会改变已发布的公开 API 或接口契约, 或 当前会话 判断当前上下文不足以给出确认性修复——命中时不做猜测性修改
 4. 修复后验证失败：`/ly:review-code` 该轮修复后运行的测试/类型检查/构建未通过, 或 `/ly:review-plan` 该轮修复后 `openspec validate` 未通过
-5. 分歧未决：当前会话 对某个 Critical 判断为不认可（详见下一条 Requirement）, 且该 Critical 在下一轮审查中仍被审查 agent 判定为同一问题存在；双审查 subagent 意见分歧且主会话无法确认时同样落入本终止条件（见 ADDED Requirement）——此时判定为 Critical（red）
+5. 分歧未决：当前会话 对某个 Critical 判断为不认可（详见下一条 Requirement）, 且该 Critical 在下一轮审查中仍被审查 agent 判定为同一问题存在；双审查 subagent 意见分歧、首轮经主会话无法确认判定为 Critical 进入修复循环后，下一轮复审两 agent 仍分歧且主会话仍无法确认时，最终落入本终止条件（与 ADDED Requirement"分歧时序"的两轮规则一致）——此时判定为 Critical（red）
 6. 审查对象类型持续系统性误判:连续 3 轮（含本轮）审查中每一轮的全部 Critical 都被 当前会话 判定为同一大类系统性误判——即审查 agent 反复以"该轮 Critical 所依据的类型不属于当前命令的审查范畴"为由被 当前会话 判定不认可（例如 `/ly:review-plan` 连续 3 轮的 Critical 均以"代码库尚未实现该方案条目"为理由），不要求这 3 轮之间 Critical 的文件/类别/锚点互相一致, 只要求"判定为不认可的原因类型"在这 3 轮中一致
 
 出现终止条件 2-6 中任一条时, 命令必须（SHALL）立即停止循环, 在报告中明确指出触发的具体条件、涉及的问题（文件、类别、锚点、判断依据）, 并说明需要人工介入, 不得继续自动修复；这些条件时命令 SHALL NOT 提交任何改动（见下方）——已产生的改动留在工作区交由人工处理。循环期间的 Warning 与 Info 发现不参与循环终止判定, 只在循环结束后的最终报告列出最后一轮的结果, 不跨轮次合并。
@@ -102,11 +108,11 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn 2 个审查 subag
 - **THEN** 本轮报告“逐字原文”区块展示 2 条原文, 并排展示 当前会话 对每条认可/不认可及理由, 用户直接对照
 
 #### Scenario: 轮间续聊开启时, 第 2 轮仍按增量传递语义构造 TASK
-- **WHEN** `/ly:review-plan` 首轮取得 session_id, 第 2 轮以 resume 模式延续会话
+- **WHEN** `/ly:review-plan` 沿用具备轮间记忆的 subagent 会话（fork 上下文），第 2 轮继续同一批审查 agent
 - **THEN** TASK 仍只包含上一轮全部 Critical 逐字原文 + 路径清单（增量），不整段重新传入基线 artifact 全文；会话记忆提供上下文，不代表 TASK 可省略逐字 Critical 原文
 
 ### Requirement: 审查调用失败视为独立终止条件
-原"`codex exec` 调用失败（子会话启动失败、`--json` 解析失败、`resume` 失败等）视为独立终止条件"的语义 SHALL 扩展为：subagent 不可用、spawn 失败、审查 agent 未返回有效结论、或双审查任一 agent 调用失败且无法按回退口径继续时, 均视为独立终止条件, 如实报告原因并停止循环。仅当失败可归因于单一 agent 且另一 agent 结论完整时, 可按"分歧未决"路径交主会话处理。
+原"`codex exec` 调用失败（子会话启动失败、`--json` 解析失败、`resume` 失败等）视为独立终止条件"的语义 SHALL 调整为区分两阶段：**运行期失败**（spawn 后超时、返回内容格式不符、审查 agent 未返回有效结论、双审查任一 agent 调用失败且无法按回退口径继续、回退不可行或回退后仍失败）视为独立终止条件, 如实报告原因并停止循环；**环境级不可用**（宿主无 subagent 能力、初始 spawn 不可用）则按 `subagent-agent-config` 的回退口径处理（回退当前会话直接执行）, SHALL NOT 视为流程失败中断整体编排。当失败可归因于单一 agent 且另一 agent 结论完整时, SHALL 以完整一方结论继续审查并如实报告降级（含失败 agent 与原因）, SHALL NOT 归入"分歧未决"（环境级失败非意见分歧）；是否补跑或重试由主会话决定。
 
 #### Scenario: 审查调用超时
 - **WHEN** 审查 subagent 调用超过预设时限未返回有效结论
@@ -119,4 +125,3 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn 2 个审查 subag
 #### Scenario: 双审查 agent 均调用失败
 - **WHEN** 两个审查 subagent 均无法产出结论（spawn 失败或超时）
 - **THEN** 按独立终止条件结束审查, 如实报告"审查调用失败"及原因, 不进入下一轮
-

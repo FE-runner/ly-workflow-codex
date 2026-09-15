@@ -28,6 +28,7 @@ v0.1.0 拆分后的执行模型为：审查走 `codex exec` 独立子会话（�
 
 - `ly-review-gates`: 审查关卡执行机制从"单 `codex exec` 独立子会话"改为"双审查 subagent（fork 上下文 + 范围点名 + 独立审→交换→共识；分歧→主会话拍板 + 提示用户→不能确认 Critical）"；模型按 reviewModel/reviewModelB 分别指定；审查调用失败终止条件扩展为"subagent 不可用/调用失败"。
 - `ly-propose-flow`: apply 实施步骤从"当前会话自实施"改为"coding subagent 实施"（fork 上下文 + 只实施 change 范围 + 可指定模型 + 主会话保留提交权）；全自动流水线中实施环节的主体语义同步。
+- `ly-lifecycle-commands`: apply 实施主体语义从"当前会话本人实施完成立即提交"改为"coding subagent 实施、主会话确认后统一提交"——基线 Requirement 中与 "无外部委托/当前会话本人实施" 冲突的表述同步修正（delta 见 `specs/ly-lifecycle-commands/spec.md`）。
 
 ## Impact
 
@@ -37,7 +38,8 @@ v0.1.0 拆分后的执行模型为：审查走 `codex exec` 独立子会话（�
 - `src/types/index.ts`：`codexHost` 新增 `codingModel?` / `reviewModelB?`。
 - `src/utils/host-adapters.ts` / `installer-template.ts`：模板渲染按新字段回退语义处理（未配置 → 模板指示当前会话模型）。
 - `docs/codex-exec-contract.md`：标 DEPRECATED；模板不再引用。
+- `openspec/changes/subagent-multi-agent-mode/specs/ly-lifecycle-commands/spec.md`：新增 delta——`ly-lifecycle-commands` 实施主体语义同步。
 - 测试：`src/utils/__tests__/host-adapters.test.ts`、`installer.test.ts` 中 exec 契约断言更新为 subagent 语义；`config.test.ts` 补新字段断言。
-- 文档：根 CLAUDE.md / templates/CLAUDE.md 中"审查执行模型"与 exec 契约引用同步。
+- 文档：根 CLAUDE.md / templates/CLAUDE.md / README 中"审查执行模型"与 exec 契约引用同步。
 - 升级路径：模板/契约改动仅在重装后生效——已安装用户（`~/.agents/skills/lyx-*`）需运行 `lycx update` 重新渲染模板，旧 exec 契约引用随重装移除。
 - 不涉及：`templates/prompts/codex/` 角色词内容、`src/commands/init.ts` 的 reviewModel 设置步骤（新字段本次不进入向导，仅配置读取）。

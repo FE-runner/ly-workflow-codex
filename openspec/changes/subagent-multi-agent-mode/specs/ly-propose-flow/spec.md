@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: apply 实施由 coding subagent 执行
-`@lyx-apply` 的实施环节 SHALL 由 coding subagent 执行：主会话 spawn 一个 coding subagent，fork 当前会话上下文，并在任务中点名"只实施 change 范围"（读取 `openspec/changes/<change-name>/tasks.md` 逐任务实施 + 验证 + 勾选，SHALL NOT 改动范围外文件）。模型 SHALL 按 `codexHost.codingModel` 指定，未配置回退当前会话模型。coding subagent SHALL NOT 自行 commit：实施完成后将改动与结果回传主会话，由主会话确认后统一 `git commit -m "apply: <change-name>"`。coding subagent 实施失败 SHALL 原样呈报转人工，不自动重试、不自动兜底（与既有 apply 语义一致）。
+`@lyx-apply` 的实施环节 SHALL 由 coding subagent 执行：主会话 spawn 一个 coding subagent，fork 当前会话上下文，并在任务中点名"只实施 change 范围"（读取 `openspec/changes/<change-name>/tasks.md` 逐任务实施 + 验证 + 勾选，SHALL NOT 改动范围外文件）。模型 SHALL 按 `codexHost.codingModel` 指定，未配置回退当前会话模型。coding subagent SHALL NOT 自行 commit：实施完成后将改动与结果回传主会话，由主会话确认后统一 `git commit -m "apply: <change-name>"`。失败区分两阶段：**环境级不可用**（宿主无 subagent 能力、初始 spawn 失败）按 `subagent-agent-config` 的回退口径回退当前会话直接实施，SHALL NOT 视为业务失败；**实施中/验证失败**（coding subagent 报告任务未完成或验证失败）SHALL 原样呈报转人工，不自动重试、不切回自实施、不自动兜底。
 
 #### Scenario: coding subagent 完成实施
 - **WHEN** coding subagent 读 tasks.md 完成全部任务并验证通过
