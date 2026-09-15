@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultConfig, migrateLegacyConfig, readLyConfig, sanitizeInstalledHosts, sanitizeModelField, sanitizeReviewModel, writeLyConfig } from '../config'
+import { createDefaultConfig, migrateLegacyConfig, readLyConfig, resolveSpawnableModels, sanitizeInstalledHosts, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
 
 // 模块顶层常量（CONFIG_FILE / LY_DIR 等）在 import 时基于 homedir() 求值，
 // 因此 hoisted 阶段就创建固定临时 home，再 mock homedir() 指向它——
@@ -217,6 +217,82 @@ describe('sanitizeModelField', () => {
   })
 })
 
+describe('sPAWNABLE_MODELS_DEFAULT / sanitizeSpawnableModels / resolveSpawnableModels (codex-model-config)', () => {
+  it('defines the built-in default as the five OpenAI models', () => {
+    expect(SPAWNABLE_MODELS_DEFAULT).toEqual([
+      'gpt-6-astra',
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+      'gpt-5.5',
+    ])
+  })
+
+  it('treats missing config as unset', () => {
+    expect(sanitizeSpawnableModels(undefined)).toEqual({ state: 'unset', models: [] })
+    expect(sanitizeSpawnableModels(null)).toEqual({ state: 'unset', models: [] })
+  })
+
+  it('trims, dedupes and filters non-strings for a valid array', () => {
+    expect(sanitizeSpawnableModels([' gpt-5.5 ', 'gpt-5.5', 42, 'gpt-5.6-sol'])).toEqual({
+      state: 'ok',
+      models: ['gpt-5.5', 'gpt-5.6-sol'],
+    })
+  })
+
+  it('marks an explicitly present non-array as invalid', () => {
+    expect(sanitizeSpawnableModels('glm-5.3-flash')).toEqual({ state: 'invalid', models: [] })
+    expect(sanitizeSpawnableModels(42)).toEqual({ state: 'invalid', models: [] })
+  })
+
+  it('marks an explicitly empty / fully-cleaned array as empty', () => {
+    expect(sanitizeSpawnableModels([])).toEqual({ state: 'empty', models: [] })
+    expect(sanitizeSpawnableModels(['', '  '])).toEqual({ state: 'empty', models: [] })
+    expect(sanitizeSpawnableModels([42, null])).toEqual({ state: 'empty', models: [] })
+  })
+
+  it('resolveSpawnableModels uses the configured list when valid', () => {
+    expect(resolveSpawnableModels({ spawnableModels: ['glm-5.3-flash'] })).toEqual(['glm-5.3-flash'])
+  })
+
+  it('resolveSpawnableModels falls back to the built-in default for unset / empty / invalid', () => {
+    expect(resolveSpawnableModels(undefined)).toEqual([...SPAWNABLE_MODELS_DEFAULT])
+    expect(resolveSpawnableModels({ spawnableModels: [] })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
+    expect(resolveSpawnableModels({ spawnableModels: '' })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
+    expect(resolveSpawnableModels({ spawnableModels: ['  '] })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
+  })
+})
+
+describe('createDefaultConfig spawnableModels 透传保全 (codex-model-config)', () => {
+  const baseOptions = {
+    language: 'zh-CN' as const,
+    installedWorkflows: ['propose'],
+  }
+
+  it('passes through spawnableModels alongside the model trio', () => {
+    const config = createDefaultConfig({
+      ...baseOptions,
+      codexHost: { reviewModel: 'a', reviewModelB: 'b', codingModel: 'c', spawnableModels: ['glm-5.3-flash'] },
+    })
+    expect(config.codexHost).toEqual({
+      reviewModel: 'a',
+      reviewModelB: 'b',
+      codingModel: 'c',
+      spawnableModels: ['glm-5.3-flash'],
+    })
+  })
+
+  it('preserves spawnableModels even when all model fields are blank', () => {
+    const config = createDefaultConfig({ ...baseOptions, codexHost: { spawnableModels: [] } })
+    expect(config.codexHost?.spawnableModels).toEqual([])
+  })
+
+  it('omits codexHost when nothing (including spawnableModels) is provided', () => {
+    const config = createDefaultConfig(baseOptions)
+    expect(config.codexHost).toBeUndefined()
+  })
+})
+
 describe('legacy config migration (~/.claude/.ly → ~/.ly)', () => {
   it('moves legacy config to ~/.ly/config.toml and preserves its value', async () => {
     const legacyDir = join(osMocks.home, '.claude', '.ly')
@@ -280,7 +356,7 @@ describe('readLyConfig / writeLyConfig', () => {
     const config = createDefaultConfig({
       language: 'en',
       installedWorkflows: ['propose'],
-      codexHost: { reviewModel: 'gpt-5.1' },
+      codexHost: { reviewModel: 'gpt-5.1', spawnableModels: ['gpt-5.6-luna'] },
     })
     await writeLyConfig(config)
 
@@ -290,6 +366,7 @@ describe('readLyConfig / writeLyConfig', () => {
     expect(readBack?.general?.language).toBe('en')
     expect(readBack?.workflows?.installed).toEqual(['propose'])
     expect(readBack?.codexHost?.reviewModel).toBe('gpt-5.1')
+    expect(readBack?.codexHost?.spawnableModels).toEqual(['gpt-5.6-luna'])
     expect(readBack?.installedHosts).toEqual(['codex'])
   })
 

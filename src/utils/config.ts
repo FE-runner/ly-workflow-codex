@@ -22,6 +22,19 @@ export function getConfigPath(): string {
   return CONFIG_FILE
 }
 
+/**
+ * 内置默认 spawn 可用模型清单（当前环境实证值）：声明 Codex 宿主显式 spawn 子代理可用的模型，
+ * `[codexHost] spawnableModels` 未配置、空白或清洗后为空时回退此清单。可用列表随环境漂移，
+ * 用户可按实测维护 `spawnableModels` 覆盖（doctor/init 以"用户配置或内置默认"为唯一候选/校验来源）。
+ */
+export const SPAWNABLE_MODELS_DEFAULT = [
+  'gpt-6-astra',
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
+  'gpt-5.5',
+] as const
+
 // ── installedHosts（兼容旧配置：持久化已安装宿主集合）──
 // codex 单宿主下恒为 ['codex']，此处保留清洗逻辑以兼容旧配置读取。
 
@@ -115,7 +128,7 @@ export async function writeLyConfig(config: LyConfig): Promise<void> {
 export function createDefaultConfig(options: {
   language: SupportedLang
   installedWorkflows: string[]
-  codexHost?: { reviewModel?: string; reviewModelB?: string; codingModel?: string }
+  codexHost?: { reviewModel?: string, reviewModelB?: string, codingModel?: string, spawnableModels?: string[] }
   /** 已安装宿主集合（兼容旧配置；codex 单宿主缺省 ['codex']） */
   installedHosts?: HostId[]
 }): LyConfig {
@@ -142,11 +155,15 @@ export function createDefaultConfig(options: {
   // 不做字符白名单清洗——它们不再拼进 shell 命令串，由模板指示 + 宿主 spawn 能力落实
   const reviewModelB = sanitizeModelField(options.codexHost?.reviewModelB)
   const codingModel = sanitizeModelField(options.codexHost?.codingModel)
-  if (reviewModel || reviewModelB || codingModel) {
+  // spawnableModels 透传并保全：不改写、不静默丢弃存量值（含格式非法的存量形态由 doctor WARN 暴露），
+  // 避免"重装即丢失非法值、下次 doctor 不再告警"掩盖配置问题
+  const spawnableModels = options.codexHost?.spawnableModels
+  if (reviewModel || reviewModelB || codingModel || spawnableModels !== undefined) {
     config.codexHost = {
       ...(reviewModel ? { reviewModel } : {}),
       ...(reviewModelB ? { reviewModelB } : {}),
       ...(codingModel ? { codingModel } : {}),
+      ...(spawnableModels !== undefined ? { spawnableModels } : {}),
     }
   }
   return config
@@ -175,4 +192,49 @@ export function sanitizeModelField(value: unknown): string | undefined {
     return undefined
   const cleaned = value.trim()
   return cleaned === '' ? undefined : cleaned
+}
+
+/** spawnableModels 清洗结果的形态判定（doctor 与 init 共用，避免两处口径漂移） */
+export type SpawnableModelsState = 'unset' | 'ok' | 'empty' | 'invalid'
+
+export interface SpawnableModelsSanitizeResult {
+  /** 'ok' = 显式合法非空数组；'unset' = 未配置；'empty' = 显式数组但清洗后为空；'invalid' = 显式存在但格式非法 */
+  state: SpawnableModelsState
+  /** state==='ok' 时为清洗后模型名列表（trim、去重、过滤非字符串）；其余为空数组 */
+  models: string[]
+}
+
+/**
+ * spawnableModels 清洗：统一产出"未配置 / 合法非空 / 清洗后为空 / 格式非法"四态判定入口。
+ * - 未配置（undefined/null）→ 'unset'
+ * - 显式存在但非数组（如字符串）→ 'invalid'（doctor 对该形态输出 WARN）
+ * - 显式数组但清洗后为空（含显式 []）→ 'empty'（doctor 对该形态输出 WARN；回退语义同未配置）
+ * - 清洗后非空 → 'ok'（仅保留非空字符串、逐项 trim、去重）
+ */
+export function sanitizeSpawnableModels(value: unknown): SpawnableModelsSanitizeResult {
+  if (value === undefined || value === null)
+    return { state: 'unset', models: [] }
+  if (!Array.isArray(value))
+    return { state: 'invalid', models: [] }
+
+  const models: string[] = []
+  for (const item of value) {
+    if (typeof item !== 'string')
+      continue
+    const trimmed = item.trim()
+    if (trimmed !== '' && !models.includes(trimmed))
+      models.push(trimmed)
+  }
+  if (models.length === 0)
+    return { state: 'empty', models: [] }
+  return { state: 'ok', models }
+}
+
+/**
+ * 生效清单解析：`[codexHost] spawnableModels` 清洗后合法非空用之；
+ * 未配置 / 格式非法 / 清洗后为空均回退内置默认 SPAWNABLE_MODELS_DEFAULT。
+ */
+export function resolveSpawnableModels(codexHost?: { spawnableModels?: unknown }): string[] {
+  const result = sanitizeSpawnableModels(codexHost?.spawnableModels)
+  return result.state === 'ok' ? result.models : [...SPAWNABLE_MODELS_DEFAULT]
 }

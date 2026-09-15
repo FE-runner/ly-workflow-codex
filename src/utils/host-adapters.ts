@@ -21,6 +21,8 @@ export interface HostAdapterConfig {
   reviewModelB?: string
   /** coding subagent（实施）模型（LyConfig.codexHost.codingModel）；未配置或空白时回退当前会话模型 */
   codingModel?: string
+  /** 宿主显式 spawn 可用模型清单（LyConfig.codexHost.spawnableModels）；透传供模板渲染（占位仅注入内置默认，见 installer-template） */
+  spawnableModels?: string[]
 }
 
 /** 适配器安装/卸载/校验共用的上下文 */

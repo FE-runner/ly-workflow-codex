@@ -6,16 +6,18 @@ import inquirer from 'inquirer'
 import ora from 'ora'
 import { version as packageVersion } from '../../package.json'
 import { i18n, initI18n } from '../i18n'
-import { codexConfigPath, fetchCodexModels, listModelProviders, readCodexConfigToml, sanitizeProviderName, upsertModelProvider } from '../utils/codex-provider'
+import { codexConfigPath, listModelProviders, readCodexConfigToml, readCodexCurrentModel, readModelsJson, sanitizeProviderName, upsertModelProvider } from '../utils/codex-provider'
 import {
   createDefaultConfig,
   ensureLyDir,
   readLyConfig,
+  resolveSpawnableModels,
   sanitizeModelField,
   sanitizeReviewModel,
   writeLyConfig,
 } from '../utils/config'
 import { getCoreCommandIds, installWorkflows, migrateLegacyPrompts } from '../utils/installer'
+import { buildModelFieldChoices, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
 import { PACKAGE_NAME } from '../utils/package-meta'
 
 // ═══════════════════════════════════════════════════════
@@ -36,22 +38,18 @@ type ProviderChoice
     | { type: 'official' }
     | { type: 'custom' }
 
-// 模型三连 list 的两个哨兵项（NUL 前缀保证绝不与任何模型 id 冲突）
-const MODEL_CHOICE_CUSTOM = '\u0000lyx:custom'
-const MODEL_CHOICE_UNSET = '\u0000lyx:unset'
-
 // 三个模型字段的驱动元数据（i18n 键 + 持久化清洗归属：A 白名单、B/coding 仅 trim）
 const MODEL_FIELDS = [
-  { key: 'reviewModel', labelKey: 'init:model.reviewModelA', promptKey: 'init:model.reviewModelAPrompt', sanitize: sanitizeReviewModel },
-  { key: 'reviewModelB', labelKey: 'init:model.reviewModelB', promptKey: 'init:model.reviewModelBPrompt', sanitize: sanitizeModelField },
-  { key: 'codingModel', labelKey: 'init:model.codingModel', promptKey: 'init:model.codingModelPrompt', sanitize: sanitizeModelField },
+  { key: 'reviewModel', labelKey: 'init:model.reviewModelA', sanitize: sanitizeReviewModel },
+  { key: 'reviewModelB', labelKey: 'init:model.reviewModelB', sanitize: sanitizeModelField },
+  { key: 'codingModel', labelKey: 'init:model.codingModel', sanitize: sanitizeModelField },
 ] as const
 
 /**
- * 模型字段列表选择（provider 模型列表拉取成功路径）：
- * - 既有值在列表内 → 默认该项
- * - 既有值非空但不在列表 → 默认"自定义输入"且弹框 SHALL 预填既有值（直接回车即保留原值）
- * - 无既有值或空白 → 默认"不设置"
+ * 模型字段 list 选择（候选 = 默认继承（留空）+ spawnableModels 生效清单）：
+ * 候选构造与默认值语义由 `buildModelFieldChoices` 统一提供（init 与 menu 共用）——
+ * 既有值非空且 ∈ 清单 → 默认该项；非空但 ∉ 清单 → 附加"保留当前值（警告）"项并默认该项；
+ * 无既有值或空白 → 默认"留空"。不再提供自由输入入口。
  */
 async function pickModelField(input: {
   field: typeof MODEL_FIELDS[number]
@@ -59,13 +57,7 @@ async function pickModelField(input: {
   current?: string
 }): Promise<string | undefined> {
   const { field, models, current } = input
-  const inList = current !== undefined && models.includes(current)
-  const choices = [
-    ...models.map(id => ({ name: id, value: id })),
-    { name: ansis.cyan(`✏️ ${i18n.t('init:model.customChoice')}`), value: MODEL_CHOICE_CUSTOM },
-    { name: ansis.gray(i18n.t('init:model.unsetChoice')), value: MODEL_CHOICE_UNSET },
-  ]
-  const defaultChoice = inList ? current : current !== undefined ? MODEL_CHOICE_CUSTOM : MODEL_CHOICE_UNSET
+  const { choices, defaultChoice } = buildModelFieldChoices({ models, current })
 
   const { pick } = await inquirer.prompt([{
     type: 'list',
@@ -78,46 +70,56 @@ async function pickModelField(input: {
 
   if (pick === MODEL_CHOICE_UNSET)
     return undefined
-  if (pick !== MODEL_CHOICE_CUSTOM)
-    return pick
-
-  // 自定义输入弹框预填既有值
-  const { custom } = await inquirer.prompt([{
-    type: 'input',
-    name: 'custom',
-    message: i18n.t('init:model.customPrompt'),
-    default: current || '',
-  }])
-  return custom?.trim() || undefined
-}
-
-/** 模型字段自由输入（模型列表拉取失败回退路径；留空 = 不设置） */
-async function inputModelField(input: {
-  field: typeof MODEL_FIELDS[number]
-  current?: string
-}): Promise<string | undefined> {
-  const { field, current } = input
-  const { model } = await inquirer.prompt([{
-    type: 'input',
-    name: 'model',
-    message: i18n.t(field.promptKey),
-    default: current || '',
-  }])
-  return model?.trim() || undefined
+  return typeof pick === 'string' ? pick.trim() : undefined
 }
 
 /**
- * codex 宿主侧交互采集：API 提供方 → 模型三连。
+ * Codex 现状检测（只读展示，零副作用）：主会话模型（~/.codex/config.toml 顶层 model）、
+ * [model_providers.*] 条目、~/.codex/models.json 注册集合规模。读取失败或缺文件如实标注
+ * "未检测到"（models.json 返回 undefined 与"注册 0 个"可区分），全部失败均不阻断流程；
+ * 附 reasoning_effort 参数坑背景提示（部分第三方模型需显式 low，仅背景说明、不新增配置通道）。
+ */
+async function printCodexStatus(): Promise<void> {
+  console.log()
+  console.log(ansis.cyan.bold(`  📊 ${i18n.t('init:codexStatus.title')}`))
+  console.log()
+
+  const currentModel = await readCodexCurrentModel()
+  console.log(`  · ${ansis.cyan(i18n.t('init:codexStatus.mainModelLabel'))} ${
+    currentModel
+      ? i18n.t('init:codexStatus.mainModel', { model: currentModel })
+      : ansis.gray(i18n.t('init:codexStatus.notDetected'))}`)
+
+  const providers = await listModelProviders()
+  console.log(`  · ${ansis.cyan(i18n.t('init:codexStatus.providersLabel'))} ${
+    providers.length > 0
+      ? providers.map(p => p.name).join(', ')
+      : ansis.gray(i18n.t('init:codexStatus.noProvider'))}`)
+
+  const models = await readModelsJson()
+  console.log(`  · ${ansis.cyan(i18n.t('init:codexStatus.registeredLabel'))} ${
+    models === undefined
+      ? ansis.gray(i18n.t('init:codexStatus.notDetected'))
+      : i18n.t('init:codexStatus.registeredModels', { count: models.length })}`)
+
+  console.log()
+  console.log(ansis.yellow(`  ⚠ ${i18n.t('init:codexStatus.reasoningHint')}`))
+  console.log(ansis.gray(`  ${i18n.t('init:codexStatus.spawnableHint')}`))
+}
+
+/**
+ * codex 宿主侧交互采集：API 提供方 → Codex 现状检测 → 模型三连。
  * 仅交互模式进入（skip-prompt 保持既有跳过语义）；返回经 sanitizeReviewModel
  * / sanitizeModelField 清洗的三字段（undefined = 回退当前会话模型）。
  *
  * API 提供方列表 = config.toml 现有 [model_providers.*] 条目 + OpenAI 官方 + 自定义；
  * 选自定义时增量写入 config.toml（upsertModelProvider 文本合并，保注释）。
- * 模型三连：GET {base_url}/models 拉取一次列表，三字段共用该列表逐个 list 选择，
- * 拉取失败回退三个 input 自由输入。
+ * 模型三连候选 = 默认继承（留空）+ spawnableModels 生效清单（配置值或内置默认），
+ * 不再以 provider /models 拉取结果为候选、不再提供自由输入入口。
  */
 async function collectCodexHostConfig(options: {
   defaults: CodexHostModels
+  spawnableModels: string[]
 }): Promise<CodexHostModels> {
   // ── Step 1: 选择 API 提供方 ──
   console.log()
@@ -145,23 +147,8 @@ async function collectCodexHostConfig(options: {
     ],
   }])
 
-  let baseUrl = OPENAI_OFFICIAL_BASE_URL
-  let apiKey = ''
-
   if (provider.type === 'existing') {
-    baseUrl = provider.provider.baseUrl?.trim() || OPENAI_OFFICIAL_BASE_URL
-
-    // 该 provider 声明了 env_key 且环境变量未设置 → 补询 API key（仅用于拉取模型列表）
-    const envKey = provider.provider.envKey
-    if (envKey && !process.env[envKey]) {
-      const { key } = await inquirer.prompt([{
-        type: 'password',
-        name: 'key',
-        message: i18n.t('init:mode.envKeyMissingPrompt', { envKey }),
-        mask: '*',
-      }])
-      apiKey = key?.trim() || ''
-    }
+    // 直接选用既有 provider（不再拉取 /models：模型候选与校验仅以 spawnableModels 为来源）
   }
   else if (provider.type === 'custom') {
     console.log()
@@ -179,15 +166,8 @@ async function collectCodexHostConfig(options: {
       message: i18n.t('init:mode.customUrlPrompt'),
       default: OPENAI_OFFICIAL_BASE_URL,
     }])
-    const { key } = await inquirer.prompt([{
-      type: 'password',
-      name: 'key',
-      message: `${i18n.t('init:mode.customKeyPrompt')} ${ansis.gray(`(${i18n.t('init:mode.optional')})`)}`,
-      mask: '*',
-    }])
 
-    baseUrl = (url || OPENAI_OFFICIAL_BASE_URL).trim()
-    apiKey = key?.trim() || ''
+    const baseUrl = (url || OPENAI_OFFICIAL_BASE_URL).trim()
 
     // 写入 ~/.codex/config.toml（增量合并，保注释）
     const writeResult = await upsertModelProvider({ name: providerName, baseUrl })
@@ -201,29 +181,22 @@ async function collectCodexHostConfig(options: {
       console.log(ansis.yellow(`  ⚠ ${i18n.t('init:mode.providerWriteFailed', { error: writeResult.error })}`))
     }
   }
-  // official：apiKey/baseUrl 保持默认（OAuth 登录）
+  // official：直接选用（OAuth 登录语义保留）
 
-  // ── Step 2: 模型三连 ──
+  // ── Step 2: Codex 现状检测（只读展示）──
+  await printCodexStatus()
+
+  // ── Step 3: 模型三连（候选 = 留空 + spawnableModels 生效清单）──
   console.log()
   console.log(ansis.cyan.bold(`  🧠 ${i18n.t('init:model.trioTitle')}`))
   console.log()
-  if (baseUrl) {
-    console.log(ansis.gray(`  ${i18n.t('init:mode.modelFetching', { baseUrl })}`))
-  }
-
-  const fetchResult = await fetchCodexModels({ baseUrl, apiKey })
-
-  // 拉取失败（网络/非标响应/超时）：提示原因，回退自由输入
-  if (!fetchResult.ok) {
-    console.log(ansis.yellow(`  ⚠ ${i18n.t('init:mode.modelFetchFailed', { reason: fetchResult.error })}`))
-  }
+  console.log(ansis.gray(`  ${i18n.t('init:model.trioCandidatesHint')}`))
+  console.log()
 
   const collected: CodexHostModels = {}
   for (const field of MODEL_FIELDS) {
     const current = options.defaults[field.key]?.trim() || undefined
-    const raw = fetchResult.ok
-      ? await pickModelField({ field, models: fetchResult.models, current })
-      : await inputModelField({ field, current })
+    const raw = await pickModelField({ field, models: options.spawnableModels, current })
     collected[field.key] = field.sanitize(raw)
   }
   return collected
@@ -296,14 +269,16 @@ export async function init(options: InitOptions = {}): Promise<void> {
     reviewModelB: sanitizeModelField(existingConfig?.codexHost?.reviewModelB),
     codingModel: sanitizeModelField(existingConfig?.codexHost?.codingModel),
   }
+  // 模型三连候选/校验的唯一来源：spawnableModels 生效清单（配置值或内置默认）
+  const spawnableModels = resolveSpawnableModels(existingConfig?.codexHost)
   let collectedModels: CodexHostModels = { ...defaultModels }
 
   // ═══════════════════════════════════════════════════════
   // Interactive flow（codex 单宿主）
   // ═══════════════════════════════════════════════════════
   if (!options.skipPrompt) {
-    // ── API 提供方 → 模型三连 ──
-    collectedModels = await collectCodexHostConfig({ defaults: defaultModels })
+    // ── API 提供方 → Codex 现状检测 → 模型三连 ──
+    collectedModels = await collectCodexHostConfig({ defaults: defaultModels, spawnableModels })
 
     // ── 摘要 ──
     printSummary({ models: collectedModels, commandCount: selectedWorkflows.length })
@@ -339,6 +314,8 @@ export async function init(options: InitOptions = {}): Promise<void> {
         reviewModel: collectedModels.reviewModel,
         reviewModelB: collectedModels.reviewModelB,
         codingModel: collectedModels.codingModel,
+        // 透传保全：init 不编辑 spawnableModels（维护方式 = 手改 config.toml），存量值原样保留
+        spawnableModels: existingConfig?.codexHost?.spawnableModels,
       },
       installedHosts: ['codex'],
     })
@@ -363,6 +340,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     // Install codex host commands + shared role prompts
     const result = await installWorkflows(selectedWorkflows, '', options.force, {
       reviewModel: collectedModels.reviewModel,
+      spawnableModels,
     })
 
     spinner.succeed(ansis.green(i18n.t('init:installSuccess')))

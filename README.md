@@ -14,8 +14,8 @@ npx ly-workflow-codex init   # 全量初始化（生成 AGENTS.md + openspec ini
 
 - CLI 二进制名 `lycx`（子命令：`init`/`doctor`/`status`/`uninstall`，裸命令进菜单；`update` 在菜单内）
 - 安装产物：14 个 `@lyx-*` skills（`SKILL.md`）→ `~/.agents/skills/lyx-*/`；8 个角色提示词 → `~/.ly/prompts/codex/`
-- 配置：`~/.ly/config.toml`——首次读取/写入时自动从旧 `~/.claude/.ly/config.toml` 迁移（新位置已有配置则不覆盖）
-- 初始化向导采集流程：语言 → API 提供方（`~/.codex/config.toml` 现有 `[model_providers.*]` / OpenAI 官方 / 自定义）→ 模型三连（共用 provider 模型列表逐个选择：`codexHost.reviewModel` 审查 agent A / `reviewModelB` 审查 agent B / `codingModel` coding subagent，可"自定义输入…"或"不设置（回退当前会话模型）"，拉取失败回退自由输入）→ 配置摘要（三模型各自状态）
+- 配置：`~/.ly/config.toml`——首次读取/写入时自动从旧 `~/.claude/.ly/config.toml` 迁移（新位置已有配置则不覆盖）；`[codexHost] spawnableModels` 声明当前宿主显式 spawn 可用的模型清单（候选/校验唯一来源），未配置或空白回退内置默认（gpt-6-astra / gpt-5.6-sol / gpt-5.6-terra / gpt-5.6-luna / gpt-5.5），维护方式 = 手改配置（编辑交互入口为后续增强）
+- 初始化向导采集流程：语言 → API 提供方（`~/.codex/config.toml` 现有 `[model_providers.*]` / OpenAI 官方 / 自定义）→ **Codex 现状检测（只读**：主会话模型 `~/.codex/config.toml` 顶层 `model` / provider 条目 / `~/.codex/models.json` 注册规模）→ 模型三连（候选 = **默认继承当前会话模型（留空）** + `[codexHost] spawnableModels` 生效清单，不再以 provider `/models` 为候选来源、无自由输入；清单外既有值附"保留当前值（警告）"项保全）→ 配置摘要（三模型各自状态）
 
 ## 命令（14 个 `@lyx-*` skills）
 
@@ -51,6 +51,7 @@ npx ly-workflow-codex init   # 全量初始化（生成 AGENTS.md + openspec ini
 - **codex 单 Agent 编排**：当前 Codex 会话完成探索 → 方案 → 自审 → 实施 → 修复的全部编排；无 wrapper、无 Web UI、无 routing/implementer 后端选择
 - **审查关卡 = 双审查 subagent**：每关 spawn 2 个审查 subagent（fork 当前会话上下文 + 任务点名"只审 change 范围"），各自独立审 → 交换结论 → 达成共识；意见分歧 → 主会话拍板并显式提示用户，不能确认 → 判定 Critical；模型按 `codexHost.reviewModel`/`reviewModelB` 分别指定（未配置回退当前会话模型）；角色词绝对路径 `~/.ly/prompts/codex/` 为行为契约
 - **apply = coding subagent 实施**：spawn 一个 coding subagent（fork 当前上下文 + 只实施 change 范围），模型 = `codexHost.codingModel`；coding subagent 不自行 commit，结果回传主会话，由主会话确认后统一提交 `apply: <change-name>`；环境级不可用回退当前会话直接实施，业务失败原样呈报转人工
+- **模型可用性校验（spawn 前）**：review-plan / review-code / apply 三模板按"模板指示 + 宿主能力"落实模型，并内置校验规则——spawn 前读取 `~/.ly/config.toml` 的 `[codexHost] spawnableModels`（未配置用安装时注入的内置默认清单作后备）；配置模型 ∉ 生效清单 → 判定"子代理模型配置无效"并停止该关卡转人工改配（不回退）；读取配置失败 → "配置状态未知"提示运行 `lycx doctor`；配置合法但 spawn 环境失败 → 仍按环境级不可用回退。`lycx doctor` 含"Codex 子代理模型配置"检查项（留空 OK / ∈ 清单 OK / ∉ 清单 FAIL；`spawnableModels` 格式非法输出 WARN）
 - **发布**：打 tag `v*.*.*` push 触发 GitHub Actions 自动发 npm 包；无独立二进制构建步骤
 - **生命周期**：直接委托 OpenSpec 原生 skills（`@openspec-explore` / `@openspec-propose` / `@openspec-apply-change` / `@openspec-archive-change`），安装器只负责 preflight（openspec CLI + openspec-* skills 检测）与安装
 

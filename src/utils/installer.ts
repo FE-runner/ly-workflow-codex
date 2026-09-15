@@ -37,6 +37,8 @@ export { injectConfigVariables } from './installer-template'
 export interface InstallWorkflowsConfig {
   /** codex 宿主审查模型（LyConfig.codexHost.reviewModel） */
   reviewModel?: string
+  /** codex 宿主显式 spawn 可用模型清单（LyConfig.codexHost.spawnableModels） */
+  spawnableModels?: string[]
   /** 共享角色词目录（默认 ~/.ly/prompts/） */
   promptsDir?: string
   /** codex skills 安装目录（默认 ~/.agents/skills/，测试可注入） */
@@ -238,6 +240,7 @@ export async function installWorkflows(
     force,
     config: {
       reviewModel: config.reviewModel,
+      spawnableModels: config.spawnableModels,
     },
     templateDir: join(PACKAGE_ROOT, 'templates'),
     promptsDir: config.promptsDir || LY_PROMPTS_DIR,

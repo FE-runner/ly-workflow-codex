@@ -1,10 +1,11 @@
+import type { LyConfig } from '../types'
 import { execSync } from 'node:child_process'
 import ansis from 'ansis'
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import { version as packageVersion } from '../../package.json'
 import { i18n } from '../i18n'
-import { LY_PROMPTS_DIR, readLyConfig } from '../utils/config'
+import { LY_PROMPTS_DIR, readLyConfig, resolveSpawnableModels, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels } from '../utils/config'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
 import { detectOpenspecCli, detectOpenspecSkills } from '../utils/preflight'
 
@@ -27,6 +28,81 @@ function execSafe(cmd: string): string | null {
     return execSync(cmd, { stdio: 'pipe', timeout: 10000 }).toString().trim()
   }
   catch { return null }
+}
+
+export interface SubagentModelFieldResult {
+  key: string
+  /** 配置值（清洗后）；undefined = 留空（回退当前会话模型） */
+  value?: string
+  status: 'ok' | 'fail'
+  /** status==='ok' 时的判定原因：'unset' 留空 | 'in-list' 在可用清单内 */
+  okKind: 'unset' | 'in-list'
+}
+
+export interface SubagentModelConfigResult {
+  /** 总体状态：fail（存在清单外模型）> warn（spawnableModels 形态异常）> ok */
+  status: 'ok' | 'warn' | 'fail'
+  fields: SubagentModelFieldResult[]
+  /** 生效清单（用户配置或内置默认） */
+  effectiveModels: string[]
+  /** 清单来源：configured = 用户配置；builtin = 内置默认 */
+  listSource: 'configured' | 'builtin'
+  /** spawnableModels 字段形态（empty/invalid 时对总体输出 WARN，区别于未配置的静默通过） */
+  spawnState: 'unset' | 'ok' | 'empty' | 'invalid'
+}
+
+/**
+ * 子代理模型配置审查（doctor 第 7 项核心判定，独立导出便于单测）：
+ * 以 spawnableModels 生效清单为唯一校验来源，三个模型字段逐项判定——
+ * 留空 = 通过（回退当前会话模型）；非空且 ∈ 生效清单 = 通过；非空且 ∉ = FAIL。
+ * spawnableModels 字段显式存在但格式非法/清洗后为空 → 总体 WARN（区别于未配置）。
+ */
+export function assessSubagentModelConfig(codexHost: LyConfig['codexHost']): SubagentModelConfigResult {
+  const spawn = sanitizeSpawnableModels(codexHost?.spawnableModels)
+  const effectiveModels = resolveSpawnableModels(codexHost)
+
+  const fields: SubagentModelFieldResult[] = [
+    { key: 'reviewModel', value: sanitizeReviewModel(codexHost?.reviewModel) },
+    { key: 'reviewModelB', value: sanitizeModelField(codexHost?.reviewModelB) },
+    { key: 'codingModel', value: sanitizeModelField(codexHost?.codingModel) },
+  ].map((f) => {
+    const ok = !f.value || effectiveModels.includes(f.value)
+    return {
+      key: f.key,
+      value: f.value,
+      status: ok ? 'ok' : 'fail',
+      okKind: !f.value ? 'unset' : 'in-list',
+    }
+  })
+
+  const anyFail = fields.some(f => f.status === 'fail')
+  const spawnWarn = spawn.state === 'empty' || spawn.state === 'invalid'
+  return {
+    status: anyFail ? 'fail' : spawnWarn ? 'warn' : 'ok',
+    fields,
+    effectiveModels,
+    listSource: spawn.state === 'ok' ? 'configured' : 'builtin',
+    spawnState: spawn.state,
+  }
+}
+
+/** 第 7 项检查详情：逐字段判定 + 生效清单 + spawnableModels 形态 WARN */
+function buildSubagentModelCheckDetail(result: SubagentModelConfigResult): string {
+  const parts = result.fields.map((f) => {
+    if (f.status === 'ok') {
+      return f.value
+        ? i18n.t('doctor:modelConfig.okInList', { key: f.key, model: f.value })
+        : i18n.t('doctor:modelConfig.okUnset', { key: f.key })
+    }
+    return i18n.t('doctor:modelConfig.failNotInList', { key: f.key, model: f.value })
+  })
+  const list = result.listSource === 'configured'
+    ? i18n.t('doctor:modelConfig.listConfigured', { list: result.effectiveModels.join(', ') })
+    : i18n.t('doctor:modelConfig.listBuiltin', { list: result.effectiveModels.join(', ') })
+  const spawnWarn = result.spawnState === 'empty' || result.spawnState === 'invalid'
+    ? `; ${i18n.t('doctor:modelConfig.warnInvalid')}`
+    : ''
+  return `${parts.join('; ')}; ${list}${spawnWarn}`
 }
 
 export async function doctor(): Promise<void> {
@@ -81,6 +157,14 @@ export async function doctor(): Promise<void> {
     label: 'OpenSpec skills',
     status: hasOpenspecSkills ? OK : WARN,
     detail: hasOpenspecSkills ? i18n.t('common:doctor.skillsInitialized') : i18n.t('common:doctor.skillsMissing'),
+  })
+
+  // 7. Codex 子代理模型配置（候选/校验唯一来源 = spawnableModels 生效清单）
+  const modelCheck = assessSubagentModelConfig(config?.codexHost)
+  checks.push({
+    label: i18n.t('doctor:modelConfig.label'),
+    status: modelCheck.status === 'fail' ? FAIL : modelCheck.status === 'warn' ? WARN : OK,
+    detail: buildSubagentModelCheckDetail(modelCheck),
   })
 
   // Output

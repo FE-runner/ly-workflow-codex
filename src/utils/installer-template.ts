@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import fs from 'fs-extra'
 import { dirname, join } from 'pathe'
+import { SPAWNABLE_MODELS_DEFAULT } from './config'
 import { ISSUES_URL } from './package-meta'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -44,6 +45,13 @@ function findPackageRoot(startDir: string): string {
 
 export const PACKAGE_ROOT = findPackageRoot(__dirname)
 
+export interface InjectConfig {
+  /** 审查 agent A 模型（历史占位 {{REVIEW_MODEL}} 兼容；codex 单宿主恒渲染 codex） */
+  reviewModel?: string
+  /** spawnableModels（透传；{{SPAWNABLE_MODELS_DEFAULT}} 仅注入内置默认列表文本，见下） */
+  spawnableModels?: string[]
+}
+
 /**
  * Replace template variables in content based on user configuration.
  * codex 单宿主（subagent 多 Agent 模式）：审查/实施模型经"模板指示 + 宿主能力"落实——
@@ -51,8 +59,13 @@ export const PACKAGE_ROOT = findPackageRoot(__dirname)
  * 未配置回退当前会话模型，无 shell 层模型参数，因此模板不含这些模型的渲染占位符。
  * 此处只处理历史占位符兼容：{{REVIEWER_MODEL}}/{{IMPLEMENTER_MODEL}} 统一渲染为 codex、
  * 实施者条件块折叠、liteMode 标志剥离（Web UI/ly-wrapper 已不存在）。
+ *
+ * {{SPAWNABLE_MODELS_DEFAULT}}：注入内置默认列表文本（仅作后备）——模板正文在使用该占位时
+ * 表达的语义是"未配置 spawnableModels 时用内置默认清单"；生效清单一律由模板运行时读取
+ * `~/.ly/config.toml` 的 `[codexHost] spawnableModels` 决定，不把用户配置快照注入模板
+ * （配置变更无需重装即可生效，避免模板携带过期配置值）。
  */
-export function injectConfigVariables(content: string, _config?: { reviewModel?: string }): string {
+export function injectConfigVariables(content: string, _config?: InjectConfig): string {
   let processed = content
 
   // Reviewer / implementer 占位符（历史模板兼容）：codex 单宿主统一渲染为 codex
@@ -63,6 +76,8 @@ export function injectConfigVariables(content: string, _config?: { reviewModel?:
   processed = processed.replace(/\n?<!--\s*LY:IF:IMPLEMENTER_CLAUDE\s*-->[\s\S]*?<!--\s*LY:ENDIF\s*-->\n?/g, '')
   // Lite mode 标志（ly-wrapper 已删除，恒为空）
   processed = processed.replace(/\{\{LITE_MODE_FLAG\}\}/g, '')
+  // spawnableModels 内置默认清单文本（仅作后备）
+  processed = processed.replace(/\{\{SPAWNABLE_MODELS_DEFAULT\}\}/g, SPAWNABLE_MODELS_DEFAULT.join(' / '))
 
   return processed
 }

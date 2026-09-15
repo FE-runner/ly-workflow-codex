@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { SPAWNABLE_MODELS_DEFAULT } from '../config'
 import { injectConfigVariables } from '../installer'
 
 // Helper: find package root (mirrors the logic in installer.ts)
@@ -62,5 +63,23 @@ describe('integration: real templates have no MCP placeholders', () => {
   it('injectConfigVariables renders reviewer/implementer placeholders to codex', () => {
     expect(injectConfigVariables('{{REVIEWER_MODEL}}', {})).toBe('codex')
     expect(injectConfigVariables('{{IMPLEMENTER_MODEL}}', {})).toBe('codex')
+  })
+
+  it('renders {{SPAWNABLE_MODELS_DEFAULT}} with the built-in default list text', () => {
+    const rendered = injectConfigVariables('fallback: {{SPAWNABLE_MODELS_DEFAULT}}', {})
+    expect(rendered).toBe(`fallback: ${SPAWNABLE_MODELS_DEFAULT.join(' / ')}`)
+    expect(rendered).not.toContain('{{SPAWNABLE_MODELS_DEFAULT}}')
+    expect(rendered).toContain('gpt-6-astra')
+  })
+
+  it('review-plan / review-code / apply templates carry the model availability validation rule and no unrendered placeholder', () => {
+    for (const file of ['review-plan.md', 'review-code.md', 'apply.md']) {
+      const rendered = injectConfigVariables(readFileSync(join(TEMPLATES_DIR, file), 'utf-8'), {})
+      expect(rendered, file).toContain('模型可用性校验')
+      expect(rendered, file).toContain('子代理模型配置无效')
+      expect(rendered, file).toContain('Available models')
+      expect(rendered, file).toContain('无法读取配置，请运行 `lycx doctor` 检查')
+      expect(rendered, file).not.toContain('{{SPAWNABLE_MODELS_DEFAULT}}')
+    }
   })
 })

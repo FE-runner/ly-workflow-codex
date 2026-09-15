@@ -47,7 +47,13 @@ git status --porcelain | grep '^??'
    - **审查 agent A**：模型 = `~/.ly/config.toml` 的 `[codexHost] reviewModel`；未配置或空白 → 继承当前会话模型。
    - **审查 agent B**：模型 = `[codexHost] reviewModelB`；未配置或空白 → 继承当前会话模型。
 2. **fork 当前会话上下文**：两个 agent 均 fork 当前会话上下文启动——主会话讨论中的关键决策、取舍、已知边界等"软上下文"随 fork 到达审查模型，避免关键信息丢失。模型指定只写在模板指示里（取哪个配置字段、未配置用当前会话模型），由宿主 spawn 能力执行，SHALL NOT 依赖任何 shell 层模型参数（无 `-m`/`--model` 类指令）。
-3. **TASK 范围点名（只审 change 范围）**：每个审查 subagent 的任务均点名"只审该 change 的下列代码变更"，SHALL NOT 超出点名范围作业。TASK 先指示读取 ROLE_FILE（两个 agent 均用 `~/.ly/prompts/codex/reviewer.md`，角色词内容不重写），再给出审查范围说明（步骤 1 记录的基线引用说明或零 commit 场景组合）与未跟踪文件路径清单；**首轮不拼贴 diff 全文**——审查 subagent 自行执行对应命令获取实际内容（例如"运行 git diff HEAD 得到完整 diff"），不要假设范围。
+3. **模型可用性校验（spawn 前，主会话执行）**：spawn 前 SHALL 读取 `~/.ly/config.toml` 的 `[codexHost] spawnableModels` 校验本次使用的模型值——未配置时用安装时注入的内置默认清单（仅作后备）：`{{SPAWNABLE_MODELS_DEFAULT}}`。校验规则：
+   - 配置的模型非空且 ∉ 生效清单 → 判定**配置无效**：明确报告"子代理模型配置无效（<model> 不在可用列表，请运行 `lycx doctor` 或配置 `[codexHost] spawnableModels`）"，停止该关卡转人工改配，SHALL NOT 回退为当前会话直接执行，SHALL NOT 以"运行期失败/审查调用失败"终止条件掩盖。
+   - 留空（未配置）→ 回退继承当前会话模型（既有口径）。
+   - 读取 `~/.ly/config.toml` 失败（缺文件/解析错误）→ 视为**配置状态未知**：明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承回退。
+   - 配置合法但宿主无 subagent 能力或初始 spawn 失败 → 按既有"环境级不可用"口径回退当前会话直接执行并如实报告"已回退，原因：subagent 不可用"。
+   - spawn 失败报错原文含 `Available models: ...` 时如实展示，并可提示用户据此维护 `spawnableModels`。
+4. **TASK 范围点名（只审 change 范围）**：每个审查 subagent 的任务均点名"只审该 change 的下列代码变更"，SHALL NOT 超出点名范围作业。TASK 先指示读取 ROLE_FILE（两个 agent 均用 `~/.ly/prompts/codex/reviewer.md`，角色词内容不重写），再给出审查范围说明（步骤 1 记录的基线引用说明或零 commit 场景组合）与未跟踪文件路径清单；**首轮不拼贴 diff 全文**——审查 subagent 自行执行对应命令获取实际内容（例如"运行 git diff HEAD 得到完整 diff"），不要假设范围。
 
 OUTPUT 约束（写入每个审查 subagent 的任务）：审查发现按严重度分级 Critical/Warning/Info，每条含位置（含可解析的文件相对路径）、问题、建议。
 
@@ -61,7 +67,7 @@ OUTPUT 约束（写入每个审查 subagent 的任务）：审查发现按严重
 **审查调用失败（区分两阶段）**：
 
 - **运行期失败**（spawn 后超时、返回内容格式不符、审查 agent 未返回有效结论、双审查任一 agent 调用失败且无法按回退口径继续、回退不可行或回退后仍失败）→ 视为**独立终止条件**，如实报告原因（退出码/超时说明/原始输出片段）并停止循环，**不得**把失败等同于"本轮无 Critical"或视为清零通过。
-- **环境级不可用**（宿主无 subagent 能力、初始 spawn 不可用）→ 按回退口径处理：回退为当前会话直接执行审查，并如实报告"已回退，原因：subagent 不可用"，SHALL NOT 视为流程失败中断整体编排。
+- **环境级不可用**（配置合法时宿主无 subagent 能力、初始 spawn 不可用）→ 按回退口径处理：回退为当前会话直接执行审查，并如实报告"已回退，原因：subagent 不可用"，SHALL NOT 视为流程失败中断整体编排。
 - **单一 agent 失败且另一 agent 结论完整** → 以完整一方结论继续审查，如实报告降级（含失败 agent 与原因），SHALL NOT 归入"分歧未决"（环境级失败非意见分歧）；是否补跑/重试由主会话决定。
 
 本轮结束后，无论是否有 Critical，都先生成"本轮执行日志"（见"逐轮执行日志"一节），再判定：

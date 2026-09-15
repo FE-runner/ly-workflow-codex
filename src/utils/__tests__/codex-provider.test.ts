@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'smol-toml'
 import { describe, expect, it, vi } from 'vitest'
-import { fetchCodexModels, listModelProviders, sanitizeProviderName, upsertModelProvider } from '../codex-provider'
+import { fetchCodexModels, listModelProviders, readCodexCurrentModel, readModelsJson, sanitizeProviderName, upsertModelProvider } from '../codex-provider'
 
 /**
  * codex-provider 单测——全部在 mkdtemp 临时目录运行，不触碰真实 ~/.codex。
@@ -291,6 +291,108 @@ describe('fetchCodexModels', () => {
     }
     finally {
       vi.unstubAllGlobals()
+    }
+  })
+})
+
+describe('readCodexCurrentModel (codex-model-config)', () => {
+  it('reads the top-level model from config.toml', async () => {
+    const dir = makeTmp()
+    try {
+      const file = join(dir, 'config.toml')
+      writeFileSync(file, 'model = "DeepSeek-V4-Flash-0731"\nmodel_provider = "blueai"\n', 'utf-8')
+      expect(await readCodexCurrentModel(file)).toBe('DeepSeek-V4-Flash-0731')
+    }
+    finally {
+      cleanup(dir)
+    }
+  })
+
+  it('returns undefined when the top-level model is absent', async () => {
+    const dir = makeTmp()
+    try {
+      const file = join(dir, 'config.toml')
+      writeFileSync(file, '[model_providers.x]\nname = "x"\n', 'utf-8')
+      expect(await readCodexCurrentModel(file)).toBeUndefined()
+    }
+    finally {
+      cleanup(dir)
+    }
+  })
+
+  it('returns undefined for missing file / parse failure', async () => {
+    const dir = makeTmp()
+    try {
+      expect(await readCodexCurrentModel(join(dir, 'nope.toml'))).toBeUndefined()
+      const bad = join(dir, 'bad.toml')
+      writeFileSync(bad, 'model = "unterminated\n[', 'utf-8')
+      expect(await readCodexCurrentModel(bad)).toBeUndefined()
+    }
+    finally {
+      cleanup(dir)
+    }
+  })
+})
+
+describe('readModelsJson (codex-model-config)', () => {
+  it('extracts model slugs from the codex cache shape models[].slug', async () => {
+    const dir = makeTmp()
+    try {
+      const file = join(dir, 'models.json')
+      writeFileSync(file, JSON.stringify({ models: [{ slug: 'deepseek-v4-flash' }, { slug: 'gpt-5.6-luna' }, { slug: '  ' }] }), 'utf-8')
+      expect(await readModelsJson(file)).toEqual(['deepseek-v4-flash', 'gpt-5.6-luna'])
+    }
+    finally {
+      cleanup(dir)
+    }
+  })
+
+  it('tolerates a bare string array and {models: [string]}', async () => {
+    const dir = makeTmp()
+    try {
+      const bare = join(dir, 'bare.json')
+      writeFileSync(bare, '["a", { "slug": "b" }]', 'utf-8')
+      expect(await readModelsJson(bare)).toEqual(['a', 'b'])
+
+      const nested = join(dir, 'nested.json')
+      writeFileSync(nested, '{"models": ["x", "y"]}', 'utf-8')
+      expect(await readModelsJson(nested)).toEqual(['x', 'y'])
+    }
+    finally {
+      cleanup(dir)
+    }
+  })
+
+  it('returns undefined for missing file / broken JSON (distinct from 0 models)', async () => {
+    const dir = makeTmp()
+    try {
+      expect(await readModelsJson(join(dir, 'nope.json'))).toBeUndefined()
+      const bad = join(dir, 'bad.json')
+      writeFileSync(bad, '{not json', 'utf-8')
+      expect(await readModelsJson(bad)).toBeUndefined()
+      // 空注册集合 → 空数组（与"未检测到"区分）
+      const empty = join(dir, 'empty.json')
+      writeFileSync(empty, '{"models": []}', 'utf-8')
+      expect(await readModelsJson(empty)).toEqual([])
+    }
+    finally {
+      cleanup(dir)
+    }
+  })
+
+  it('never returns provider secrets (envKey / apiKey 不进入返回值)', async () => {
+    const dir = makeTmp()
+    try {
+      const file = join(dir, 'models.json')
+      writeFileSync(file, JSON.stringify({ models: [{ slug: 'gpt-5.5', env_key: 'SECRET', api_key: 'SK' }] }), 'utf-8')
+      const result = await readModelsJson(file)
+      const serialized = JSON.stringify(result)
+      expect(serialized).not.toContain('env_key')
+      expect(serialized).not.toContain('api_key')
+      expect(serialized).not.toContain('SECRET')
+    }
+    finally {
+      cleanup(dir)
     }
   })
 })

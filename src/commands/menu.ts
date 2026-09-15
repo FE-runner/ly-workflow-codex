@@ -9,8 +9,9 @@ import { join } from 'pathe'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import { getConfigPath, readLyConfig, sanitizeModelField, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import { getConfigPath, readLyConfig, resolveSpawnableModels, sanitizeModelField, sanitizeReviewModel, writeLyConfig } from '../utils/config'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows, uninstallWorkflows } from '../utils/installer'
+import { buildModelFieldChoices, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
 import { init } from './init'
 import { update } from './update'
@@ -293,19 +294,27 @@ function readLyConfigSync(): any {
 async function configReviewModel(): Promise<void> {
   const config = await readLyConfig()
   const currentReviewModel = sanitizeReviewModel(config?.codexHost?.reviewModel)
+  // 候选/默认语义与 init 模型三连共用（buildModelFieldChoices），来源 = spawnableModels 生效清单
+  const spawnableModels = resolveSpawnableModels(config?.codexHost)
 
   console.log()
   console.log(ansis.cyan.bold(`  ${i18n.t('init:model.title')}`))
   console.log()
   console.log(ansis.gray(`  ${i18n.t('init:host.reviewModelHint')}`))
 
+  const { choices, defaultChoice } = buildModelFieldChoices({
+    models: spawnableModels,
+    current: currentReviewModel,
+  })
   const { model } = await inquirer.prompt([{
-    type: 'input',
+    type: 'list',
     name: 'model',
     message: i18n.t('init:host.reviewModelPrompt'),
-    default: currentReviewModel || '',
+    choices,
+    default: defaultChoice,
+    pageSize: 15,
   }])
-  const next = sanitizeReviewModel(model)
+  const next = model === MODEL_CHOICE_UNSET ? undefined : sanitizeReviewModel(model)
 
   if (next === currentReviewModel) {
     console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))
@@ -317,14 +326,16 @@ async function configReviewModel(): Promise<void> {
     console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized`)
     return
   }
-  // 写回保留既有 reviewModelB / codingModel（本次仍只编辑审查 agent A，全字段菜单编辑列为后续候选）
+  // 写回保留既有 reviewModelB / codingModel / spawnableModels（本次仍只编辑审查 agent A）
   const existingB = sanitizeModelField(fresh.codexHost?.reviewModelB)
   const existingCoding = sanitizeModelField(fresh.codexHost?.codingModel)
-  if (next || existingB || existingCoding) {
+  const existingSpawnable = fresh.codexHost?.spawnableModels
+  if (next || existingB || existingCoding || existingSpawnable !== undefined) {
     fresh.codexHost = {
       ...(next ? { reviewModel: next } : {}),
       ...(existingB ? { reviewModelB: existingB } : {}),
       ...(existingCoding ? { codingModel: existingCoding } : {}),
+      ...(existingSpawnable !== undefined ? { spawnableModels: existingSpawnable } : {}),
     }
   }
   else {
@@ -346,7 +357,8 @@ async function reinstallTemplates(): Promise<void> {
   try {
     const config = await readLyConfig()
     const reviewModel = sanitizeReviewModel(config?.codexHost?.reviewModel)
-    const result = await installWorkflows(getCoreCommandIds(), '', true, { reviewModel })
+    const spawnableModels = resolveSpawnableModels(config?.codexHost)
+    const result = await installWorkflows(getCoreCommandIds(), '', true, { reviewModel, spawnableModels })
     if (result.success) {
       spinner.succeed(i18n.t('init:model.reinstallDone'))
     }

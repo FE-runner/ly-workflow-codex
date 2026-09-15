@@ -24,6 +24,11 @@ export function codexConfigPath(): string {
   return join(homedir(), '.codex', 'config.toml')
 }
 
+/** Codex 模型注册缓存文件路径（仅作现状展示，实测其内容 ≠ spawn 可用列表，不作为候选/校验来源） */
+export function codexModelsJsonPath(): string {
+  return join(homedir(), '.codex', 'models.json')
+}
+
 /**
  * provider 名称清洗：该值既进 TOML section 头（[model_providers.<name>]，bare key
  * 仅允许 [A-Za-z0-9_-]），又作为 model_provider 顶层值——白名单剔除其余字符；
@@ -73,6 +78,59 @@ export async function listModelProviders(filePath: string = codexConfigPath()): 
     })
   }
   return providers
+}
+
+/**
+ * 读取 `~/.codex/config.toml` 顶层 `model`（主会话模型 = "默认继承"的实际值）。
+ * 文件缺失 / 解析失败 / 无顶层 model → undefined（调用方按"未检测到"展示，不报错）。
+ */
+export async function readCodexCurrentModel(filePath: string = codexConfigPath()): Promise<string | undefined> {
+  const parsed = await readCodexConfigToml(filePath)
+  const model = parsed?.model
+  return typeof model === 'string' && model.trim() !== '' ? model.trim() : undefined
+}
+
+/**
+ * 读取 `~/.codex/models.json` 注册模型集合（OpenAI 兼容缓存，仅作现状展示）：
+ * - 解析成功 → 模型名数组（宽容处理 `{"models": [{slug}]}`、`{"models": [string]}`、裸数组）
+ * - 缺文件 / 坏 JSON → undefined，与"注册 0 个模型"（返回空数组）可区分，展示层据实标注"未检测到"
+ *
+ * 返回结构仅含模型名字符串，不包含 provider 的 API key / env_key 等敏感字段。
+ */
+export async function readModelsJson(filePath: string = codexModelsJsonPath()): Promise<string[] | undefined> {
+  let json: any
+  try {
+    if (!(await fs.pathExists(filePath)))
+      return undefined
+    json = JSON.parse(await fs.readFile(filePath, 'utf-8'))
+  }
+  catch {
+    return undefined
+  }
+
+  const collect = (items: unknown): string[] => {
+    if (!Array.isArray(items))
+      return []
+    const names: string[] = []
+    for (const item of items) {
+      const id = typeof item === 'string'
+        ? item
+        : (item && typeof item === 'object' && typeof (item as any).slug === 'string')
+            ? (item as any).slug as string
+            : ''
+      const trimmed = id.trim()
+      if (trimmed !== '' && !names.includes(trimmed))
+        names.push(trimmed)
+    }
+    return names
+  }
+
+  const items = Array.isArray(json)
+    ? json
+    : (json && typeof json === 'object' && Array.isArray((json as any).models))
+        ? (json as any).models
+        : null
+  return items === null ? [] : collect(items)
 }
 
 export type UpsertProviderResult
