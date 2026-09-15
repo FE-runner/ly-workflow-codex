@@ -11,13 +11,13 @@ import {
   createDefaultConfig,
   ensureLyDir,
   readLyConfig,
-  resolveSpawnableModels,
+  resolveEffectiveModelList,
   sanitizeModelField,
   sanitizeReviewModel,
   writeLyConfig,
 } from '../utils/config'
 import { getCoreCommandIds, installWorkflows, migrateLegacyPrompts } from '../utils/installer'
-import { buildModelFieldChoices, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
+import { buildModelFieldChoices, MODEL_CHOICE_CUSTOM, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
 import { PACKAGE_NAME } from '../utils/package-meta'
 
 // ═══════════════════════════════════════════════════════
@@ -70,6 +70,16 @@ async function pickModelField(input: {
 
   if (pick === MODEL_CHOICE_UNSET)
     return undefined
+  if (pick === MODEL_CHOICE_CUSTOM) {
+    // 自定义输入：保留自由输入方式（可填不在生效清单内的模型）；留空视为取消（回退默认"留空"）
+    const { custom } = await inquirer.prompt([{
+      type: 'input',
+      name: 'custom',
+      message: i18n.t('init:model.customPrompt'),
+    }])
+    const model = custom?.trim()
+    return model ? model : undefined
+  }
   return typeof pick === 'string' ? pick.trim() : undefined
 }
 
@@ -270,8 +280,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
     reviewModelB: sanitizeModelField(existingConfig?.codexHost?.reviewModelB),
     codingModel: sanitizeModelField(existingConfig?.codexHost?.codingModel),
   }
-  // 模型三连候选/校验的唯一来源：spawnableModels 生效清单（配置值或内置默认）
-  const spawnableModels = resolveSpawnableModels(existingConfig?.codexHost)
+  // 模型三连候选/校验来源：生效清单（spawnableModels 基准；未显式配置时并入已配置模型字段值
+  // 与 codex 当前主模型 —— 用户已配置的模型按配置列出，选项含"默认继承"的实际主模型）
+  const currentModel = await readCodexCurrentModel()
+  const spawnableModels = resolveEffectiveModelList(existingConfig?.codexHost, { currentModel })
   let collectedModels: CodexHostModels = { ...defaultModels }
 
   // ═══════════════════════════════════════════════════════

@@ -6,7 +6,7 @@ import { join } from 'pathe'
 import { version as packageVersion } from '../../package.json'
 import { i18n } from '../i18n'
 import { readCodexCurrentModel } from '../utils/codex-provider'
-import { LY_PROMPTS_DIR, readLyConfig, resolveSpawnableModels, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels } from '../utils/config'
+import { LY_PROMPTS_DIR, readLyConfig, resolveEffectiveModelList, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels } from '../utils/config'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
 import { detectOpenspecCli, detectOpenspecSkills } from '../utils/preflight'
 
@@ -56,19 +56,21 @@ export interface SubagentModelConfigResult {
 
 /**
  * 子代理模型配置审查（doctor 第 7 项核心判定，独立导出便于单测）：
- * 以 spawnableModels 生效清单为唯一校验来源，三个模型字段逐项判定——
+ * 以生效清单（基准 = spawnableModels 或内置默认；已配置模型字段值始终并入、codex 主模型
+ * 在未显式配置清单时并入，见 resolveEffectiveModelList）为校验来源，三个模型字段逐项判定——
  * 留空 = 通过（回退当前会话模型）；非空且 ∈ 生效清单 = 通过；非空且 ∉ = FAIL。
  * spawnableModels 字段显式存在但格式非法/清洗后为空 → 总体 WARN（区别于未配置）。
  * 可选交叉校验（opts.currentModel = ~/.codex/config.toml 顶层 model）：存在留空字段时，
- * 当前会话模型可检测到但 ∉ 生效清单 → 总体 WARN（提示"留空继承的模型可能不可 spawn"，
- * 事前体检尽力而为，运行期 spawn 失败兜底仍由模板规则承担）；未检测到则不提示。
+ * 当前会话模型可检测到但 ∉ 生效清单（仅用户显式配置 spawnableModels 时可能）→ 总体 WARN
+ * （提示"留空继承的模型可能不可 spawn"，事前体检尽力而为，运行期 spawn 失败兜底仍由
+ * 模板规则承担）；未检测到则不提示。
  */
 export function assessSubagentModelConfig(
   codexHost: LyConfig['codexHost'],
   opts?: { currentModel?: string },
 ): SubagentModelConfigResult {
   const spawn = sanitizeSpawnableModels(codexHost?.spawnableModels)
-  const effectiveModels = resolveSpawnableModels(codexHost)
+  const effectiveModels = resolveEffectiveModelList(codexHost, { currentModel: opts?.currentModel })
 
   const fields: SubagentModelFieldResult[] = [
     { key: 'reviewModel', value: sanitizeReviewModel(codexHost?.reviewModel) },
@@ -177,7 +179,7 @@ export async function doctor(): Promise<void> {
     detail: hasOpenspecSkills ? i18n.t('common:doctor.skillsInitialized') : i18n.t('common:doctor.skillsMissing'),
   })
 
-  // 7. Codex 子代理模型配置（候选/校验唯一来源 = spawnableModels 生效清单）。
+  // 7. Codex 子代理模型配置（候选/校验来源 = 生效清单：spawnableModels 基准 + 已配置字段值始终并入 + 未显式配置清单时并入 codex 主模型）。
   // config 缺失时第 7 项仍按全字段未配置判定 OK（行为可接受）：config 文件缺失已由
   // 第 1 项 config 检查（WARN）兜底，此处无需重复报错。
   const currentModel = await readCodexCurrentModel()

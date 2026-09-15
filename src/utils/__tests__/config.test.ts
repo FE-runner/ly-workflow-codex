@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultConfig, migrateLegacyConfig, readLyConfig, resolveSpawnableModels, sanitizeInstalledHosts, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
+import { createDefaultConfig, migrateLegacyConfig, readLyConfig, resolveEffectiveModelList, resolveSpawnableModels, sanitizeInstalledHosts, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
 
 // 模块顶层常量（CONFIG_FILE / LY_DIR 等）在 import 时基于 homedir() 求值，
 // 因此 hoisted 阶段就创建固定临时 home，再 mock homedir() 指向它——
@@ -250,6 +250,60 @@ describe('sPAWNABLE_MODELS_DEFAULT / sanitizeSpawnableModels / resolveSpawnableM
     expect(resolveSpawnableModels({ spawnableModels: [] })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
     expect(resolveSpawnableModels({ spawnableModels: '' })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
     expect(resolveSpawnableModels({ spawnableModels: ['  '] })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
+  })
+})
+
+describe('resolveEffectiveModelList（生效清单：spawnableModels 基准 + 宽松路径并入已配置模型/主模型）', () => {
+  it('strict path: explicit spawnableModels is the base; configured field values always merge, main model does not', () => {
+    expect(resolveEffectiveModelList({ spawnableModels: ['glm-5.3-flash'] })).toEqual(['glm-5.3-flash'])
+    expect(resolveEffectiveModelList(
+      { spawnableModels: ['glm-5.3-flash'], reviewModel: 'gpt-5.6-luna' },
+      { currentModel: 'deepseek-v4.1-flash' },
+    )).toEqual(['glm-5.3-flash', 'gpt-5.6-luna'])
+  })
+
+  it('lenient path: unset spawnableModels → built-in default, no extras', () => {
+    expect(resolveEffectiveModelList(undefined)).toEqual([...SPAWNABLE_MODELS_DEFAULT])
+  })
+
+  it('lenient path: configured model fields and (when provided) the codex main model are merged in (deduped, in order)', () => {
+    expect(resolveEffectiveModelList({ reviewModel: 'glm-5.3-flash' })).toEqual([
+      ...SPAWNABLE_MODELS_DEFAULT,
+      'glm-5.3-flash',
+    ])
+    expect(resolveEffectiveModelList({ reviewModelB: 'glm-x', codingModel: '  glm-x ' })).toEqual([
+      ...SPAWNABLE_MODELS_DEFAULT,
+      'glm-x',
+    ])
+  })
+
+  it('lenient path: codex main model is merged in when detectable (deduped with same field value)', () => {
+    expect(resolveEffectiveModelList(undefined, { currentModel: 'deepseek-v4.1-flash' })).toEqual([
+      ...SPAWNABLE_MODELS_DEFAULT,
+      'deepseek-v4.1-flash',
+    ])
+    expect(resolveEffectiveModelList({ codingModel: 'deepseek-v4.1-flash' }, { currentModel: 'deepseek-v4.1-flash' })).toEqual([
+      ...SPAWNABLE_MODELS_DEFAULT,
+      'deepseek-v4.1-flash',
+    ])
+    // 主模型已在内置默认中 → 不重复
+    expect(resolveEffectiveModelList(undefined, { currentModel: 'gpt-5.6-luna' })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
+  })
+
+  it('lenient path: empty / invalid spawnableModels also merge field values and main model', () => {
+    expect(resolveEffectiveModelList({ spawnableModels: [] }, { currentModel: 'deepseek-v4.1-flash' })).toEqual([
+      ...SPAWNABLE_MODELS_DEFAULT,
+      'deepseek-v4.1-flash',
+    ])
+    expect(resolveEffectiveModelList({ spawnableModels: 'bad', reviewModel: 'glm-5.3-flash' })).toEqual([
+      ...SPAWNABLE_MODELS_DEFAULT,
+      'glm-5.3-flash',
+    ])
+  })
+
+  it('ignores blank field values and blank / undetectable main model', () => {
+    expect(resolveEffectiveModelList({ reviewModel: '  ' })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
+    expect(resolveEffectiveModelList(undefined, { currentModel: '   ' })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
   })
 })
 

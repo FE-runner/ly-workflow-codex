@@ -4,6 +4,9 @@ import { i18n } from '../i18n'
 /** 模型字段 list 的"不设置（留空）"哨兵值（NUL 前缀保证绝不与任何模型 id 冲突） */
 export const MODEL_CHOICE_UNSET = '\u0000lyx:unset'
 
+/** 模型字段 list 的"自定义输入"哨兵值（NUL 前缀保证绝不与任何模型 id 冲突） */
+export const MODEL_CHOICE_CUSTOM = '\u0000lyx:custom'
+
 export interface ModelFieldChoice {
   name: string
   value: string
@@ -16,7 +19,7 @@ export interface ModelFieldChoices {
 
 /**
  * 模型字段候选构造（init 模型三连与 menu 审查模型编辑共用，保证候选/默认语义一致）：
- * 候选 = [默认继承当前会话模型（留空）] + spawnableModels 生效清单；
+ * 候选 = [默认继承当前会话模型（留空）] + 生效清单 + [自定义输入]；
  * 既有值非空且 ∈ 清单 → 默认该项；非空但 ∉ 清单 → 附加"保留当前值（不在可用列表，警告）"项并默认该项
  * （SHALL NOT 静默丢弃或覆盖既有值）；无既有值或空白 → 默认"留空"。
  */
@@ -29,6 +32,7 @@ export function buildModelFieldChoices(input: { models: string[], current?: stri
   const choices: ModelFieldChoice[] = [
     { name: ansis.gray(i18n.t('init:model.unsetChoice')), value: MODEL_CHOICE_UNSET },
     ...models.map(id => ({ name: id, value: id })),
+    { name: ansis.cyan(i18n.t('init:model.customChoice')), value: MODEL_CHOICE_CUSTOM },
   ]
   let defaultChoice = MODEL_CHOICE_UNSET
   if (hasCurrent) {

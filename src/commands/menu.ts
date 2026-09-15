@@ -9,9 +9,10 @@ import { join } from 'pathe'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import { getConfigPath, readLyConfig, resolveSpawnableModels, sanitizeModelField, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import { getConfigPath, readLyConfig, resolveEffectiveModelList, sanitizeModelField, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import { readCodexCurrentModel } from '../utils/codex-provider'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows, uninstallWorkflows } from '../utils/installer'
-import { buildModelFieldChoices, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
+import { buildModelFieldChoices, MODEL_CHOICE_CUSTOM, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
 import { init } from './init'
 import { update } from './update'
@@ -294,8 +295,10 @@ function readLyConfigSync(): any {
 async function configReviewModel(): Promise<void> {
   const config = await readLyConfig()
   const currentReviewModel = sanitizeReviewModel(config?.codexHost?.reviewModel)
-  // 候选/默认语义与 init 模型三连共用（buildModelFieldChoices），来源 = spawnableModels 生效清单
-  const spawnableModels = resolveSpawnableModels(config?.codexHost)
+  // 候选/默认语义与 init 模型三连共用（buildModelFieldChoices），来源 = 生效清单
+  // （spawnableModels 基准；未显式配置时并入已配置模型字段值与 codex 当前主模型）
+  const currentModel = await readCodexCurrentModel()
+  const spawnableModels = resolveEffectiveModelList(config?.codexHost, { currentModel })
 
   console.log()
   console.log(ansis.cyan.bold(`  ${i18n.t('init:model.title')}`))
@@ -314,7 +317,19 @@ async function configReviewModel(): Promise<void> {
     default: defaultChoice,
     pageSize: 15,
   }])
-  const next = model === MODEL_CHOICE_UNSET ? undefined : sanitizeReviewModel(model)
+  let next: string | undefined
+  if (model === MODEL_CHOICE_CUSTOM) {
+    // 自定义输入：保留自由输入方式（可填不在生效清单内的模型）；留空视为取消（保持原值语义）
+    const { custom } = await inquirer.prompt([{
+      type: 'input',
+      name: 'custom',
+      message: i18n.t('init:model.customPrompt'),
+    }])
+    next = custom?.trim() || undefined
+  }
+  else {
+    next = model === MODEL_CHOICE_UNSET ? undefined : sanitizeReviewModel(model)
+  }
 
   if (next === currentReviewModel) {
     console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))

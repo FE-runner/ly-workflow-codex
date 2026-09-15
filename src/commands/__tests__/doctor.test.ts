@@ -21,18 +21,21 @@ describe('assessSubagentModelConfig (codex-model-config)', () => {
     expect(result.listSource).toBe('builtin')
   })
 
-  it('configured spawnableModels list is the effective validation source', () => {
+  it('configured spawnableModels is the base; configured field values always merge into the effective list', () => {
     expect(assessSubagentModelConfig({ spawnableModels: ['glm-5.3-flash'] }).listSource).toBe('configured')
     expect(assessSubagentModelConfig({ spawnableModels: ['glm-5.3-flash'] }).effectiveModels).toEqual(['glm-5.3-flash'])
-    // reviewModel 在用户清单内 → ok；在用户清单外（即使是内置默认之一）→ fail
+    // reviewModel 在用户清单内 → ok；清单外配置值（含自定义输入）→ 并入生效清单同样 ok
     expect(assessSubagentModelConfig({ spawnableModels: ['glm-5.3-flash'], reviewModel: 'glm-5.3-flash' }).status).toBe('ok')
-    expect(assessSubagentModelConfig({ spawnableModels: ['glm-5.3-flash'], reviewModel: 'gpt-5.6-luna' }).status).toBe('fail')
+    const outOfBase = assessSubagentModelConfig({ spawnableModels: ['glm-5.3-flash'], reviewModel: 'gpt-5.6-luna' })
+    expect(outOfBase.status).toBe('ok')
+    expect(outOfBase.effectiveModels).toEqual(['glm-5.3-flash', 'gpt-5.6-luna'])
   })
 
-  it('out-of-list model value → fail with the offending field listed', () => {
+  it('configured model value without explicit spawnableModels → merged into the effective list (ok)', () => {
     const result = assessSubagentModelConfig({ reviewModel: 'deepseek-v4-flash' })
-    expect(result.status).toBe('fail')
-    expect(result.fields[0]).toMatchObject({ key: 'reviewModel', value: 'deepseek-v4-flash', status: 'fail' })
+    expect(result.status).toBe('ok')
+    expect(result.effectiveModels).toContain('deepseek-v4-flash')
+    expect(result.fields[0]).toMatchObject({ key: 'reviewModel', value: 'deepseek-v4-flash', status: 'ok', okKind: 'in-list' })
   })
 
   it('malformed spawnableModels (string) → warn even when model fields would pass', () => {
@@ -49,24 +52,29 @@ describe('assessSubagentModelConfig (codex-model-config)', () => {
     expect(result.spawnState).toBe('empty')
   })
 
-  it('a field out of list takes priority over the spawnableModels WARN (fail wins)', () => {
+  it('malformed spawnableModels with a configured field → field merges (ok), overall WARN stays', () => {
     const result = assessSubagentModelConfig({ spawnableModels: 'bad' as any, reviewModel: 'deepseek-v4-flash' })
-    expect(result.status).toBe('fail')
+    expect(result.status).toBe('warn')
     expect(result.spawnState).toBe('invalid')
+    expect(result.fields[0].status).toBe('ok')
   })
 
-  it('cross-checks the inherited current-session model when a field is unset', () => {
-    // 主会话模型可检测到且 ∈ 生效清单 → ok，不额外提示
-    const inList = assessSubagentModelConfig(undefined, { currentModel: 'gpt-5.6-luna' })
+  it('inherited current-session model is merged into the effective list when spawnableModels is unset', () => {
+    // 主会话模型可检测到 → 合并入生效清单（宽松路径），无警告
+    const inList = assessSubagentModelConfig(undefined, { currentModel: 'deepseek-v4-flash' })
     expect(inList.status).toBe('ok')
+    expect(inList.effectiveModels).toContain('deepseek-v4-flash')
     expect(inList.inheritedModel).toBeUndefined()
-    // 主会话模型 ∉ 生效清单且存在留空字段 → warn + inheritedModel（W5 交叉校验）
-    const warnResult = assessSubagentModelConfig(undefined, { currentModel: 'deepseek-v4-flash' })
-    expect(warnResult.status).toBe('warn')
-    expect(warnResult.inheritedModel).toEqual({ model: 'deepseek-v4-flash' })
     // 主会话模型未检测到 → ok，不提示
     expect(assessSubagentModelConfig(undefined, { currentModel: undefined }).status).toBe('ok')
     expect(assessSubagentModelConfig(undefined, {}).status).toBe('ok')
+  })
+
+  it('inherited current-session model not in an explicit spawnableModels list → warn (strict path)', () => {
+    const warnResult = assessSubagentModelConfig({ spawnableModels: ['glm-5.3-flash'] }, { currentModel: 'deepseek-v4-flash' })
+    expect(warnResult.status).toBe('warn')
+    expect(warnResult.effectiveModels).toEqual(['glm-5.3-flash'])
+    expect(warnResult.inheritedModel).toEqual({ model: 'deepseek-v4-flash' })
   })
 
   it('does not warn on unset inheritance when every field is explicitly in-list', () => {
@@ -78,12 +86,12 @@ describe('assessSubagentModelConfig (codex-model-config)', () => {
     expect(result.inheritedModel).toBeUndefined()
   })
 
-  it('field out-of-list keeps priority over the inherited-model WARN (fail wins)', () => {
+  it('configured field + same current model (unset spawnableModels) → both merged, ok', () => {
     const result = assessSubagentModelConfig(
       { reviewModel: 'deepseek-v4-flash' },
       { currentModel: 'deepseek-v4-flash' },
     )
-    expect(result.status).toBe('fail')
-    expect(result.fields[0].okKind).toBe('out-of-list')
+    expect(result.status).toBe('ok')
+    expect(result.fields[0].okKind).toBe('in-list')
   })
 })

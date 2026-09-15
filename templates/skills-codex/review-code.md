@@ -47,10 +47,10 @@ git status --porcelain | grep '^??'
    - **审查 agent A**：模型 = `~/.ly/config.toml` 的 `[codexHost] reviewModel`；未配置或空白 → 继承当前会话模型。
    - **审查 agent B**：模型 = `[codexHost] reviewModelB`；未配置或空白 → 继承当前会话模型。
 2. **fork 当前会话上下文**：两个 agent 均 fork 当前会话上下文启动——主会话讨论中的关键决策、取舍、已知边界等"软上下文"随 fork 到达审查模型，避免关键信息丢失。模型指定只写在模板指示里（取哪个配置字段、未配置用当前会话模型），由宿主 spawn 能力执行，SHALL NOT 依赖任何 shell 层模型参数（无 `-m`/`--model` 类指令）。
-3. **模型可用性校验（spawn 前，主会话执行）**：spawn 前 SHALL 读取 `~/.ly/config.toml` 的 `[codexHost] spawnableModels` 校验本次使用的模型值——未配置时用安装时注入的内置默认清单（仅作后备）：`{{SPAWNABLE_MODELS_DEFAULT}}`。校验规则：
+3. **模型可用性校验（spawn 前，主会话执行）**：spawn 前 SHALL 读取 `~/.ly/config.toml` 的 `[codexHost] spawnableModels` 校验本次使用的模型值。**生效清单** = `spawnableModels` 清洗后合法非空值（未配置 / 格式非法 / 清洗后为空时回退安装时注入的内置默认清单：`{{SPAWNABLE_MODELS_DEFAULT}}`）∪ `[codexHost]` 已配置的模型字段非空值（**始终并入**，含向导自定义输入——用户显式指定的模型按配置列出）∪ codex 当前主模型（`~/.codex/config.toml` 顶层 `model`，可检测时；仅未显式配置清单时并入；与 `lycx doctor` 口径一致）。校验规则：
    - 配置的模型非空且 ∉ 生效清单 → 判定**配置无效**：明确报告"子代理模型配置无效（<model> 不在可用列表，请运行 `lycx doctor` 或配置 `[codexHost] spawnableModels`）"，停止该关卡转人工改配，SHALL NOT 回退为当前会话直接执行，SHALL NOT 以"运行期失败/审查调用失败"终止条件掩盖。
    - 留空（未配置）→ 回退继承当前会话模型（既有口径）。
-   - `spawnableModels` 显式存在但为空数组/非数组（形态异常）→ 视同未配置，生效清单 = 内置默认（与 `lycx doctor` 口径一致；内置默认以当前 `lycx` 版本为准，以 `lycx doctor` 输出为准）。
+   - `spawnableModels` 显式存在但为空数组/非数组（形态异常）→ 视同未配置，生效清单 = 内置默认 ∪ 已配置模型字段值 ∪ codex 主模型（与 `lycx doctor` 口径一致；内置默认以当前 `lycx` 版本为准，以 `lycx doctor` 输出为准）。
    - 读取 `~/.ly/config.toml` 失败（缺文件/解析错误）→ 视为**配置状态未知**：明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承回退。
    - 配置合法但宿主无 subagent 能力或初始 spawn 失败 → 按既有"环境级不可用"口径回退当前会话直接执行并如实报告"已回退，原因：subagent 不可用"。
    - spawn 失败报错原文含 `Available models: ...` 时如实展示，并可提示用户据此维护 `spawnableModels`。

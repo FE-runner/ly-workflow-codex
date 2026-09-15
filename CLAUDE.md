@@ -8,7 +8,7 @@
 
 ## 项目定位
 
-**ly-workflow-codex**：Codex 单 Agent 工作流——同一 Codex 会话内自己完成探索 / 方案 / 实施 / 审查编排；方案审查与代码审查两个关卡以 **双审查 subagent**（fork 当前会话上下文 + 范围点名 + 独立审 → 交换 → 共识）执行，实施由 **coding subagent** 执行，模型经 `codexHost.reviewModel`/`reviewModelB`/`codingModel` 分别指定（未配置回退当前会话模型）；`[codexHost] spawnableModels` 为模型候选/校验的唯一来源（未配置回退内置默认）。无 wrapper、无 Web UI、无 routing/implementer 概念；配置单宿主于 `~/.ly/config.toml`。它是 ly-workflow（双宿主）的 codex 单宿主独立版，关系与迁移路径见 [README.md](./README.md#与-ly-workflow-的关系)。
+**ly-workflow-codex**：Codex 单 Agent 工作流——同一 Codex 会话内自己完成探索 / 方案 / 实施 / 审查编排；方案审查与代码审查两个关卡以 **双审查 subagent**（fork 当前会话上下文 + 范围点名 + 独立审 → 交换 → 共识）执行，实施由 **coding subagent** 执行，模型经 `codexHost.reviewModel`/`reviewModelB`/`codingModel` 分别指定（未配置回退当前会话模型）；`[codexHost] spawnableModels` 为模型候选/校验的基准清单（未配置回退内置默认，生效清单并入已配置模型字段值与 codex 主模型，用户已配置的模型按配置列出）。无 wrapper、无 Web UI、无 routing/implementer 概念；配置单宿主于 `~/.ly/config.toml`。它是 ly-workflow（双宿主）的 codex 单宿主独立版，关系与迁移路径见 [README.md](./README.md#与-ly-workflow-的关系)。
 
 ## 常用命令
 
@@ -41,7 +41,7 @@ lycx uninstall               # 卸载
 
 - 审查关卡 = **双审查 subagent**：每关 spawn 2 个审查 subagent（fork 当前会话上下文 + 任务点名"只审 change 范围"），各自独立审 → 交换结论 → 达成共识；意见分歧 → 主会话拍板并**显式提示用户"这是审查分歧"**，不能确认 → 判定 Critical；模型按 `codexHost.reviewModel`（agent A）/ `reviewModelB`（agent B）分别指定，未配置或空白回退当前会话模型
 - 实施 = **coding subagent**（`@lyx-apply`）：spawn 一个 coding subagent（fork 当前上下文 + 只实施 change 范围），模型 = `codexHost.codingModel`（未配置回退当前会话模型）；coding subagent 不自行 commit，实施结果回传主会话，由主会话确认后统一提交 `apply: <change-name>`；环境级不可用回退当前会话直接执行，业务失败原样呈报转人工
-- 模型可用性校验（spawn 前）：三模板（review-plan / review-code / apply）读取 `~/.ly/config.toml` 的 `[codexHost] spawnableModels` 校验（未配置用安装时注入的内置默认清单作后备）；配置模型 ∉ 生效清单 → 判定"子代理模型配置无效"停止该关卡转人工改配（不回退）；读取配置失败 → "配置状态未知"提示运行 `lycx doctor`；配置合法但 spawn 环境失败 → 仍按环境级不可用回退。`lycx doctor` 第 7 项"Codex 子代理模型配置"（留空 OK / ∈ 清单 OK / ∉ 清单 FAIL；`spawnableModels` 格式非法输出 WARN）
+- 模型可用性校验（spawn 前）：三模板（review-plan / review-code / apply）读取 `~/.ly/config.toml` 的 `[codexHost] spawnableModels` 校验（未配置用安装时注入的内置默认清单作后备，生效清单并入已配置模型字段值与 codex 主模型）；配置模型 ∉ 生效清单 → 判定"子代理模型配置无效"停止该关卡转人工改配（不回退）；读取配置失败 → "配置状态未知"提示运行 `lycx doctor`；配置合法但 spawn 环境失败 → 仍按环境级不可用回退。`lycx doctor` 第 7 项"Codex 子代理模型配置"（留空 OK / ∈ 生效清单 OK / ∉ 生效清单 FAIL；`spawnableModels` 格式非法输出 WARN）
 - 角色词绝对路径 `~/.ly/prompts/codex/{reviewer,plan-reviewer}.md` 为行为契约（角色词内容不重写）
 - 完整执行约定（spawn 协议、共识/分歧裁决、修复循环、终止条件、提交时机）内联在各 skill 模板；[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED（历史参考）
 
