@@ -1,6 +1,6 @@
 ## Purpose
 
-提供两个由 Codex 支撑的审查关卡——一个用于在实施前审查 OpenSpec change 的方案, 一个用于在实施后审查代码变更——统一使用 `codex exec` 独立子会话（调用契约见 docs/codex-exec-contract.md；模型由安装期渲染的 `{{REVIEW_MODEL}}` 决定，未配置回退当前会话模型），替代旧的双模型（Codex + Gemini）交叉审查机制。两个命令都支持审查-修复循环：审查子会话报告的 Critical 不是自动生效的裁决，当前会话先判断是否认可再决定是否修复，循环直到 Critical 清零或触发终止条件。
+提供两个由双审查 subagent 支撑的审查关卡：一个用于在实施前审查 OpenSpec change 的方案，一个用于在实施后审查代码变更。模型经 `[codexHost]` 的 `reviewModel`/`reviewModelB` 与对应推理档字段 `reviewReasoningEffort`/`reviewReasoningEffortB` 落实，未配置模型时回退当前会话模型，推理档空白时不传。两个命令都支持审查-修复循环：审查 subagent 报告的 Critical 不是自动生效的裁决，当前会话先判断是否认可再决定是否修复，循环直到 Critical 清零或触发终止条件。
 
 ## Requirements
 
@@ -29,95 +29,114 @@
 
 ### Requirement: 代码审查读取 git diff 并分级输出发现
 
-`/ly:review-code` 必须（SHALL）按以下方式确定审查范围：若存在未提交变更（已暂存或未暂存均可，审查对象是"当前工作区尚未提交的变更"这整个集合），使用 `git diff HEAD`（覆盖已暂存的修改与未暂存的修改）。**当且仅当**当前工作区连同暂存区都干净（没有任何未提交变更）时——无论仓库是否存在历史 commit——命令必须（SHALL）报告"无变更可审查"，直接结束，SHALL NOT 回退到审查任何历史 commit 的 diff（`git diff HEAD~1` / `git show HEAD` 这类以历史 commit 为审查对象的兜底分支已废弃：审查对象原则上是"未提交的变更"，历史 commit 不属于审查范围）。由于 `git diff HEAD` 不会显示未跟踪文件，命令必须额外列出未跟踪文件（用 `git status --porcelain` 过滤出 `??` 条目）并把其路径并入审查上下文，确保新建但未 `git add` 的文件不会被静默漏审。若仓库尚无任何 commit（`git rev-parse HEAD` 执行失败），命令必须以固定的三条 git 命令组合表达审查范围，而不是构造某种独立持久化的"快照"：`git diff --cached`（已暂存的改动）、`git diff`（未暂存的改动）、`git status --porcelain` 过滤 `??` 得到的未跟踪文件路径清单；不得尝试执行 `git diff HEAD` 或 `git diff HEAD~1`（这两者在无 HEAD 时无意义或报错）。命令必须以 `~/.ly/prompts/codex/reviewer.md` 角色提示词通过 `codex exec` 独立子会话调用（形态与模型渲染见 docs/codex-exec-contract.md）, 并将发现严格分为三个严重度层级：Critical、Warning、Info。**首轮审查确定的审查范围（`git diff HEAD`，或零 commit 场景下的上述三条命令组合说明）必须（SHALL）被记录, 供首轮 TASK 使用**——工作区干净场景直接报告"无变更"即可，不存在需要记录的基线。第 2 轮起, 审查范围语义改为"对上一轮 Critical 的回归验证 + 本轮改动的增量审查"（不再是"基线 → 当前工作区完整状态"的地毯式复审）, 具体规则见"审查-修复循环与终止条件（review-code / review-plan 共用）"里的"第 2 轮起的 TASK 内容构造方式"。零 commit 场景下, 由于该三条命令每次执行都直接反映"当前"状态（不依赖某个固定时点的快照）, 修复导致某文件从"已暂存"变为"未暂存"不构成任何特殊问题——第 2 轮起的路径清单机制本身就是按文件当前路径读取内容, 与该文件处于 staged 还是 unstaged 无关。若存在 Critical 发现, 命令必须（SHALL）进入审查-修复循环（见"审查-修复循环与终止条件（review-code / review-plan 共用）"）, 而不是止步于报告。从第 2 轮起必须（SHALL）复用本流程首轮取得的 session_id（见 additional 的"审查循环轮间续聊（同一流程内复用）"规则）通过 resume 模式延续会话。
+`/ly:review-code` 必须（SHALL）以目标 change 的最近一期 `apply:` commit 作为审查基线（编排方 `@lyx-apply` 在实施完成后立即提交，提交信息为 `apply: <change-name>`）：先按目标 change 优先级解析 change（显式参数 → `openspec/changes/` 下唯一未归档 change → 询问用户），再用 `git log --grep="^apply: <change-name>"` 取 HEAD 侧最近一期匹配 commit；该 commit 存在时，审查范围 = 该 `apply:` commit 的差异（`git show <commit>`）+ 当前 `git diff HEAD` + `git status --porcelain` 过滤出的未跟踪路径清单，工作区/暂存区干净时仍按该 commit 审查，SHALL NOT 报"无变更可审查"。该 commit 不存在时，检查最近一期 `propose: <change-name>` commit（`git log --grep="^propose: <change-name>" -1`）：存在则审查范围 = 该 `propose:` commit 差异 + 当前 `git diff HEAD` + 未跟踪路径清单，工作区/暂存区干净时仍按该 commit 审查。两者都不存在时退化为"有未提交变更"组合：`git diff HEAD`（覆盖已暂存+未暂存）+ `??` 未跟踪路径清单；仓库零 commit（`git rev-parse HEAD` 失败）则使用三条固定命令组合表达审查范围：`git diff --cached` + `git diff` + `git status --porcelain` 过滤 `??` 得到的未跟踪路径清单，不得尝试执行 `git diff HEAD`、`git diff HEAD~1` 或 `git show HEAD`。仅在既无 `apply:`/`propose:` commit、工作区又无任何未提交变更时，命令才报告"无变更可审查"并直接结束。
 
-**首轮 TASK 内容构造方式**：审查子会话以 agentic 模式运行（具备在 `WORKDIR` 下自主执行 shell 命令、读取文件的能力）, 命令 SHALL NOT 由 当前会话 预先把首轮基线对应的完整 diff 文本或未跟踪文件的完整内容拼接进 TASK 字符串；TASK 必须（SHALL）改为传递首轮确定的审查范围说明（`git diff HEAD`，或零 commit 场景下"运行 `git diff --cached` + `git diff` + 未跟踪文件路径清单"这三条命令组合的说明）, 并指示审查子会话自行执行这些命令/读取指定路径获取审查所需的实际内容。判定审查范围本身（是否存在未提交变更、选择 `git diff HEAD` 还是零 commit 三命令组合）仍由 当前会话 完成, 不下放给审查子会话。
+无论采用上述哪种基线，命令必须（SHALL）额外用 `git status --porcelain` 抓取 `??` 开头的未跟踪文件路径，确保新建但未 `git add` 的文件不被漏审。审查执行方式由"审查关卡以双审查 subagent 执行"定义：两个并行审查 subagent fork 当前会话上下文，模型按 `codexHost.reviewModel`/`reviewModelB` 配置、未配置或空白时继承当前会话模型，对应推理档 `reviewReasoningEffort`/`reviewReasoningEffortB` 非空时随 spawn 传入；命令 SHALL NOT 使用 `codex exec`、`-m`、`session_id` 或 `resume`。首轮确定的审查范围必须（SHALL）被记录并供首轮 TASK 使用：只传基线引用说明（如"审查 `git show <commit>` 的差异"或三条零 commit 命令组合说明）和未跟踪文件路径清单，不把完整 diff 文本拼进 TASK；判定审查范围本身（选哪条分支、取哪个 commit）由当前会话完成，不下放给审查 subagent。第 2 轮起按"审查-修复循环与终止条件（review-code / review-plan 共用）"的增量语义继续，沿用同一批审查 subagent 会话，不重新 spawn。
+
+命令必须（SHALL）将发现严格分为 Critical、Warning、Info 三个严重度层级。若存在 Critical，命令必须（SHALL）进入审查-修复循环。
+
+#### Scenario: 存在 apply commit 且工作区干净, 仍按该 commit 审查
+- **WHEN** 目标 change 存在最近一期 `apply:` commit, 当前工作区与暂存区都干净, 用户运行 `/ly:review-code`
+- **THEN** 审查范围 = 该 `apply:` commit 的差异, 命令按该差异审查并输出分级结果, SHALL NOT 报"无变更可审查"
+
+#### Scenario: 无 apply commit 时退化为 propose commit
+- **WHEN** 目标 change 尚无 `apply:` commit, 但存在最近一期 `propose:` commit, 当前工作区干净, 用户运行 `/ly:review-code`
+- **THEN** 审查范围 = 该 `propose:` commit 的差异, 命令按该差异审查并输出分级结果, SHALL NOT 回退到任意更早历史 commit
 
 #### Scenario: 存在未提交变更且无 Critical
-- **WHEN** 用户在当前工作区存在未提交变更时运行 `/ly:review-code`, 且审查子会话审查未发现任何 Critical
-- **THEN** 审查范围是 `git diff HEAD`, 发现按 Critical/Warning/Info 分级输出, 命令直接结束, 不进入修复循环
-
-#### Scenario: 已跟踪的修改与新建的未跟踪文件同时存在
-- **WHEN** 用户运行 `/ly:review-code`, 工作区里既有已跟踪文件的修改, 也有一个新建的未跟踪文件
-- **THEN** TASK 中包含 `git diff HEAD` 对应的基线引用说明和该未跟踪文件的路径, 审查子会话自行读取两者的实际内容进行审查——未跟踪文件不会被静默遗漏
+- **WHEN** 目标 change 无相关 `apply:`/`propose:` commit, 当前工作区存在未提交变更, 审查 subagent 审查后未发现任何 Critical
+- **THEN** 审查范围 = `git diff HEAD` + 未跟踪文件路径清单, 发现按 Critical/Warning/Info 分级输出, 命令直接结束, 不进入修复循环
 
 #### Scenario: 工作区干净但有历史提交, 报告无变更
-- **WHEN** 用户在没有未提交变更、但存在历史提交时运行 `/ly:review-code`
-- **THEN** 命令报告"无变更可审查"并直接结束, SHALL NOT 回退审查 `git diff HEAD~1` 或 `git show HEAD`——历史 commit 的 diff 不属于"代码审查"的审查范围
+- **WHEN** 目标 change 既无 `apply:` commit 也无 `propose:` commit, 仓库有 HEAD 且当前工作区与暂存区都干净, 用户运行 `/ly:review-code`
+- **THEN** 命令报告"无变更可审查"并直接结束, SHALL NOT 审查 `git diff HEAD~1` 或 `git show HEAD`
 
-#### Scenario: 仓库只有一个 commit 且工作区干净
-- **WHEN** 用户在没有未提交变更、且仓库恰好只有一个 commit 时运行 `/ly:review-code`
-- **THEN** 命令报告"无变更可审查", SHALL NOT 审查该单个 commit 的完整内容——审查对象是未提交的变更, 不是历史 commit
+#### Scenario: 已跟踪的修改与新建的未跟踪文件同时存在
+- **WHEN** 目标 change 无相关 commit, 工作区既有已跟踪文件的修改, 也有新建的未跟踪文件, 用户运行 `/ly:review-code`
+- **THEN** 审查范围 = `git diff HEAD` + 未跟踪文件路径清单; TASK 只包含基线引用说明和未跟踪路径, 审查 subagent 自行读取实际内容, 未跟踪文件不被静默遗漏
 
 #### Scenario: 仓库尚无任何 commit
-- **WHEN** 用户在一个完全没有 commit 的仓库中运行 `/ly:review-code`（`git rev-parse HEAD` 会失败）
-- **THEN** 命令以"`git diff --cached` + `git diff` + 未跟踪文件路径清单"这三条固定命令组合表达审查范围, 而不是因缺失 `HEAD` 引用而报错；TASK 中向审查子会话说明该三条命令, 由审查子会话自行执行并读取当前工作区内容, 不由 当前会话 把内容整段贴入 TASK
+- **WHEN** 目标 change 无相关 commit, 且 `git rev-parse HEAD` 失败, 用户运行 `/ly:review-code`
+- **THEN** 审查范围用 `git diff --cached` + `git diff` + 未跟踪路径清单三条固定命令表达, 不因缺失 HEAD 报错; TASK 只传命令组合说明, 不由当前会话把内容整段贴入
+
+#### Scenario: 仓库只有一个 commit 且工作区干净
+- **WHEN** 目标 change 无相关 `apply:`/`propose:` commit, 仓库只有一个不匹配该 change 的历史 commit 且工作区干净, 用户运行 `/ly:review-code`
+- **THEN** 命令报告"无变更可审查"并直接结束, SHALL NOT 审查该单个 commit 的完整内容
 
 #### Scenario: 无发现
-- **WHEN** 审查子会话没有返回任何问题
+- **WHEN** 审查 subagent 没有返回任何问题
 - **THEN** 命令明确说明未发现问题, 而不是保持沉默
 
 #### Scenario: 首轮 TASK 不预先拼贴完整 diff 文本
-- **WHEN** 首轮审查范围判定为 `git diff HEAD`, 且该 diff 内容有数百行
-- **THEN** 传给审查子会话的 TASK 只包含基线引用说明（例如"审查 `git diff HEAD`"）及未跟踪文件路径清单, 不包含 当前会话 预先读取、拼接的完整 diff 文本；审查子会话在 `WORKDIR` 下自行执行 `git diff HEAD` 获取实际内容
+- **WHEN** 首轮按某 `apply:` commit 确定审查范围, 且该 commit 差异有数百行
+- **THEN** 传给审查 subagent 的 TASK 只包含基线引用说明及未跟踪路径清单, 不包含当前会话预读拼接的完整 diff; 审查 subagent 自行执行对应命令获取实际内容
 
 #### Scenario: 审查模型未配置时回退当前会话模型
-- **WHEN** 用户未配置 `codexHost.reviewModel`（或配置为空白/非法字符被清洗掉），然后运行 `/ly:review-code`
-- **THEN** 命令的 `codex exec` 调用不带 `-m`，审查以当前会话模型运行
+- **WHEN** 用户未配置 `codexHost.reviewModel` 或 `reviewModelB`（或配置为空白）, 然后运行 `/ly:review-code`
+- **THEN** 对应审查 agent 的模型回退继承当前会话模型; spawn SHALL NOT 携带 shell 层 `-m` 参数
+
+#### Scenario: 推理档未配置时不传; 非空时随对应模型传入
+- **WHEN** 用户运行 `/ly:review-code`, `reviewReasoningEffort` 为空白而 `reviewReasoningEffortB = "low"`
+- **THEN** 审查 agent A 不传推理档参数, 审查 agent B 以 `reviewReasoningEffortB` 的 trim 后原值随 `reviewModelB` 传入 `reasoning_effort`, SHALL NOT 使用任何模型名到档位的硬编码映射
 
 #### Scenario: 第 2 轮以 resume 模式续聊同一会话
-- **WHEN** `/ly:review-code` 第一轮结束且取得了 session_id（`--json` 输出中 `thread.started` 事件的 `thread_id`），第一轮存在未清零的 Critical，循环进入第二轮
-- **THEN** 第二轮以 `codex exec resume <session_id>` 传回该 session_id，让审查子会话在同一会话上下文中复审，而非另起全新会话
+- **WHEN** `/ly:review-code` 首轮存在未清零 Critical, 循环进入第 2 轮
+- **THEN** 第 2 轮继续使用同一批审查 subagent（利用 fork 会话的轮间记忆）, TASK 只包含上一轮全部 Critical 逐字原文与路径清单; 该续聊由"沿用同一批 subagent 会话"实现, SHALL NOT 构造 shell 层 `codex exec resume <session_id>`，也不重新拼贴完整基线 diff
 
 ### Requirement: 方案审查分级输出发现
-`/ly:review-plan` 必须（SHALL）读取目标 change 的 `proposal.md`/`design.md`/`tasks.md`（存在的部分即可, 缺失容错跳过）以及该 change 目录下 `specs/**/*.md` 的全部 delta spec 文件（若存在；不存在则容错跳过, 不报错）的路径, 以 `~/.ly/prompts/codex/plan-reviewer.md` 角色提示词（而非 `/ly:review-code` 使用的 `~/.ly/prompts/codex/reviewer.md`）通过 `codex exec` 独立子会话调用, 并将发现严格分为三个严重度层级：Critical、Warning、Info（与 `/ly:review-code` 一致, 不再使用不分级的"问题清单"格式）。**首轮**审查必须（SHALL）确保审查子会话读取到这些文件的**当前内容**（不是 diff），不需要记录或复用基线——因为审查对象是文件当前状态而非变更范围, 不存在"审查范围漂移"问题。**第 2 轮起**改为增量语义, 具体规则见"审查-修复循环与终止条件（review-code / review-plan 共用）"里的"第 2 轮起的 TASK 内容构造方式"。审查必须（SHALL）聚焦方案文档本身的逻辑缺陷：遗漏的边界情况、范围不清晰、`proposal.md`/`design.md`/`tasks.md`/对应 spec 之间互相矛盾或脱节、风险点交代不清、spec 的 Requirement/Scenario 未覆盖 proposal 的 What Changes。**"spec 未覆盖 What Changes"这一检查项必须（SHALL）区分两种"该 change 没有 delta spec 文件"的情形**（`openspec validate`/`openspec archive` 只校验"该 change 的 delta 总数是否为 0"，不逐个核对 proposal 声明的每个 capability 是否都有对应 delta spec，因此这条检查是唯一能在方案阶段捕捉"部分/全部 capability 缺失覆盖"的机制，不能被下游工具兜底）：（a）该 change 的 `proposal.md` 的 Capabilities 段落本身未声明任何 New/Modified Capability（纯重构/工具/文档类变更, 通常配合 `.openspec.yaml` 的 `skip_specs: true`）——此时没有 delta spec 文件属于正常情况, SHALL NOT 报 Critical；（b）`proposal.md` 的 Capabilities 段落声明了至少一个 New/Modified Capability, 但该 change 目录下完全没有任何 delta spec 文件（不管 `skip_specs` 是否被设置为 `true`）——此时命令必须（SHALL）报告 Critical, 指出"proposal 声明了 capability 变更但没有任何 delta spec 覆盖"；若 `skip_specs: true` 与声明的 capability 变更同时存在, 额外指出这是 `skip_specs` 使用不当（真正无行为变更的 change 不应在 Capabilities 段落列出任何 capability）。`~/.ly/prompts/codex/plan-reviewer.md` 必须（SHALL）明确约束：SHALL NOT 将"代码库尚未实现某方案条目"或"`tasks.md` 中某任务未勾选"作为 Critical 依据——这是方案审查阶段（实施尚未开始或尚未完成）的正常状态, 不构成方案缺陷。若存在 Critical 发现, 命令必须（SHALL）进入审查-修复循环（见"审查-修复循环与终止条件（review-code / review-plan 共用）"）, 而不是止步于报告。
 
-**首轮 TASK 内容构造方式**：命令**（SHALL）**不（SHALL NOT）由 当前会话 预先读取 `proposal.md`/`design.md`/`tasks.md`/`specs/**/*.md` 的全文并拼接进 TASK 字符串；TASK 必须（SHALL）改为传递该 change 目录路径及需要审查的文件相对路径清单（`proposal.md`/`design.md`/`tasks.md`, 以及枚举到的全部 delta spec 文件路径）, 并指示审查子会话在 `WORKDIR` 下自行读取这些文件的当前内容进行审查——并要求命令必须（SHALL）明确列出全部 delta spec 文件的路径（不能只提示"读取 specs 目录"而不枚举具体路径, 避免审查子会话遗漏部分 delta spec 文件), **SHALL NOT** 仅在角色提示词里描述 checklist 项却不提供文件路径清单, 否则审查子会话无从定位需要读取哪些 spec 文件。若该 change 的某份 delta spec 文件（无论出现在 `## MODIFIED Requirements` 内还是外）中显式文字引用了基线 spec 里未被本次修改的既有 Requirement（例如"见……'某 Requirement 名'"这类指代, 包括本 delta 自身在 MODIFIED Requirement 正文中引用同一 capability 基线里其他未改动 Requirement 的情况), 命令必须（SHALL）额外将该基线能力对应的 `openspec/specs/<capability>/spec.md` 路径纳入首轮路径清单, 并在 TASK 中说明该文件仅作审查上下文（用于核实引用是否准确、是否与 delta 冲突), 不属于本次修复对象——避免审查子会话因看不到被引用的既有 Requirement 定义而误判为遗漏或凭空猜测其内容。
+`/ly:review-plan` 必须（SHALL）读取目标 change 的 `proposal.md`/`design.md`/`tasks.md`（存在的部分即可, 缺失容错跳过）以及该 change 目录下 `specs/**/*.md` 的全部 delta spec 文件（若存在；不存在则容错跳过, 不报错）的路径, 由两位并行审查 subagent fork 当前会话上下文执行审查, 并将发现分为 Critical、Warning、Info 三个严重度层级。审查执行方式由"审查关卡以双审查 subagent 执行"定义：模型按 `codexHost.reviewModel`（agent A）/ `reviewModelB`（agent B）配置、未配置或空白时继承当前会话模型, 对应推理档 `reviewReasoningEffort`/`reviewReasoningEffortB` 非空时随 spawn 传入；命令 SHALL NOT 使用 `codex exec`、`-m`、`session_id` 或 `resume`。两个审查 subagent 的任务 SHALL 先指示读取 ROLE_FILE `~/.ly/prompts/codex/plan-reviewer.md`（角色词内容不重写）, 再给出路径清单。**首轮**只传该 change 目录路径和 `proposal.md`/`design.md`/`tasks.md`/全部 delta spec 文件路径清单, 不预先读取并拼贴文件全文；若某份 delta spec 显式引用了基线 spec 中未被本次修改的既有 Requirement, 命令必须（SHALL）额外把对应基线 spec 路径纳入清单, 并在 TASK 中说明该路径仅作审查上下文、不属于修复对象。审查必须（SHALL）聚焦方案文档本身的逻辑缺陷：遗漏边界、范围不清晰、`proposal.md`/`design.md`/`tasks.md`/对应 spec 互相矛盾或脱节、风险点交代不清、spec 的 Requirement/Scenario 未覆盖 proposal 的 What Changes。SHALL NOT 将"代码库尚未实现某方案条目"或"`tasks.md` 中某任务未勾选"作为 Critical 依据。若存在 Critical, 命令必须（SHALL）进入审查-修复循环。
+
+"spec 未覆盖 What Changes"检查必须（SHALL）区分两种"该 change 没有 delta spec 文件"的情形：（a）`proposal.md` 的 Capabilities 段落未声明任何 New/Modified Capability（纯重构/工具/文档类变更, 通常配合 `skip_specs: true`）——此时没有 delta spec 属正常, SHALL NOT 报 Critical；（b）`proposal.md` 声明了至少一个 New/Modified Capability, 但该 change 目录下完全没有任何 delta spec 文件——此时命令必须（SHALL）报告 Critical, 指出"proposal 声明了 capability 变更但没有任何 delta spec 覆盖"；若 `skip_specs: true` 同时存在, 额外指出这是 `skip_specs` 使用不当。
 
 #### Scenario: 无 Critical
-- **WHEN** 用户运行 `/ly:review-plan`, 审查子会话未发现任何 Critical（可能有 Warning/Info）
+- **WHEN** 用户运行 `/ly:review-plan`, 审查 subagent 未发现任何 Critical（可能有 Warning/Info）
 - **THEN** 发现按 Critical/Warning/Info 分级输出, 命令直接结束, 不进入修复循环
 
 #### Scenario: 无任何发现
-- **WHEN** 审查子会话对 proposal/design/tasks 没有返回任何问题
+- **WHEN** 审查 subagent 对 proposal/design/tasks/specs 没有返回任何问题
 - **THEN** 命令明确说明"方案审查未发现问题", 而不是保持沉默
 
 #### Scenario: 多个候选 change 且未指定
-- **WHEN** 用户运行 `/ly:review-plan` 且未通过 `$ARGUMENTS` 指定 change 名, `openspec/changes/` 下（排除 `archive/`）存在多个候选
-- **THEN** 命令用 AskUserQuestion 询问用户选择哪个 change, 不猜测
+- **WHEN** 用户运行 `/ly:review-plan` 且未指定 change 名, `openspec/changes/` 下（排除 `archive/`）存在多个候选
+- **THEN** 命令询问用户选择哪个 change, 不猜测
 
 #### Scenario: 方案条目未实现不构成 Critical
-- **WHEN** 某个 change 的 `tasks.md` 里存在多个未勾选的任务（对应代码库中尚未实现该功能）, 审查子会话依据 `codex/plan-reviewer.md` 审查该 change
-- **THEN** 未勾选的任务、代码库中尚未实现该方案条目, 均不作为 Critical 依据被报告；审查只针对 `proposal.md`/`design.md`/`tasks.md` 及对应 spec 本身的逻辑缺陷（遗漏边界、范围不清晰、文档间矛盾、风险点交代不清、spec 未覆盖 What Changes）
+- **WHEN** 某 change 的 `tasks.md` 里存在多个未勾选任务（对应代码库尚未实现该功能）, 审查 subagent 依据 `plan-reviewer.md` 审查该 change
+- **THEN** 未勾选任务、代码库尚未实现的方案条目均不作为 Critical; 审查只针对方案文档本身的逻辑缺陷
 
 #### Scenario: spec 未覆盖 proposal 的 What Changes, 审查子会话自行读取 delta spec 内容后判定
-- **WHEN** 某 change 的 `proposal.md` 的 What Changes 提到某项新行为, 该 capability 存在对应的 `specs/<capability>/spec.md` 文件, 但其中对应 Requirement 未提及这项行为
-- **THEN** 命令必须已在 TASK 中列出该 change 目录下全部 `specs/**/*.md` 的路径, 审查子会话自行读取这些文件内容后才能据此判定"spec 未覆盖 What Changes"这一 Critical
+- **WHEN** 某 change 的 `proposal.md` 的 What Changes 提到某项新行为, 该 capability 有对应 delta spec, 但其中对应 Requirement 未提及该行为
+- **THEN** 命令已把该 change 下全部 `specs/**/*.md` 路径列入 TASK, 审查 subagent 自行读取这些文件后判定"spec 未覆盖 What Changes"
 
 #### Scenario: proposal 未声明任何 capability, 无 delta spec 属于正常情况
-- **WHEN** 某 change 的 `proposal.md` 的 Capabilities 段落中 New/Modified Capabilities 均为空（纯重构/清理/文档类变更), 该 change 目录下没有任何 delta spec 文件
-- **THEN** 命令不报告 Critical, 视为正常情况——`skip_specs: true` 与"未声明任何 capability"是一致的
+- **WHEN** 某 change 的 `proposal.md` 未声明任何 New/Modified Capability, 且该 change 目录下没有 delta spec 文件
+- **THEN** 命令不报告 Critical, 视为正常情况
 
 #### Scenario: proposal 声明了 capability 变更但完全没有 delta spec, 报告 Critical
-- **WHEN** 某 change 的 `proposal.md` 的 Capabilities 段落声明了至少一个 New/Modified Capability, 但该 change 目录下 `specs/**/*.md` 一个文件都不存在
-- **THEN** 命令必须报告 Critical, 说明"proposal 声明了 capability 变更但没有任何 delta spec 覆盖"; 若该 change 的 `.openspec.yaml` 同时设置了 `skip_specs: true`, 额外说明该 `skip_specs` 使用不当（`openspec validate`/`openspec archive` 不会拦截这种情况, 只有这一步能捕捉到)
+- **WHEN** 某 change 的 `proposal.md` 声明了至少一个 New/Modified Capability, 但该 change 目录下 `specs/**/*.md` 一个文件都不存在
+- **THEN** 命令报告 Critical; 若 `.openspec.yaml` 同时设置 `skip_specs: true`, 额外说明该 `skip_specs` 使用不当
 
 #### Scenario: 首轮 TASK 只传路径清单, 不拼贴全文
 - **WHEN** 某 change 的 `proposal.md`、`design.md`、`tasks.md` 及全部 delta spec 文件总长度超过千行
-- **THEN** 传给审查子会话的 TASK 只包含这些文件各自的相对路径清单和该 change 目录路径, 不包含 当前会话 预先读取、拼接的完整文件内容；审查子会话在 `WORKDIR` 下自行读取这些路径对应的当前内容
+- **THEN** 传给审查 subagent 的 TASK 只包含这些文件的相对路径清单和 change 目录路径, 不包含当前会话预读拼接的完整内容; 审查 subagent 自行读取这些路径的当前内容
 
 #### Scenario: 审查模型未配置时回退当前会话模型（review-plan）
-- **WHEN** 用户未配置 `codexHost.reviewModel`（或配置被 sanitizeReviewModel 清洗为空白），运行 `/ly:review-plan`
-- **THEN** 命令的 `codex exec` 调用不带 `-m`，审查以当前会话模型运行
+- **WHEN** 用户未配置 `codexHost.reviewModel` 或 `reviewModelB`（或配置为空白）, 运行 `/ly:review-plan`
+- **THEN** 对应审查 agent 的模型回退继承当前会话模型; spawn SHALL NOT 携带 shell 层 `-m` 参数
+
+#### Scenario: 审查模型配置了推理档时随对应 spawn 传入
+- **WHEN** 用户配置 `reviewModelB = "glm-5.3-flash"` 与 `reviewReasoningEffortB = "low"`, 运行 `/ly:review-plan`
+- **THEN** 审查 agent B 的 spawn 读取 `reviewReasoningEffortB` 并把 `reasoning_effort: "low"` 随 `reviewModelB` 一并传入; 空白档位不传参, SHALL NOT 使用模型名到档位的硬编码映射
 
 ### Requirement: 审查-修复循环与终止条件（review-code / review-plan 共用）
-当某一轮审查发现至少一个 Critical 时, `/ly:review-code` 与 `/ly:review-plan` 都必须（SHALL）由当前会话针对该轮全部 Critical 逐条判断（见"Critical 需先经当前会话判断是否认可"）并执行认可部分的修复, 修复完成后必须（SHALL）自动重新执行双审查 subagent 关卡（spawn ×2：fork 当前上下文 + 范围点名, 见本 delta ADDED Requirement）对更新后的内容进行下一轮审查, 不要求用户手动触发。`/ly:review-code` 的修复对象是审查范围指向的应用代码文件（含为验证修复而必须新增/调整的测试文件）；`/ly:review-plan` 的修复对象是该 change 自己的 `proposal.md`/`design.md`/`tasks.md`以及该 change 目录下的 delta spec 文件（`specs/**/*.md`）——例如"spec 未覆盖 proposal 的 What Changes"这类 Critical, 修复方式就是编辑对应的 delta spec 文件, 不属于修复对象之外的私改。两个命令的每轮修复允许改动"当前轮 Critical 报告直接指向的条目"以及"修复该 Critical 所必需的直接依赖条目"（例如一个跨 artifact/跨文件的一致性问题, 需要同步改动多处才能真正修好）, 但不得借机重构、格式化或改动与该 Critical 无关的内容；命中"必需依赖"用时, 本轮报告必须（SHALL）逐项说明每处改动与该 Critical 的关联性。每轮修复完成后必须（SHALL）记录本轮实际改动的文件清单（含修改的 delta spec 文件, 如适用）。`/ly:review-code` 每轮修复后, 若项目存在对应的验证命令（测试/类型检查/构建）, 必须（SHALL）运行与该轮改动范围相称的验证, 验证失败必须作为停止条件处理；`/ly:review-plan` 每轮修复后必须（SHALL）运行 `openspec validate --changes <change-name>` 作为验证步骤, 验证失败同样作为停止条件。循环必须（SHALL）持续到满足以下任一终止条件, 并受一个全局轮数上限的兜底约束（见"全局轮数上限作为最后兜底"）：
+当某一轮审查发现至少一个 Critical 时, `/ly:review-code` 与 `/ly:review-plan` 都必须（SHALL）由当前会话针对该轮全部 Critical 逐条判断（见"Critical 需先经当前会话判断是否认可"）并执行认可部分的修复, 修复完成后必须（SHALL）自动进入下一轮审查——第 2 轮起沿用同一批审查 subagent 会话（具备轮间记忆），SHALL NOT 重新 spawn——不要求用户手动触发。`/ly:review-code` 的修复对象是审查范围指向的应用代码文件（含为验证修复而必须新增/调整的测试文件）；`/ly:review-plan` 的修复对象是该 change 自己的 `proposal.md`/`design.md`/`tasks.md`以及该 change 目录下的 delta spec 文件（`specs/**/*.md`）——例如"spec 未覆盖 proposal 的 What Changes"这类 Critical, 修复方式就是编辑对应的 delta spec 文件, 不属于修复对象之外的私改。两个命令的每轮修复允许改动"当前轮 Critical 报告直接指向的条目"以及"修复该 Critical 所必需的直接依赖条目"（例如一个跨 artifact/跨文件的一致性问题, 需要同步改动多处才能真正修好）, 但不得借机重构、格式化或改动与该 Critical 无关的内容；命中"必需依赖"用时, 本轮报告必须（SHALL）逐项说明每处改动与该 Critical 的关联性。每轮修复完成后必须（SHALL）记录本轮实际改动的文件清单（含修改的 delta spec 文件, 如适用）。`/ly:review-code` 每轮修复后, 若项目存在对应的验证命令（测试/类型检查/构建）, 必须（SHALL）运行与该轮改动范围相称的验证, 验证失败必须作为停止条件处理；`/ly:review-plan` 每轮修复后必须（SHALL）运行 `openspec validate --changes <change-name>` 作为验证步骤, 验证失败同样作为停止条件。循环必须（SHALL）持续到满足以下任一终止条件, 并受一个全局轮数上限的兜底约束（见"全局轮数上限作为最后兜底"）：
 
 1. 某一轮审查 Critical 数为 0（正常清零）
 2. 熔断：同一个 Critical（以"文件路径 + 问题类型 + 定位锚点（`/ly:review-code` 为函数名/路由/调用点；`/ly:review-plan` 为 artifact 内的具体条目/章节）"三者共同判定为同一问题, 不要求问题描述文字完全一致）在相邻两轮审查中都判定仍存在——即上一轮判定为 Critical 并已尝试修复的问题, 在紧接的下一轮复审中仍被判定未解决。若 当前会话 在上一轮对它的判断是"不认可"（未修复）, 相邻两轮再次出现 SHALL NOT 走熔断而走"分歧未决"（见下）
 3. 无法安全自动修复：某个 Critical 的修复需要产品/业务决策、依赖当前会话不具备的外部凭据、会改变已发布的公开 API 或接口契约, 或 当前会话 判断当前上下文不足以给出确认性修复——命中时不做猜测性修改
 4. 修复后验证失败：`/ly:review-code` 该轮修复后运行的测试/类型检查/构建未通过, 或 `/ly:review-plan` 该轮修复后 `openspec validate` 未通过
-5. 分歧未决：当前会话 对某个 Critical 判断为不认可（详见下一条 Requirement）, 且该 Critical 在下一轮审查中仍被审查 agent 判定为同一问题存在；双审查 subagent 意见分歧、首轮经主会话无法确认判定为 Critical 进入修复循环后，下一轮复审两 agent 仍分歧且主会话仍无法确认时，最终落入本终止条件（与 ADDED Requirement"分歧时序"的两轮规则一致）——此时判定为 Critical（red）
+5. 分歧未决：当前会话 对某个 Critical 判断为不认可（详见下一条 Requirement）, 且该 Critical 在下一轮审查中仍被审查 agent 判定为同一问题存在；双审查 subagent 意见分歧、首轮经主会话无法确认判定为 Critical 进入修复循环后，下一轮复审两 agent 仍分歧且主会话仍无法确认时，最终落入本终止条件（与 Requirement"审查关卡以双审查 subagent 执行"的"分歧时序"两轮规则一致）——此时判定为 Critical（red）
 6. 审查对象类型持续系统性误判:连续 3 轮（含本轮）审查中每一轮的全部 Critical 都被 当前会话 判定为同一大类系统性误判——即审查 agent 反复以"该轮 Critical 所依据的类型不属于当前命令的审查范畴"为由被 当前会话 判定不认可（例如 `/ly:review-plan` 连续 3 轮的 Critical 均以"代码库尚未实现该方案条目"为理由），不要求这 3 轮之间 Critical 的文件/类别/锚点互相一致, 只要求"判定为不认可的原因类型"在这 3 轮中一致
 
 出现终止条件 2-6 中任一条时, 命令必须（SHALL）立即停止循环, 在报告中明确指出触发的具体条件、涉及的问题（文件、类别、锚点、判断依据）, 并说明需要人工介入, 不得继续自动修复；这些条件时命令 SHALL NOT 提交任何改动（见下方）——已产生的改动留在工作区交由人工处理。循环期间的 Warning 与 Info 发现不参与循环终止判定, 只在循环结束后的最终报告列出最后一轮的结果, 不跨轮次合并。
@@ -218,19 +237,32 @@
 - **THEN** 不触发"分歧未决"（该问题已不再被 Codex 提出）, 循环按其余 Critical 的状态继续正常判定
 
 ### Requirement: 审查调用失败视为独立终止条件
-原"`codex exec` 调用失败（子会话启动失败、`--json` 解析失败、`resume` 失败等）视为独立终止条件"的语义 SHALL 调整为区分两阶段：**运行期失败**（spawn 后超时、返回内容格式不符、审查 agent 未返回有效结论、双审查任一 agent 调用失败且无法按回退口径继续、回退不可行或回退后仍失败）视为独立终止条件, 如实报告原因并停止循环；**环境级不可用**（宿主无 subagent 能力、初始 spawn 不可用）则按 `subagent-agent-config` 的回退口径处理（回退当前会话直接执行）, SHALL NOT 视为流程失败中断整体编排。当失败可归因于单一 agent 且另一 agent 结论完整时, SHALL 以完整一方结论继续审查并如实报告降级（含失败 agent 与原因）, SHALL NOT 归入"分歧未决"（环境级失败非意见分歧）；是否补跑或重试由主会话决定。
+
+`/ly:review-code` 与 `/ly:review-plan` 必须（SHALL）区分四类审查调用失败：**运行期失败**（spawn 后超时、返回内容格式不符、审查 agent 未返回有效结论、双审查任一 agent 调用失败且无法按回退口径继续、回退不可行或回退后仍失败）视为独立终止条件, 如实报告原因并停止循环, 不得把失败等同于"本轮无 Critical"或视为清零通过；**环境级不可用**（宿主无 subagent 能力、初始 spawn 不可用）按 `subagent-agent-config` 的回退口径处理——回退当前会话直接执行审查, 并如实报告"已回退, 原因：subagent 不可用", SHALL NOT 视为流程失败中断整体编排。当失败可归因于单一 agent 且另一 agent 结论完整时, SHALL 以完整一方结论继续审查并如实报告降级（含失败 agent 与原因）, SHALL NOT 归入"分歧未决"（环境级失败非意见分歧）；是否补跑或重试由主会话决定。配置读取失败（缺文件或解析错误）SHALL 视为"配置状态未知", 明确提示"无法读取配置, 请运行 `lycx doctor` 检查", SHALL NOT 按"未配置"静默继承回退。
 
 #### Scenario: 审查调用超时
 - **WHEN** 审查 subagent 调用超过预设时限未返回有效结论
 - **THEN** 命令按独立终止条件处理, 如实报告超时事实与已取得的部分结论（如有）, 不进入下一轮
 
 #### Scenario: 返回内容格式不符
-- **WHEN** 审查 subagent 返回内容不符合约定的输出结构, 无法解析出 Critical/Warning/Info
+- **WHEN** 审查 subagent 返回内容不符合约定输出结构, 无法解析出 Critical/Warning/Info
 - **THEN** 命令按独立终止条件处理, 报告原始返回内容与解析失败原因, 不猜测改写后继续
 
 #### Scenario: 双审查 agent 均调用失败
 - **WHEN** 两个审查 subagent 均无法产出结论（spawn 失败或超时）
 - **THEN** 按独立终止条件结束审查, 如实报告"审查调用失败"及原因, 不进入下一轮
+
+#### Scenario: 环境级 subagent 不可用, 回退当前会话直接审查
+- **WHEN** 当前 codex 环境无 subagent 能力或在初始 spawn 即不可用, 用户运行 `/ly:review-plan` 或 `/ly:review-code`
+- **THEN** 命令回退为当前会话直接执行审查并如实报告"已回退, 原因：subagent 不可用", SHALL NOT 视为流程失败中断整体编排
+
+#### Scenario: 单一 agent 失败且另一 agent 结论完整
+- **WHEN** 双审查中一个审查 agent 调用失败, 另一个 agent 返回完整结论
+- **THEN** 命令以完整一方结论继续审查并如实报告降级（含失败 agent 与原因）, 不归入"分歧未决"; 是否补跑或重试由主会话决定
+
+#### Scenario: 模板运行前读取配置失败
+- **WHEN** 审查 subagent spawn 前读取 `~/.ly/config.toml` 失败（缺文件或解析错误）
+- **THEN** 命令明确提示"无法读取配置, 请运行 `lycx doctor` 检查", 按"配置状态未知"处理, SHALL NOT 按"未配置"静默继承回退
 
 ### Requirement: 全局轮数上限作为最后兜底
 `/ly:review-code` 与 `/ly:review-plan` 的审查-修复循环必须（SHALL）设置一个全局轮数上限（默认 5 轮）。达到该上限时, 无论熔断/分歧未决/审查对象类型持续系统性误判等信号是否已触发, 命令必须（SHALL）立即停止循环, 报告"已达到全局轮数上限, 停止自动化, 转人工介入", 并附完整轮次轨迹（每轮 Critical 摘要）。该上限 SHALL NOT 作为正常场景下的主要终止信号, 仅用于兜底防止其余终止条件因某种原因未生效而导致的真正无限循环。**清零优先于轮数上限**：轮数上限的判定必须（SHALL）发生在"本轮审查结果确认为非清零"之后——若第 N 轮（包括恰好第 5 轮）审查结果本身是 Critical 清零, 命令必须（SHALL）按正常清零处理并输出清零报告, SHALL NOT 因为该轮恰好命中轮数上限而报告为"达到全局轮数上限"。
@@ -283,9 +315,10 @@
 - **THEN** 命令不重新进入循环（因为已经清零), 在报告中如实说明这次统一提交失败的原始错误信息, 并指出需要人工手动完成提交
 
 ### Requirement: 审查关卡以双审查 subagent 执行
-review-plan 与 review-code 两个审查关卡 SHALL 各 spawn 2 个审查 subagent 执行：两个 agent SHALL 并行且各自独立审查（互不见对方结论），随后交换结论并讨论以达成共识。每个审查 subagent SHALL fork 当前会话上下文，并在任务中点名审查范围（review-plan 为"只审 change 产物：proposal/design/specs/tasks"，review-code 为"只审最近一次相关 commit 对应 diff（`apply:` commit，未有 `apply:` 时退化为 `propose:` commit）及未跟踪清单"），SHALL NOT 超出点名范围作业。审查任务 SHALL 继续引用各自 ROLE_FILE（`~/.ly/prompts/codex/plan-reviewer.md` / `reviewer.md`），角色词内容不重写。
 
-**旧调用形态废止**：基线 Requirement"代码审查读取 git diff 并分级输出发现"与"方案审查分级输出发现"中关于"通过 `codex exec` 独立子会话调用（形态与模型渲染见 docs/codex-exec-contract.md）"、"复用 session_id 以 resume 续聊"、"`codex exec` 调用不带 `-m` 回退当前会话模型"的调用形态要求，SHALL 自本 change 起视为被本 Requirement 取代（废止）；两条基线 Requirement 的其余语义（审查范围确定、首轮 TASK 只传路径清单不拼贴全文、基线引用检测、分级输出）保持不变。基线正文及其关联 Scenario 中凡与本段冲突的表述，以本段为准。
+review-plan 与 review-code 两个审查关卡 SHALL 各 spawn 2 个审查 subagent 执行：两个 agent SHALL 并行且各自独立审查（互不见对方结论），随后交换结论并达成共识；每个审查 subagent SHALL fork 当前会话上下文, 并在任务中点名审查范围（review-plan 为"只审 change 产物：proposal/design/specs/tasks", review-code 为"只审最近一次相关 commit 对应 diff（`apply:` commit，未有 `apply:` 时退化为 `propose:` commit）及未跟踪清单"），SHALL NOT 超出点名范围作业。审查任务 SHALL 继续引用各自 ROLE_FILE（`~/.ly/prompts/codex/plan-reviewer.md` / `reviewer.md`），角色词内容不重写。
+
+模型与推理档 SHALL 经"模板指示 + 宿主 spawn 能力"落实：审查 agent A 用 `codexHost.reviewModel` + 非空 `reviewReasoningEffort`，审查 agent B 用 `codexHost.reviewModelB` + 非空 `reviewReasoningEffortB`；模型未配置或空白时继承当前会话模型，推理档 trim 后为空时不传 `reasoning_effort`。SHALL NOT 依赖任何 shell 层模型或推理档参数，SHALL NOT 内置"模型名 → 推理档"的硬编码映射。审查 subagent 具备自主执行 shell 命令与读取文件的能力；TASK SHALL 只传基线引用或路径清单，SHALL NOT 由当前会话预先读取并拼贴审查内容全文。
 
 **共识归并**：两 agent 结论合并去重后作为本轮审查结论；部分重叠或冲突的条目 SHALL 一并列出交主会话判定，SHALL NOT 静默丢弃任一 agent 的独立发现。
 
@@ -298,3 +331,7 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn 2 个审查 subag
 #### Scenario: 双审查 agent 意见分歧
 - **WHEN** 审查 agent A 提出 Critical 而审查 agent B 未提出，或两者结论冲突
 - **THEN** 主会话拍板，且 SHALL 显式提示用户"这是审查分歧"；主会话能确认 → 按确认结论处理；不能确认 → 判定 Critical（red）进入修复循环
+
+#### Scenario: 双审查 agent 按配置模型和推理档 spawn
+- **WHEN** 用户配置 `reviewModel = "A"`, `reviewModelB = "B"`, `reviewReasoningEffort = "low"`, 运行一个审查关卡
+- **THEN** 审查 agent A 以模型 A 和推理档 `low` spawn, 审查 agent B 以模型 B 且不传推理档 spawn; 两者并行独立审查并 fork 当前会话上下文
