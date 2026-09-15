@@ -6,12 +6,12 @@
 
 ## 2. Codex 现状读取（静态）
 
-- [ ] 2.1 `src/utils/codex-provider.ts` 新增 `readCodexCurrentModel()`（config.toml 顶层 `model`，解析失败→undefined）与 `readModelsJson()`（`~/.codex/models.json`，失败→[]），验证单测覆盖缺文件/坏 JSON/正常
+- [ ] 2.1 `src/utils/codex-provider.ts` 新增 `readCodexCurrentModel()`（config.toml 顶层 `model`，解析失败→undefined）与 `readModelsJson()`（`~/.codex/models.json`，解析成功→模型名数组；缺文件/坏 JSON→**undefined**，与"注册 0 个模型"可区分），验证单测覆盖缺文件/坏 JSON/正常三态及返回结构区分
 - [ ] 2.2 确认不引入新依赖、不读敏感字段（API key 不进入返回值），验证单测断言返回结构不含 envKey/key
 
 ## 3. init 向导改造
 
-- [ ] 3.1 `collectCodexHostConfig`：provider 步骤后新增"Codex 现状检测"只读展示块（主模型/provider 条目/注册模型数，失败标注未检测到、不阻断），验证手工运行交互 init 出现检测块
+- [ ] 3.1 `collectCodexHostConfig`：provider 步骤后新增"Codex 现状检测"只读展示块（主模型/provider 条目/注册模型数；`readModelsJson` 返回 undefined 时标注"未检测到"而非 0 个，失败不阻断），并附带 `reasoning_effort` 参数坑背景提示文案（背景说明、不新增模板参数通道），验证手工运行交互 init 出现检测块与提示
 - [ ] 3.2 模型三连候选改为 `留空（默认继承当前会话模型）+ resolveSpawnableModels()`；删除 `pickModelField` 的 CUSTOM 哨兵与 `inputModelField` 自由输入回退、不再调用 `fetchCodexModels`，验证候选不再含 provider `/models` 内容且无自由输入
 - [ ] 3.3 既有值非空且 ∉ 清单时候选附加"保留当前值 `<v>`（不在可用列表，警告）"并默认该项，验证确认后原值写回、不静默替换
 - [ ] 3.4 写回保留 `reviewModelB`/`codingModel`/`spawnableModels`（交互与非交互两条路径），验证 update 后原值不丢
@@ -22,16 +22,16 @@
 
 ## 5. doctor 检查项
 
-- [ ] 5.1 `doctor()` 新增第 7 项"Codex 子代理模型配置"（留空=OK/∈=OK/∉=FAIL 附修配指引，detail 展示生效清单），验证三态单测或手工：清空配置→OK、`reviewModel=gpt-5.6-luna`→OK、`reviewModel=deepseek-v4-flash`→FAIL
+- [ ] 5.1 `doctor()` 新增第 7 项"Codex 子代理模型配置"（留空=OK 且文案注明"以主会话模型可 spawn 为前提"/∈=OK/∉=FAIL 附修配指引，detail 展示生效清单），并对 `spawnableModels` 字段存在但格式非法/清洗后为空输出 WARN（区别于未配置），验证三态单测或手工：清空配置→OK、`reviewModel=gpt-5.6-luna`→OK、`reviewModel=deepseek-v4-flash`→FAIL、`spawnableModels="bad"`（字符串）→WARN
 
 ## 6. 模板注入与运行时校验规则
 
 - [ ] 6.1 `installer-template.ts` 新增 `{{SPAWNABLE_MODELS_DEFAULT}}` 占位渲染（注入默认列表文本，签名扩展传配置），验证安装产物含该占位替换结果
-- [ ] 6.2 `templates/skills-codex/review-plan.md`/`review-code.md`/`apply.md` 模型指示段补"模型可用性校验"规则（运行时读取 `[codexHost] spawnableModels` 校验：∉ → 明确报配置无效停止该关卡转人工、不回退；留空 → 继承回退；spawn 失败含 `Available models:` 如实展示），验证渲染后三模板含规则文本且无占位残留
+- [ ] 6.2 `templates/skills-codex/review-plan.md`/`review-code.md`/`apply.md` 模型指示段补"模型可用性校验"规则（运行时读取 `[codexHost] spawnableModels` 校验：∉ → 明确报配置无效停止该关卡转人工、不回退；留空 → 继承回退；读取/解析配置失败 → 按"配置状态未知"明确提示"无法读取配置，请运行 `lycx doctor`"，不静默继承；spawn 失败含 `Available models:` 如实展示），验证渲染后三模板含规则文本且无占位残留
 
 ## 7. 文案与文档
 
-- [ ] 7.1 `src/i18n/index.ts` zh-CN/en 补齐现状检测、候选哨兵（留空/保留当前值警告）、doctor 检查文案，验证 `pnpm test` i18n 用例
+- [ ] 7.1 `src/i18n/index.ts` zh-CN/en 补齐现状检测（含 `reasoning_effort` 参数坑提示）、候选哨兵（留空/保留当前值警告）、doctor 检查（含前提说明与格式非法 WARN）文案，验证 `pnpm test` i18n 用例
 - [ ] 7.2 `README.md`/`CLAUDE.md` 同步 `spawnableModels` 字段与"候选 = 留空 + 可 spawn 清单"语义，验证文档无版本残留引用
 
 ## 8. 全量验证
