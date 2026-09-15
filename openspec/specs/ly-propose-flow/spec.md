@@ -87,8 +87,8 @@
 
 ### Requirement: 全自动路径 = 自动流水线直到审完代码
 当且仅当用户在开始时选择"全自动"，`/ly:propose` SHALL 在 `propose:` commit 完成后自动按序执行：
-1. 自动调用 `/ly:review-plan <change-name>`（审查对象为 `propose:` commit，见新增 Requirement）。以 Critical 清零结束时自动进入下一步；以其余任一种终止（熔断、分歧未决、无法安全修复、验证失败、审查调用失败、提交失败、达到全局轮数上限）时，SHALL 停止流水线，复用该循环已产出的终止报告（SHALL NOT 重新生成或重复一份）报告终止原因，SHALL NOT 继续执行 apply。
-2. 自动进入 `/ly:apply <change-name>` 实施 tasks（`apply` 产物按 `ly-lifecycle-commands` 的实施完成立即 commit 规则落库），自动进入 `/ly:review-code <change-name>`（审查对象为 `apply:` commit）。以 Critical 清零结束；以其余任一种终止时，SHALL 停止流水线，报告终止原因。
+1. 自动调用 `/ly:review-plan <change-name>`（审查对象为 `propose:` commit；按 `ly-review-gates` 的双审查 subagent 机制执行）。以 Critical 清零结束时自动进入下一步；以其余任一种终止（熔断、分歧未决、无法安全修复、验证失败、审查调用失败、提交失败、达到全局轮数上限）时，SHALL 停止流水线，复用该循环已产出的终止报告（SHALL NOT 重新生成或重复一份）报告终止原因，SHALL NOT 继续执行 apply。
+2. 自动进入 `/ly:apply <change-name>` 实施 tasks（实施由 coding subagent 执行，见本 delta ADDED Requirement；`apply:` commit 由主会话统一提交），自动进入 `/ly:review-code <change-name>`（审查对象为 `apply:` commit；同样按双审查 subagent 机制执行）。以 Critical 清零结束；以其余任一种终止时，SHALL 停止流水线，报告终止原因。
 
 流水线执行过程中 SHALL NOT 出现任何 worktree 询问或 `/ly:worktree switch` 调用；`/ly:archive` SHALL 仍由用户手动触发，propose 不自动归档。
 
@@ -139,3 +139,14 @@
 #### Scenario: 提交的相关 commit 存在但工作区干净，仍按相关 commit 审查
 - **WHEN** `apply:`/`propose:` commit 已存在、当前工作区/暂存区完全干净（无未提交改动）
 - **THEN** 审查对象仍是该相关 commit 的差异（`git show <commit>`），SHALL NOT 报"无变更可审查"
+
+### Requirement: apply 实施由 coding subagent 执行
+`@lyx-apply` 的实施环节 SHALL 由 coding subagent 执行：主会话 spawn 一个 coding subagent，fork 当前会话上下文，并在任务中点名"只实施 change 范围"（读取 `openspec/changes/<change-name>/tasks.md` 逐任务实施 + 验证 + 勾选，SHALL NOT 改动范围外文件）。模型 SHALL 按 `codexHost.codingModel` 指定，未配置回退当前会话模型。coding subagent SHALL NOT 自行 commit：实施完成后将改动与结果回传主会话，由主会话确认后统一 `git commit -m "apply: <change-name>"`。失败区分两阶段：**环境级不可用**（宿主无 subagent 能力、初始 spawn 失败）按 `subagent-agent-config` 的回退口径回退当前会话直接实施，SHALL NOT 视为业务失败；**实施中/验证失败**（coding subagent 报告任务未完成或验证失败）SHALL 原样呈报转人工，不自动重试、不切回自实施、不自动兜底。
+
+#### Scenario: coding subagent 完成实施
+- **WHEN** coding subagent 读 tasks.md 完成全部任务并验证通过
+- **THEN** 改动回传主会话，主会话确认后提交 `apply: <change-name>`，作为 `@lyx-review-code` 的审查对象
+
+#### Scenario: coding subagent 实施失败
+- **WHEN** coding subagent 报告任务未完成或验证失败
+- **THEN** 主会话原样呈报失败详情转人工，不自动重试、不切回自实施、不 commit
