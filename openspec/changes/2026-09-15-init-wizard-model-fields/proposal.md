@@ -30,7 +30,7 @@
 - `src/commands/init.ts`：交互流重构——移除模式/Agent 步、`collectCodexHostConfig` 返回三字段（模型三连 + 拉取失败回退输入）、摘要三行、非交互路径三字段保真。
 - `src/utils/config.ts`：抽出 `sanitizeModelField`（trim → undefined，无白名单清洗）供 `reviewModelB`/`codingModel` 与 `createDefaultConfig` 复用。
 - `src/commands/menu.ts`：`configReviewModel` 写回保留既有 `reviewModelB`/`codingModel`（本次仍只编辑审查 agent A；全字段菜单编辑列为后续候选）。
-- `src/i18n/index.ts`：zh/en —— 新增 `init:model.*` 三连键与 `init:summary.*` 三模型行，收敛 `init:host.reviewModelPrompt`，删除 `init:mode.select/singleAgent/agentSelect/agentCodex`。
+- `src/i18n/index.ts`：zh/en —— 新增 `init:model.*` 三连键与 `init:summary.reviewModelA/B/codingModel` 三模型行（`init:summary.reviewModelCodex` 保留给 menu 单行显示），收敛 `init:host.reviewModelPrompt`，删除 `init:mode.select/singleAgent/agentSelect/agentCodex`。
 - 文档：README（初始化向导描述）、CLAUDE.md（模块职责）、AGENTS.md（工作区文件，`.gitignore` 忽略、不随 commit 落库，与 subagent-multi-agent-mode 同处理）。
 - 测试：`src/utils/__tests__/config.test.ts` 补 `sanitizeModelField` 与三字段组合断言。
 - 不涉及：skill 模板（模型仍经"模板指示 + 宿主能力"落实，渲染层不动）、review 关卡行为、`docs/codex-exec-contract.md`、`src/utils/installer-data.ts` 命令注册。

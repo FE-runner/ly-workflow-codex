@@ -9,7 +9,7 @@ import { join } from 'pathe'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import { getConfigPath, readLyConfig, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import { getConfigPath, readLyConfig, sanitizeModelField, sanitizeReviewModel, writeLyConfig } from '../utils/config'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows, uninstallWorkflows } from '../utils/installer'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
 import { init } from './init'
@@ -317,7 +317,19 @@ async function configReviewModel(): Promise<void> {
     console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized`)
     return
   }
-  fresh.codexHost = next ? { reviewModel: next } : undefined
+  // 写回保留既有 reviewModelB / codingModel（本次仍只编辑审查 agent A，全字段菜单编辑列为后续候选）
+  const existingB = sanitizeModelField(fresh.codexHost?.reviewModelB)
+  const existingCoding = sanitizeModelField(fresh.codexHost?.codingModel)
+  if (next || existingB || existingCoding) {
+    fresh.codexHost = {
+      ...(next ? { reviewModel: next } : {}),
+      ...(existingB ? { reviewModelB: existingB } : {}),
+      ...(existingCoding ? { codingModel: existingCoding } : {}),
+    }
+  }
+  else {
+    fresh.codexHost = undefined
+  }
   await writeLyConfig(fresh)
 
   console.log()

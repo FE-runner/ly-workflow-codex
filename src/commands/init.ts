@@ -7,51 +7,119 @@ import ora from 'ora'
 import { version as packageVersion } from '../../package.json'
 import { i18n, initI18n } from '../i18n'
 import { codexConfigPath, fetchCodexModels, listModelProviders, readCodexConfigToml, sanitizeProviderName, upsertModelProvider } from '../utils/codex-provider'
-import { createDefaultConfig, ensureLyDir, readLyConfig, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import {
+  createDefaultConfig,
+  ensureLyDir,
+  readLyConfig,
+  sanitizeModelField,
+  sanitizeReviewModel,
+  writeLyConfig,
+} from '../utils/config'
 import { getCoreCommandIds, installWorkflows, migrateLegacyPrompts } from '../utils/installer'
 import { PACKAGE_NAME } from '../utils/package-meta'
 
 // ═══════════════════════════════════════════════════════
-// codex 宿主四级采集：模式 → Agent → API 提供方 → 模型
+// codex 宿主采集：API 提供方 → 模型三连
 // ═══════════════════════════════════════════════════════
 
 const OPENAI_OFFICIAL_BASE_URL = 'https://api.openai.com/v1'
+
+/** codexHost 三个模型字段的采集结果 */
+interface CodexHostModels {
+  reviewModel?: string
+  reviewModelB?: string
+  codingModel?: string
+}
 
 type ProviderChoice
   = | { type: 'existing', provider: CodexModelProvider }
     | { type: 'official' }
     | { type: 'custom' }
 
+// 模型三连 list 的两个哨兵项（NUL 前缀保证绝不与任何模型 id 冲突）
+const MODEL_CHOICE_CUSTOM = '\u0000lyx:custom'
+const MODEL_CHOICE_UNSET = '\u0000lyx:unset'
+
+// 三个模型字段的驱动元数据（i18n 键 + 持久化清洗归属：A 白名单、B/coding 仅 trim）
+const MODEL_FIELDS = [
+  { key: 'reviewModel', labelKey: 'init:model.reviewModelA', promptKey: 'init:model.reviewModelAPrompt', sanitize: sanitizeReviewModel },
+  { key: 'reviewModelB', labelKey: 'init:model.reviewModelB', promptKey: 'init:model.reviewModelBPrompt', sanitize: sanitizeModelField },
+  { key: 'codingModel', labelKey: 'init:model.codingModel', promptKey: 'init:model.codingModelPrompt', sanitize: sanitizeModelField },
+] as const
+
 /**
- * codex 宿主侧交互采集（单 Agent 模式）：
- * 模式（唯一：单 Agent）→ Agent（唯一：Codex）→ API 提供方 → 模型。
+ * 模型字段列表选择（provider 模型列表拉取成功路径）：
+ * - 既有值在列表内 → 默认该项
+ * - 既有值非空但不在列表 → 默认"自定义输入"且弹框 SHALL 预填既有值（直接回车即保留原值）
+ * - 无既有值或空白 → 默认"不设置"
+ */
+async function pickModelField(input: {
+  field: typeof MODEL_FIELDS[number]
+  models: string[]
+  current?: string
+}): Promise<string | undefined> {
+  const { field, models, current } = input
+  const inList = current !== undefined && models.includes(current)
+  const choices = [
+    ...models.map(id => ({ name: id, value: id })),
+    { name: ansis.cyan(`✏️ ${i18n.t('init:model.customChoice')}`), value: MODEL_CHOICE_CUSTOM },
+    { name: ansis.gray(i18n.t('init:model.unsetChoice')), value: MODEL_CHOICE_UNSET },
+  ]
+  const defaultChoice = inList ? current : current !== undefined ? MODEL_CHOICE_CUSTOM : MODEL_CHOICE_UNSET
+
+  const { pick } = await inquirer.prompt([{
+    type: 'list',
+    name: 'pick',
+    message: i18n.t(field.labelKey),
+    choices,
+    default: defaultChoice,
+    pageSize: 15,
+  }])
+
+  if (pick === MODEL_CHOICE_UNSET)
+    return undefined
+  if (pick !== MODEL_CHOICE_CUSTOM)
+    return pick
+
+  // 自定义输入弹框预填既有值
+  const { custom } = await inquirer.prompt([{
+    type: 'input',
+    name: 'custom',
+    message: i18n.t('init:model.customPrompt'),
+    default: current || '',
+  }])
+  return custom?.trim() || undefined
+}
+
+/** 模型字段自由输入（模型列表拉取失败回退路径；留空 = 不设置） */
+async function inputModelField(input: {
+  field: typeof MODEL_FIELDS[number]
+  current?: string
+}): Promise<string | undefined> {
+  const { field, current } = input
+  const { model } = await inquirer.prompt([{
+    type: 'input',
+    name: 'model',
+    message: i18n.t(field.promptKey),
+    default: current || '',
+  }])
+  return model?.trim() || undefined
+}
+
+/**
+ * codex 宿主侧交互采集：API 提供方 → 模型三连。
  * 仅交互模式进入（skip-prompt 保持既有跳过语义）；返回经 sanitizeReviewModel
- * 清洗的 reviewModel（undefined = 渲染时回退当前会话模型）。
+ * / sanitizeModelField 清洗的三字段（undefined = 回退当前会话模型）。
  *
  * API 提供方列表 = config.toml 现有 [model_providers.*] 条目 + OpenAI 官方 + 自定义；
  * 选自定义时增量写入 config.toml（upsertModelProvider 文本合并，保注释）。
- * 模型选择：GET {base_url}/models 动态拉取，失败回退 inquirer input 自由输入。
+ * 模型三连：GET {base_url}/models 拉取一次列表，三字段共用该列表逐个 list 选择，
+ * 拉取失败回退三个 input 自由输入。
  */
 async function collectCodexHostConfig(options: {
-  defaultReviewModel?: string
-  askAgent: boolean
-}): Promise<string | undefined> {
-  // ── Step 2/4: 选择 Agent（codex 单宿主仅一项，仍展示列表）──
-  if (options.askAgent) {
-    console.log()
-    console.log(ansis.cyan.bold(`  🤖 ${i18n.t('init:mode.agentSelect')}`))
-    console.log()
-    await inquirer.prompt([{
-      type: 'list',
-      name: 'agent',
-      message: i18n.t('init:mode.agentSelect'),
-      choices: [{ name: i18n.t('init:mode.agentCodex'), value: 'codex' }],
-      default: 'codex',
-    }])
-    // codex 单宿主仅 Codex 一项，选择结果恒为 'codex'
-  }
-
-  // ── Step 3/4: 选择 API 提供方 ──
+  defaults: CodexHostModels
+}): Promise<CodexHostModels> {
+  // ── Step 1: 选择 API 提供方 ──
   console.log()
   console.log(ansis.cyan.bold(`  🔌 ${i18n.t('init:mode.providerSelect')}`))
   console.log()
@@ -135,9 +203,9 @@ async function collectCodexHostConfig(options: {
   }
   // official：apiKey/baseUrl 保持默认（OAuth 登录）
 
-  // ── Step 4/4: 模型列表 ──
+  // ── Step 2: 模型三连 ──
   console.log()
-  console.log(ansis.cyan.bold(`  🧠 ${i18n.t('init:mode.modelSelect')}`))
+  console.log(ansis.cyan.bold(`  🧠 ${i18n.t('init:model.trioTitle')}`))
   console.log()
   if (baseUrl) {
     console.log(ansis.gray(`  ${i18n.t('init:mode.modelFetching', { baseUrl })}`))
@@ -145,29 +213,36 @@ async function collectCodexHostConfig(options: {
 
   const fetchResult = await fetchCodexModels({ baseUrl, apiKey })
 
-  if (fetchResult.ok) {
-    const { model } = await inquirer.prompt([{
-      type: 'list',
-      name: 'model',
-      message: i18n.t('init:mode.modelSelect'),
-      choices: fetchResult.models.map(id => ({ name: id, value: id })),
-      default: options.defaultReviewModel && fetchResult.models.includes(options.defaultReviewModel)
-        ? options.defaultReviewModel
-        : fetchResult.models[0],
-      pageSize: 15,
-    }])
-    return sanitizeReviewModel(model)
+  // 拉取失败（网络/非标响应/超时）：提示原因，回退自由输入
+  if (!fetchResult.ok) {
+    console.log(ansis.yellow(`  ⚠ ${i18n.t('init:mode.modelFetchFailed', { reason: fetchResult.error })}`))
   }
 
-  // 拉取失败（网络/非标响应/超时）：提示原因，回退自由输入
-  console.log(ansis.yellow(`  ⚠ ${i18n.t('init:mode.modelFetchFailed', { reason: fetchResult.error })}`))
-  const { model } = await inquirer.prompt([{
-    type: 'input',
-    name: 'model',
-    message: i18n.t('init:mode.modelInputPrompt'),
-    default: options.defaultReviewModel || '',
-  }])
-  return sanitizeReviewModel(model)
+  const collected: CodexHostModels = {}
+  for (const field of MODEL_FIELDS) {
+    const current = options.defaults[field.key]?.trim() || undefined
+    const raw = fetchResult.ok
+      ? await pickModelField({ field, models: fetchResult.models, current })
+      : await inputModelField({ field, current })
+    collected[field.key] = field.sanitize(raw)
+  }
+  return collected
+}
+
+/** 配置摘要（交互与非交互共用）：host + 三模型 + 命令数 */
+function printSummary(input: { models: CodexHostModels, commandCount: number }): void {
+  const { models, commandCount } = input
+  console.log()
+  console.log(ansis.yellow('━'.repeat(50)))
+  console.log(ansis.bold(`  ${i18n.t('init:summary.title')}`))
+  console.log()
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.host'))}  ${ansis.green('codex')}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))}  ${models.reviewModel ? ansis.green(models.reviewModel) : ansis.gray(i18n.t('init:host.reviewModelUnset'))}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelB'))}  ${models.reviewModelB ? ansis.green(models.reviewModelB) : ansis.gray(i18n.t('init:host.reviewModelUnset'))}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))}  ${models.codingModel ? ansis.green(models.codingModel) : ansis.gray(i18n.t('init:host.reviewModelUnset'))}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(commandCount.toString())}`)
+  console.log(ansis.yellow('━'.repeat(50)))
+  console.log()
 }
 
 export async function init(options: InitOptions = {}): Promise<void> {
@@ -215,42 +290,23 @@ export async function init(options: InitOptions = {}): Promise<void> {
   }
 
   const selectedWorkflows = getCoreCommandIds()
-  // 既有配置中的审查模型作为交互/非交互默认值
-  let reviewModel = sanitizeReviewModel(existingConfig?.codexHost?.reviewModel)
+  // 既有配置中的三个模型字段作为交互/非交互默认值（空白等价未配置；保真写回不丢）
+  const defaultModels: CodexHostModels = {
+    reviewModel: sanitizeReviewModel(existingConfig?.codexHost?.reviewModel),
+    reviewModelB: sanitizeModelField(existingConfig?.codexHost?.reviewModelB),
+    codingModel: sanitizeModelField(existingConfig?.codexHost?.codingModel),
+  }
+  let collectedModels: CodexHostModels = { ...defaultModels }
 
   // ═══════════════════════════════════════════════════════
   // Interactive flow（codex 单宿主）
   // ═══════════════════════════════════════════════════════
   if (!options.skipPrompt) {
-    // ── Step 1/4: 工作流模式（单宿主唯一：单 Agent 模式）──
-    console.log()
-    console.log(ansis.cyan.bold(`  🏠 ${i18n.t('init:mode.select')}`))
-    console.log()
-    await inquirer.prompt([{
-      type: 'list',
-      name: 'mode',
-      message: i18n.t('init:mode.select'),
-      choices: [{ name: i18n.t('init:mode.singleAgent'), value: 'codex' }],
-      default: 'codex',
-    }])
-    // codex 单宿主：模式恒为单 Agent（Codex）
-
-    // ── Step 2-4: Agent → API 提供方 → 模型 ──
-    reviewModel = await collectCodexHostConfig({
-      defaultReviewModel: reviewModel,
-      askAgent: true,
-    })
+    // ── API 提供方 → 模型三连 ──
+    collectedModels = await collectCodexHostConfig({ defaults: defaultModels })
 
     // ── 摘要 ──
-    console.log()
-    console.log(ansis.yellow('━'.repeat(50)))
-    console.log(ansis.bold(`  ${i18n.t('init:summary.title')}`))
-    console.log()
-    console.log(`  ${ansis.cyan(i18n.t('init:summary.host'))}  ${ansis.green('codex')}`)
-    console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelCodex'))}  ${reviewModel ? ansis.green(reviewModel) : ansis.gray(i18n.t('init:host.reviewModelUnset'))}`)
-    console.log(`  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(selectedWorkflows.length.toString())}`)
-    console.log(ansis.yellow('━'.repeat(50)))
-    console.log()
+    printSummary({ models: collectedModels, commandCount: selectedWorkflows.length })
 
     const { confirm } = await inquirer.prompt([{
       type: 'confirm',
@@ -264,16 +320,8 @@ export async function init(options: InitOptions = {}): Promise<void> {
     }
   }
   else {
-    // non-interactive：打印最小摘要行
-    console.log()
-    console.log(ansis.yellow('━'.repeat(50)))
-    console.log(ansis.bold(`  ${i18n.t('init:summary.title')}`))
-    console.log()
-    console.log(`  ${ansis.cyan(i18n.t('init:summary.host'))}  ${ansis.green('codex')}`)
-    console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelCodex'))}  ${reviewModel ? ansis.green(reviewModel) : ansis.gray(i18n.t('init:host.reviewModelUnset'))}`)
-    console.log(`  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(selectedWorkflows.length.toString())}`)
-    console.log(ansis.yellow('━'.repeat(50)))
-    console.log()
+    // non-interactive：打印最小摘要行（保留既有三字段默认）
+    printSummary({ models: collectedModels, commandCount: selectedWorkflows.length })
   }
 
   // ═══════════════════════════════════════════════════════
@@ -287,7 +335,11 @@ export async function init(options: InitOptions = {}): Promise<void> {
     const config = createDefaultConfig({
       language,
       installedWorkflows: selectedWorkflows,
-      codexHost: { reviewModel },
+      codexHost: {
+        reviewModel: collectedModels.reviewModel,
+        reviewModelB: collectedModels.reviewModelB,
+        codingModel: collectedModels.codingModel,
+      },
       installedHosts: ['codex'],
     })
 
@@ -310,7 +362,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
     // Install codex host commands + shared role prompts
     const result = await installWorkflows(selectedWorkflows, '', options.force, {
-      reviewModel,
+      reviewModel: collectedModels.reviewModel,
     })
 
     spinner.succeed(ansis.green(i18n.t('init:installSuccess')))

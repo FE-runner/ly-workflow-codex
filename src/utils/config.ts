@@ -140,8 +140,8 @@ export function createDefaultConfig(options: {
   const reviewModel = sanitizeReviewModel(options.codexHost?.reviewModel)
   // 新字段（reviewModelB/codingModel）直接透传：仅做 trim、空白视为未配置（回退当前会话模型），
   // 不做字符白名单清洗——它们不再拼进 shell 命令串，由模板指示 + 宿主 spawn 能力落实
-  const reviewModelB = options.codexHost?.reviewModelB?.trim() || undefined
-  const codingModel = options.codexHost?.codingModel?.trim() || undefined
+  const reviewModelB = sanitizeModelField(options.codexHost?.reviewModelB)
+  const codingModel = sanitizeModelField(options.codexHost?.codingModel)
   if (reviewModel || reviewModelB || codingModel) {
     config.codexHost = {
       ...(reviewModel ? { reviewModel } : {}),
@@ -162,5 +162,17 @@ export function sanitizeReviewModel(value: unknown): string | undefined {
   if (typeof value !== 'string')
     return undefined
   const cleaned = value.trim().replace(/[^\w.:/-]/g, '')
+  return cleaned === '' ? undefined : cleaned
+}
+
+/**
+ * 模型字段通用清洗（codexHost.reviewModelB / codingModel）：
+ * 非字符串 → undefined；先 trim，空白视为未配置（回退当前会话模型）。
+ * 不做字符白名单清洗——这些值不再拼进 shell 命令串，由模板指示 + 宿主 spawn 能力落实。
+ */
+export function sanitizeModelField(value: unknown): string | undefined {
+  if (typeof value !== 'string')
+    return undefined
+  const cleaned = value.trim()
   return cleaned === '' ? undefined : cleaned
 }

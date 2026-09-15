@@ -15,7 +15,7 @@ npx ly-workflow-codex init   # 全量初始化（生成 AGENTS.md + openspec ini
 - CLI 二进制名 `lycx`（子命令：`init`/`doctor`/`status`/`uninstall`，裸命令进菜单；`update` 在菜单内）
 - 安装产物：14 个 `@lyx-*` skills（`SKILL.md`）→ `~/.agents/skills/lyx-*/`；8 个角色提示词 → `~/.ly/prompts/codex/`
 - 配置：`~/.ly/config.toml`——首次读取/写入时自动从旧 `~/.claude/.ly/config.toml` 迁移（新位置已有配置则不覆盖）
-- 初始化向导四级采集：模式（唯一：单 Agent）→ Agent（唯一：Codex）→ API 提供方（`~/.codex/config.toml` 现有 `[model_providers.*]` / OpenAI 官方 / 自定义）→ 审查模型（存 `codexHost.reviewModel`，未配置时审查回退当前会话模型）；可选字段 `codexHost.reviewModelB`（审查 agent B）与 `codexHost.codingModel`（coding subagent）可手动写入 `~/.ly/config.toml`
+- 初始化向导采集流程：语言 → API 提供方（`~/.codex/config.toml` 现有 `[model_providers.*]` / OpenAI 官方 / 自定义）→ 模型三连（共用 provider 模型列表逐个选择：`codexHost.reviewModel` 审查 agent A / `reviewModelB` 审查 agent B / `codingModel` coding subagent，可"自定义输入…"或"不设置（回退当前会话模型）"，拉取失败回退自由输入）→ 配置摘要（三模型各自状态）
 
 ## 命令（14 个 `@lyx-*` skills）
 

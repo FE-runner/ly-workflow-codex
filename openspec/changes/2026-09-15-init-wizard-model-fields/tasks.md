@@ -1,8 +1,8 @@
-- [ ] T1 向导步骤收敛：`src/commands/init.ts` 移除工作流模式/选择 Agent 两步（含 `collectCodexHostConfig` 的 `askAgent` 参数与调用处），交互流变为 语言 → provider → 模型三连 → 摘要
-- [ ] T2 模型三连采集：重构 `collectCodexHostConfig` 返回 `{ reviewModel?, reviewModelB?, codingModel? }`——provider 选定后拉取一次列表，三字段逐个 `list`（含"自定义输入…"/"不设置（回退）"、默认值语义），拉取失败回退三次 input
-- [ ] T3 非交互与重装保真：`init()` 读既有三字段作默认并统一透传 `createDefaultConfig`；`lycx update`（`init --force --skip-prompt`）不再丢 `reviewModelB`/`codingModel`
-- [ ] T4 menu 保真：`configReviewModel` 写回保留既有 `reviewModelB`/`codingModel`
-- [ ] T5 i18n：zh/en 新增/收敛 wizard 三连键与摘要三模型行；删除废弃 mode 键（select/singleAgent/agentSelect/agentCodex）
-- [ ] T6 工具与测试：`config.ts` 抽 `sanitizeModelField`；`config.test.ts` 补断言（三字段组合、空白/空串、仅 B 字段、列表外既有值语义）
-- [ ] T7 文档：README（初始化向导描述）、CLAUDE.md（模块职责）、AGENTS.md（工作区同步，不随 commit）
-- [ ] T8 验证：`openspec validate --changes init-wizard-model-fields`；`pnpm typecheck && pnpm build && pnpm test` 全绿
+- [x] T1 向导步骤收敛：`src/commands/init.ts` 移除工作流模式/选择 Agent 两步（含 `collectCodexHostConfig` 的 `askAgent` 参数与调用处），交互流变为 语言 → provider → 模型三连 → 摘要
+- [x] T2 模型三连采集：重构 `collectCodexHostConfig` 返回 `{ reviewModel?, reviewModelB?, codingModel? }`——provider 选定后拉取一次列表，三字段逐个 `list`（含"自定义输入…"/"不设置（回退）"、默认值语义；"自定义输入"预填既有值；空白等价未配置），拉取失败回退三次 input（同样预填既有值）
+- [x] T3 非交互与重装保真：`init()` 读既有三字段作默认并统一透传 `createDefaultConfig`；`lycx update`（`init --force --skip-prompt`）不再丢 `reviewModelB`/`codingModel`
+- [x] T4 menu 保真：`configReviewModel` 写回保留既有 `reviewModelB`/`codingModel`
+- [x] T5 i18n：zh/en 新增/收敛 wizard 三连键与摘要三模型行（`init:summary.reviewModelA/B/codingModel`，保留 `reviewModelCodex` 给 menu）；删除废弃 mode 键（select/singleAgent/agentSelect/agentCodex）
+- [x] T6 工具与测试：`config.ts` 抽 `sanitizeModelField`；`config.test.ts` 补断言（三字段组合、空白/空串、仅 B 字段、列表外既有值语义）
+- [x] T7 文档：README（初始化向导描述）、CLAUDE.md（模块职责）、AGENTS.md（工作区同步，不随 commit）
+- [x] T8 验证：`openspec validate --changes init-wizard-model-fields`；`pnpm typecheck && pnpm build && pnpm test` 全绿

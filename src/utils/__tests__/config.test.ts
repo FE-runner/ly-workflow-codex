@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultConfig, migrateLegacyConfig, readLyConfig, sanitizeInstalledHosts, sanitizeReviewModel, writeLyConfig } from '../config'
+import { createDefaultConfig, migrateLegacyConfig, readLyConfig, sanitizeInstalledHosts, sanitizeModelField, sanitizeReviewModel, writeLyConfig } from '../config'
 
 // 模块顶层常量（CONFIG_FILE / LY_DIR 等）在 import 时基于 homedir() 求值，
 // 因此 hoisted 阶段就创建固定临时 home，再 mock homedir() 指向它——
@@ -120,6 +120,26 @@ describe('createDefaultConfig (codex 单宿主)', () => {
     expect(config.codexHost?.codingModel).toBe('c')
   })
 
+  it('stores reviewModelB alone without requiring reviewModel (only-B field)', () => {
+    const config = createDefaultConfig({
+      ...baseOptions,
+      codexHost: { reviewModelB: 'b-model' },
+    })
+    expect(config.codexHost?.reviewModel).toBeUndefined()
+    expect(config.codexHost?.reviewModelB).toBe('b-model')
+    expect(config.codexHost?.codingModel).toBeUndefined()
+  })
+
+  it('keeps out-of-list existing values as-is (custom pass-through)', () => {
+    const config = createDefaultConfig({
+      ...baseOptions,
+      codexHost: { reviewModel: 'list-model', reviewModelB: 'other-provider/qwen', codingModel: ' custom ' },
+    })
+    expect(config.codexHost?.reviewModel).toBe('list-model')
+    expect(config.codexHost?.reviewModelB).toBe('other-provider/qwen')
+    expect(config.codexHost?.codingModel).toBe('custom')
+  })
+
   it('treats blank new fields as unset (fall back to session model)', () => {
     const config = createDefaultConfig({
       ...baseOptions,
@@ -176,6 +196,24 @@ describe('sanitizeReviewModel', () => {
   it('returns undefined when only illegal characters remain', () => {
     expect(sanitizeReviewModel('***')).toBeUndefined()
     expect(sanitizeReviewModel(' ; ')).toBeUndefined()
+  })
+})
+
+describe('sanitizeModelField', () => {
+  it('trims valid model names', () => {
+    expect(sanitizeModelField(' gpt-5.1 ')).toBe('gpt-5.1')
+  })
+
+  it('returns undefined for blank/invalid values', () => {
+    expect(sanitizeModelField('')).toBeUndefined()
+    expect(sanitizeModelField('   ')).toBeUndefined()
+    expect(sanitizeModelField(42)).toBeUndefined()
+    expect(sanitizeModelField(undefined)).toBeUndefined()
+  })
+
+  it('preserves characters outside the whitelist (no whitelist cleaning)', () => {
+    expect(sanitizeModelField('gpt 5.1')).toBe('gpt 5.1')
+    expect(sanitizeModelField('vendor/model@beta')).toBe('vendor/model@beta')
   })
 })
 

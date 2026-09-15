@@ -14,7 +14,7 @@
 
 ```bash
 npx ly-workflow-codex        # 交互式菜单（裸命令）
-npx ly-workflow-codex init   # 全量初始化（生成项目 AGENTS.md + openspec init + 安装 14 个命令）
+npx ly-workflow-codex init   # 全量初始化（语言 → API 提供方 → 模型三连 → 摘要；生成项目 AGENTS.md + openspec init + 安装 14 个命令）
 lycx doctor / status         # 体检 / 安装概览
 lycx uninstall               # 卸载
 ```
