@@ -235,6 +235,7 @@ describe('installWorkflows — codex host', () => {
     expect(reviewPlan).toContain('双审查')
     expect(reviewPlan).not.toContain('codex exec')
     expect(reviewPlan).not.toContain('-m {{REVIEW_MODEL}}')
+    expect(reviewPlan).not.toContain('gpt-5.1-codex')
   })
 
   it('does not create claude-side artifacts', async () => {

@@ -26,12 +26,13 @@ argument-hint: '[<change-name>] [--no-commit]'
 1. 解析目标 change（优先级同 `@lyx-apply`：`参数` 显式 change 名 → `openspec/changes/` 下唯一未归档 change → 询问用户）。
 2. `git log --grep="^apply: <change-name>"` 取 HEAD 侧最近一期匹配 commit：
    - **存在** → 审查范围 = 该 `apply:` commit 差异（`git show <commit>`）+ 当前 `git diff HEAD`（循环修复）+ `git status --porcelain` 过滤 `??` 得到的未跟踪文件路径清单。工作区/暂存区干净时**仍按该 commit 审查**，不报"无变更可审查"。
-   - **不存在**（零 commit 仓库，或该 change 尚未产生 apply commit）→ 退化为"有未提交变更"组合：`git diff HEAD`（覆盖已暂存+未暂存）+ `??` 未跟踪清单；仓库零 commit（`git rev-parse HEAD` 失败）→ 三条固定命令组合：`git diff --cached` + `git diff` + `??` 未跟踪路径清单。无未提交变更且也无相关 apply commit → 报告"无变更可审查"，直接结束。
+   - **不存在**（该 change 尚无 apply commit）→ 检查最近一次相关 `propose: <change-name>` commit（`git log --grep="^propose: <change-name>" -1`）：存在 → 审查范围 = 该 `propose:` commit 差异 + 当前 `git diff HEAD` + `??` 未跟踪路径清单（工作区/暂存区干净时仍按该 commit 审查）。仍不存在（零 commit 仓库或该 change 尚无任何相关 commit）→ 退化为"有未提交变更"组合：`git diff HEAD`（覆盖已暂存+未暂存）+ `??` 未跟踪清单；仓库零 commit（`git rev-parse HEAD` 失败）→ 三条固定命令组合：`git diff --cached` + `git diff` + `??` 未跟踪路径清单。无未提交变更且也无相关 commit → 报告"无变更可审查"，直接结束。
 
 **无论哪种情况**，额外用 `git status --porcelain` 抓取 `??` 开头的未跟踪文件路径——避免新建但未 `git add` 的文件被漏审。
 
 ```bash
 git log --grep="^apply: <change-name>" -1 --format='%H' 2>/dev/null
+git log --grep="^propose: <change-name>" -1 --format='%H' 2>/dev/null
 git rev-parse HEAD >/dev/null 2>&1 && echo has_head || echo no_head
 git status --porcelain | grep '^??'
 ```
@@ -52,7 +53,7 @@ OUTPUT 约束（写入每个审查 subagent 的任务）：审查发现按严重
 
 **两 agent 结论汇合（独立审 → 交换 → 共识）**：
 
-1. 两个 agent 独立审查完毕后，将其结论交换给彼此并讨论以达成共识。
+1. 两个 agent 独立审查完毕后，**由主会话将 A/B 结论互转给双方**（两 subagent 由宿主并行 spawn、不直连），各自针对对方结论给出最终意见后，主会话再归并共识。
 2. **共识归并**：两 agent 结论合并去重后作为本轮审查结论；部分重叠或冲突的条目 SHALL 一并列出交主会话判定，SHALL NOT 静默丢弃任一 agent 的独立发现。
 3. **意见分歧**（agent A 提出 Critical 而 agent B 未提出，或两者结论冲突）→ **主会话拍板**，且 SHALL **显式提示用户"这是审查分歧"**：主会话能确认 → 按确认结论处理；不能确认 → 判定该条为 Critical（red）进入修复循环。
 4. **分歧时序**：双 agent 首次分歧且主会话不能确认 → 判定 Critical 进入修复循环；下一轮复审双 agent 仍分歧且主会话仍不能确认 → 触发"分歧未决"终止条件（终止条件 5）。
@@ -100,8 +101,6 @@ OUTPUT 约束（写入每个审查 subagent 的任务）：审查发现按严重
 路径清单之外的文件不重新整段传入。若某条上一轮 Critical 的位置字段缺失可解析路径（角色提示词未被遵守等异常情况），按"审查调用失败"终止条件处理（返回内容不符合可解析格式），不得静默丢弃该 Critical。
 
 **第 2 轮起沿用同一批审查 subagent 会话**：fork 启动的 subagent 会话具备轮间记忆，第 2 轮继续使用同一批审查 subagent（A/B），无需重新 spawn 或整段重传基线——增量传递规则不变，会话记忆提供连续性，不代表 TASK 可省略逐字 Critical 原文。回到步骤 2 的执行方式（只是 TASK 内容换成上述增量内容，继续同一批审查 subagent），重新派发审查，不要求用户手动重新触发命令。生成本轮执行日志后再判定 Critical 是否清零。
-
-回到步骤 2 的执行方式（只是 TASK 内容换成上述增量内容，继续同一批审查 subagent），重新派发审查，不要求用户手动重新触发命令。生成本轮执行日志后再判定 Critical 是否清零。
 
 ### 循环终止条件（任一命中即停止，转步骤 4）
 

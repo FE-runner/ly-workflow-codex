@@ -55,8 +55,8 @@ const CORE_CONFIGS: WorkflowConfig[] = [
   cmd('archive', 23, 'opsx', '归档方案', 'Archive', '委托 opsx:archive，完成后归档', 'Delegates to opsx:archive — archives a completed change'),
 
   // ── Review gates (Codex-backed) ──────────────────────
-  cmd('review-plan', 30, 'review', '方案审查', 'Review Plan', '读取 OpenSpec change 的 proposal/design/tasks，Codex 审查方案合理性', 'Reads OpenSpec change artifacts, Codex reviews plan soundness'),
-  cmd('review-code', 31, 'review', '代码审查', 'Review Code', '读取 git diff，Codex 审查代码变更，分级输出 Critical/Warning/Info', 'Reads git diff, Codex reviews code changes with severity grading'),
+  cmd('review-plan', 30, 'review', '方案审查', 'Review Plan', '双审查 subagent 审 proposal/design/tasks，分歧主会话拍板', 'Dual-reviewer subagents review plan artifacts; main session arbitrates disagreements'),
+  cmd('review-code', 31, 'review', '代码审查', 'Review Code', '双审查 subagent 审代码变更，分级输出 Critical/Warning/Info', 'Dual-reviewer subagents review code changes with severity grading'),
 
   // ── Release pipeline ───────────────────────────────────
   cmd('release', 40, 'release', 'GitFlow 发版', 'GitFlow Release', 'GitFlow 四场景发版流程，SemVer 自动推导版本号，上线合并二选一 + 主分支名检测', 'GitFlow branching workflow with SemVer auto-detection, dual merge options and master/main detection'),
