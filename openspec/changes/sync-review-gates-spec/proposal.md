@@ -7,7 +7,8 @@
 - 重写 `ly-review-gates` 的 Purpose，把两个审查关卡描述为"双审查 subagent + `[codexHost]` 模型字段 + 可选推理档字段"落地，删除 `codex exec` / `{{REVIEW_MODEL}}` / `docs/codex-exec-contract.md` 旧调用机制描述。
 - 重写 `代码审查读取 git diff 并分级输出发现`：审查基线改为"最近一期 `apply:` commit，不存在时退化为最近一期 `propose:` commit；即使工作区/暂存区干净仍按该 commit 审查，不报无变更"；删除历史 commit 回退废弃语义、`codex exec -m` 模型回退语义和 `session_id`/`resume` 续聊要求；保留首轮 TASK 只传基线引用与未跟踪文件路径、不拼贴 diff 全文的规则。
 - 重写 `方案审查分级输出发现`：调用方式改为"双审查 subagent fork 当前上下文 + 范围点名 + 路径清单，模型按 `reviewModel`/`reviewModelB` 配置并附加对应推理档字段"，删除 `codex exec` / `-m` / `sanitizeReviewModel` 清洗回退语义和 `plan-reviewer.md` 经 `codex exec` 调用的旧描述；保留方案审查只审 artifact/delta spec、首轮只传路径清单、基线 spec 引用检测与 `spec` 未覆盖 What Changes 检查规则。
-- 把 `审查调用失败视为独立终止条件` 与 `审查关卡以双审查 subagent 执行` 两处 changelog 补丁内容并入正文，使正文直接陈述"运行期失败 / 环境级不可用 / 单 agent 失败"三阶段语义与"旧调用形态已废止"，不再以"上限文补丁覆盖基线"的形式残留。
+- 把 `审查调用失败视为独立终止条件` 与 `审查关卡以双审查 subagent 执行` 两处 changelog 补丁内容并入正文，使正文直接陈述"运行期失败 / 环境级不可用 / 单 agent 失败 / 配置读取失败按配置状态未知处理"四类失败处理语义与"旧调用形态已废止"，不再以"上限文补丁覆盖基线"的形式残留。
+- 同步 `审查-修复循环与终止条件（review-code / review-plan 共用）` 的次轮续接语义：把"修复完成后自动重新执行双审查 subagent 关卡（spawn ×2）"且引用"本 delta ADDED Requirement"的一句，改写为"第 2 轮起沿用同一批审查 subagent 会话（具备轮间记忆），不重新 spawn"，并删除归档后失效的 delta 引用。
 - 对齐推理档字段语义：`reviewModel` 对应 `reviewReasoningEffort`，`reviewModelB` 对应 `reviewReasoningEffortB`；非空时随对应 spawn 传入，空白不传，禁止模型名到档位的硬编码映射。
 
 ## Capabilities
@@ -22,5 +23,5 @@
 
 ## Impact
 
-- 仅修改 `openspec/specs/ly-review-gates/spec.md` 的规范文本与场景；不改实现代码、不新增功能、不改变模板文件。
+- 仅修改 `openspec/specs/ly-review-gates/spec.md` 的规范文本与场景（含 `审查-修复循环与终止条件` 的一处次轮续接语义，同属本 capability）；不改实现代码、不新增功能、不改变模板文件。
 - 本 change 不触碰 `/ly:*` 与 `@lyx-*` 命名基准、4 个已 DEPRECATED spec、`docs/codex-exec-contract.md` 文件本体及其他 spec。

@@ -32,15 +32,15 @@ R2/R3 仍保留原 requirement 名, 变化的是正文契约与 scenario。MODIF
 
 ### D3: 旧的调用形态直接在 R2/R3/R9 正文中消失，不新增"废止说明"
 
-不是把 `codex exec` 等词留在正文再加一段废止补丁，而是在 R2/R3/R9 的正文直接用双审查 subagent 契约替换；R6 把原"`codex exec` ... SHALL 调整为..."的补丁措辞改成直接陈述两阶段语义。这样补丁句不再出现在主 spec。
+不是把 `codex exec` 等词留在正文再加一段废止补丁，而是在 R2/R3/R9 的正文直接用双审查 subagent 契约替换；R6 把原"`codex exec` ... SHALL 调整为..."的补丁措辞改成直接陈述四类失败处理语义（运行期失败 / 环境级不可用 / 单 agent 失败 / 配置读取失败）。这样补丁句不再出现在主 spec。`codex exec`/`-m`/`session_id`/`resume` 这类旧词如需保留，仅允许出现在 `SHALL NOT` 禁止条款中（用于否定旧调用机制），不作为肯定性调用语义出现。OpenSpec 对 MODIFIED requirement 要求 scenario 标题与原主 spec 完全一致、不允许重命名，因此既有 `第 2 轮以 resume 模式续聊同一会话` 标题作为稳定场景标识保留，其 WHEN/THEN 已明确改用"沿用同一批审查 subagent 会话"实现而不是 shell 层 resume/session_id 续聊。
 
 ### D4: 推理档字段只并入 R2/R3/R9，不扩展 `subagent-agent-config`
 
 `subagent-agent-config` 已定义 `reviewReasoningEffort` / `reviewReasoningEffortB` / `codingReasoningEffort` 字段语义；本 change 只负责让 `ly-review-gates` 在审查相关 requirement 中引用这一对字段的传递规则，不新增或改写定义。禁止引入"模型名 → 档位"硬编码映射。
 
-### D5: R1/R4/R5/R7/R8 不在本次改范围
+### D5: R1/R5/R7/R8 不在本次改范围；R4 纳入 MODIFIED 仅改次轮续接语义
 
-R1 还包含命令命名和调用构造引用的历史描述，但它不直接定义双审查 spawn 或审查范围基线；本次只修直接矛盾的 R2/R3/R6/R9，避免在 spec 对账中误动无关 requirement。
+R1 还包含命令命名和调用构造引用的历史描述，但它不直接定义双审查 spawn 或审查范围基线；本次不碰 R1/R5/R7/R8，避免在 spec 对账中误动无关 requirement。R4（`审查-修复循环与终止条件`）虽不在最初 scope 内，但其正文仍写"修复完成后自动重新执行双审查 subagent 关卡（spawn ×2...）"，并带有一处归档后失效的"见本 delta ADDED Requirement"引用，与新 R2 的"第 2 轮沿用同一批审查 subagent 会话、不重新 spawn"直接矛盾；因此把 R4 的一处次轮续接语义纳入本次 MODIFIED 范围（同属 `ly-review-gates` capability），只改次轮续接语义相关句并删除失效 delta 引用，不改动 R4 的终止条件判定逻辑与场景清单。
 
 ## Risks / Trade-offs
 
@@ -50,6 +50,6 @@ R1 还包含命令命名和调用构造引用的历史描述，但它不直接�
 
 ## Migration Plan
 
-1. 应用本 change 文件编辑: 直接在主 spec 改写 Purpose, 并确保主 spec 最终与 `specs/ly-review-gates/spec.md` delta 表述一致。
+1. 应用本 change 文件编辑: 直接在主 spec 改写 Purpose（spec sync 不覆盖 Purpose，归档前确认 Purpose 已就地改写完成）, 并确保主 spec 最终与 `specs/ly-review-gates/spec.md` delta 表述一致。
 2. 运行 `openspec validate --changes sync-review-gates-spec` 验证 change 结构。
 3. 本 change 无运行时迁移、无 rollback 数据状态；若要回滚，恢复主 spec 到 `propose:` commit 前版本即可。
