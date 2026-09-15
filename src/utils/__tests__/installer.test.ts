@@ -202,6 +202,9 @@ describe('template variable completeness', () => {
       expect(rendered, file).toContain('reasoning_effort')
       expect(rendered, file).toContain('非空时')
       expect(rendered, file).toContain('不传该参数')
+      // 推理档必须先 trim 再传：与 spec「非空字符串（trim 后使用）」口径一致
+      expect(rendered, `${file} missing trim rule`).toContain('trim')
+      expect(rendered, `${file} missing trim-empty rule`).toContain('trim 后为空')
       expect(rendered, file).toContain('硬编码映射')
       expect(rendered, file).not.toContain('glm-5.3-flash')
       expect(rendered, file).not.toContain('deepseek-v4.1-flash')
