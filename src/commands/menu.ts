@@ -9,8 +9,7 @@ import { join } from 'pathe'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import { getConfigPath, readLyConfig, resolveEffectiveModelList, sanitizeModelField, sanitizeReviewModel, writeLyConfig } from '../utils/config'
-import { readCodexCurrentModel } from '../utils/codex-provider'
+import { getConfigPath, readLyConfig, sanitizeModelField, sanitizeReviewModel, writeLyConfig } from '../utils/config'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows, uninstallWorkflows } from '../utils/installer'
 import { buildModelFieldChoices, MODEL_CHOICE_CUSTOM, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
@@ -295,10 +294,8 @@ function readLyConfigSync(): any {
 async function configReviewModel(): Promise<void> {
   const config = await readLyConfig()
   const currentReviewModel = sanitizeReviewModel(config?.codexHost?.reviewModel)
-  // 候选/默认语义与 init 模型三连共用（buildModelFieldChoices），来源 = 生效清单
-  // （spawnableModels 基准；未显式配置时并入已配置模型字段值与 codex 当前主模型）
-  const currentModel = await readCodexCurrentModel()
-  const spawnableModels = resolveEffectiveModelList(config?.codexHost, { currentModel })
+  // 候选/默认语义与 init 模型三连共用（buildModelFieldChoices）：
+  // 留空（继承当前会话模型）+ 自定义输入 + 既有值；agent 模型需额外配置
 
   console.log()
   console.log(ansis.cyan.bold(`  ${i18n.t('init:model.title')}`))
@@ -306,7 +303,6 @@ async function configReviewModel(): Promise<void> {
   console.log(ansis.gray(`  ${i18n.t('init:host.reviewModelHint')}`))
 
   const { choices, defaultChoice } = buildModelFieldChoices({
-    models: spawnableModels,
     current: currentReviewModel,
   })
   const { model } = await inquirer.prompt([{
@@ -319,7 +315,7 @@ async function configReviewModel(): Promise<void> {
   }])
   let next: string | undefined
   if (model === MODEL_CHOICE_CUSTOM) {
-    // 自定义输入：保留自由输入方式（可填不在生效清单内的模型）；留空视为取消（保持原值语义）
+    // 自定义输入：保留自由输入方式（不做清单限制）；留空视为取消（保持原值语义）
     const { custom } = await inquirer.prompt([{
       type: 'input',
       name: 'custom',

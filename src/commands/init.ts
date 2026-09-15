@@ -11,7 +11,6 @@ import {
   createDefaultConfig,
   ensureLyDir,
   readLyConfig,
-  resolveEffectiveModelList,
   sanitizeModelField,
   sanitizeReviewModel,
   writeLyConfig,
@@ -46,18 +45,18 @@ const MODEL_FIELDS = [
 ] as const
 
 /**
- * 模型字段 list 选择（候选 = 默认继承（留空）+ spawnableModels 生效清单）：
+ * 模型字段 list 选择（候选 = 默认继承（留空）+ 自定义输入 + 既有值）：
  * 候选构造与默认值语义由 `buildModelFieldChoices` 统一提供（init 与 menu 共用）——
- * 既有值非空且 ∈ 清单 → 默认该项；非空但 ∉ 清单 → 附加"保留当前值（警告）"项并默认该项；
- * 无既有值或空白 → 默认"留空"。不再提供自由输入入口。
+ * 模型指定只保留两种方式：留空（继承当前会话模型）或自定义输入任意模型名
+ * （能否 spawn 由宿主实际能力决定，配置仅为提示；agent 模型需额外配置并可用示例 prompt 验证）。
+ * 既有值非空 → 附该项并默认；无既有值或空白 → 默认"留空"。
  */
 async function pickModelField(input: {
   field: typeof MODEL_FIELDS[number]
-  models: string[]
   current?: string
 }): Promise<string | undefined> {
-  const { field, models, current } = input
-  const { choices, defaultChoice } = buildModelFieldChoices({ models, current })
+  const { field, current } = input
+  const { choices, defaultChoice } = buildModelFieldChoices({ current })
 
   const { pick } = await inquirer.prompt([{
     type: 'list',
@@ -71,7 +70,7 @@ async function pickModelField(input: {
   if (pick === MODEL_CHOICE_UNSET)
     return undefined
   if (pick === MODEL_CHOICE_CUSTOM) {
-    // 自定义输入：保留自由输入方式（可填不在生效清单内的模型）；留空视为取消（回退默认"留空"）
+    // 自定义输入：保留自由输入方式（不做清单限制）；留空视为取消（回退默认"留空"）
     const { custom } = await inquirer.prompt([{
       type: 'input',
       name: 'custom',
@@ -124,12 +123,11 @@ async function printCodexStatus(): Promise<void> {
  *
  * API 提供方列表 = config.toml 现有 [model_providers.*] 条目 + OpenAI 官方 + 自定义；
  * 选自定义时增量写入 config.toml（upsertModelProvider 文本合并，保注释）。
- * 模型三连候选 = 默认继承（留空）+ spawnableModels 生效清单（配置值或内置默认），
- * 不再以 provider /models 拉取结果为候选、不再提供自由输入入口。
+ * 模型三连候选 = 默认继承（留空）+ 自定义输入（任意模型名，能否 spawn 由宿主实际能力
+ * 决定，配置仅为提示并附示例 prompt 教用户验证；agent 模型需额外配置）。
  */
 async function collectCodexHostConfig(options: {
   defaults: CodexHostModels
-  spawnableModels: string[]
 }): Promise<CodexHostModels> {
   // ── Step 1: 选择 API 提供方 ──
   console.log()
@@ -197,7 +195,7 @@ async function collectCodexHostConfig(options: {
   // ── Step 2: Codex 现状检测（只读展示）──
   await printCodexStatus()
 
-  // ── Step 3: 模型三连（候选 = 留空 + spawnableModels 生效清单）──
+  // ── Step 3: 模型三连（候选 = 留空 + 自定义输入 + 既有值）──
   console.log()
   console.log(ansis.cyan.bold(`  🧠 ${i18n.t('init:model.trioTitle')}`))
   console.log()
@@ -207,7 +205,7 @@ async function collectCodexHostConfig(options: {
   const collected: CodexHostModels = {}
   for (const field of MODEL_FIELDS) {
     const current = options.defaults[field.key]?.trim() || undefined
-    const raw = await pickModelField({ field, models: options.spawnableModels, current })
+    const raw = await pickModelField({ field, current })
     collected[field.key] = field.sanitize(raw)
   }
   return collected
@@ -280,10 +278,8 @@ export async function init(options: InitOptions = {}): Promise<void> {
     reviewModelB: sanitizeModelField(existingConfig?.codexHost?.reviewModelB),
     codingModel: sanitizeModelField(existingConfig?.codexHost?.codingModel),
   }
-  // 模型三连候选/校验来源：生效清单（spawnableModels 基准；未显式配置时并入已配置模型字段值
-  // 与 codex 当前主模型 —— 用户已配置的模型按配置列出，选项含"默认继承"的实际主模型）
-  const currentModel = await readCodexCurrentModel()
-  const spawnableModels = resolveEffectiveModelList(existingConfig?.codexHost, { currentModel })
+  // 模型三连候选 = 默认继承（留空）+ 自定义输入 + 既有值；agent 模型需额外配置，
+  // 能否 spawn 由宿主实际能力决定（详见模板与 lycx doctor 提示）
   let collectedModels: CodexHostModels = { ...defaultModels }
 
   // ═══════════════════════════════════════════════════════
@@ -291,7 +287,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
   // ═══════════════════════════════════════════════════════
   if (!options.skipPrompt) {
     // ── API 提供方 → Codex 现状检测 → 模型三连 ──
-    collectedModels = await collectCodexHostConfig({ defaults: defaultModels, spawnableModels })
+    collectedModels = await collectCodexHostConfig({ defaults: defaultModels })
 
     // ── 摘要 ──
     printSummary({ models: collectedModels, commandCount: selectedWorkflows.length })

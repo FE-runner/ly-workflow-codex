@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultConfig, migrateLegacyConfig, readLyConfig, resolveEffectiveModelList, resolveSpawnableModels, sanitizeInstalledHosts, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
+import { createDefaultConfig, migrateLegacyConfig, readLyConfig, sanitizeInstalledHosts, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
 
 // 模块顶层常量（CONFIG_FILE / LY_DIR 等）在 import 时基于 homedir() 求值，
 // 因此 hoisted 阶段就创建固定临时 home，再 mock homedir() 指向它——
@@ -181,7 +181,7 @@ describe('sanitizeReviewModel', () => {
   })
 
   // 与 sanitizeModelField 同口径：仅 trim、不做字符白名单清洗（不再拼进 shell 命令串，
-  // 由模板指示 + 宿主 spawn 能力落实），保证与 spawnableModels 生效清单按原文比对不偏差
+  // 由模板指示 + 宿主 spawn 能力落实），含 @ 等字符的模型 id 原样保真
   it('preserves characters outside the whitelist (no whitelist cleaning)', () => {
     expect(sanitizeReviewModel('gpt 5.1')).toBe('gpt 5.1')
     expect(sanitizeReviewModel('vendor/model@beta')).toBe('vendor/model@beta')
@@ -207,7 +207,7 @@ describe('sanitizeModelField', () => {
   })
 })
 
-describe('sPAWNABLE_MODELS_DEFAULT / sanitizeSpawnableModels / resolveSpawnableModels (codex-model-config)', () => {
+describe('SPAWNABLE_MODELS_DEFAULT / sanitizeSpawnableModels (codex-model-config)', () => {
   it('defines the built-in default as the five OpenAI models', () => {
     expect(SPAWNABLE_MODELS_DEFAULT).toEqual([
       'gpt-6-astra',
@@ -241,70 +241,6 @@ describe('sPAWNABLE_MODELS_DEFAULT / sanitizeSpawnableModels / resolveSpawnableM
     expect(sanitizeSpawnableModels([42, null])).toEqual({ state: 'empty', models: [] })
   })
 
-  it('resolveSpawnableModels uses the configured list when valid', () => {
-    expect(resolveSpawnableModels({ spawnableModels: ['glm-5.3-flash'] })).toEqual(['glm-5.3-flash'])
-  })
-
-  it('resolveSpawnableModels falls back to the built-in default for unset / empty / invalid', () => {
-    expect(resolveSpawnableModels(undefined)).toEqual([...SPAWNABLE_MODELS_DEFAULT])
-    expect(resolveSpawnableModels({ spawnableModels: [] })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
-    expect(resolveSpawnableModels({ spawnableModels: '' })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
-    expect(resolveSpawnableModels({ spawnableModels: ['  '] })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
-  })
-})
-
-describe('resolveEffectiveModelList（生效清单：spawnableModels 基准 + 宽松路径并入已配置模型/主模型）', () => {
-  it('strict path: explicit spawnableModels is the base; configured field values always merge, main model does not', () => {
-    expect(resolveEffectiveModelList({ spawnableModels: ['glm-5.3-flash'] })).toEqual(['glm-5.3-flash'])
-    expect(resolveEffectiveModelList(
-      { spawnableModels: ['glm-5.3-flash'], reviewModel: 'gpt-5.6-luna' },
-      { currentModel: 'deepseek-v4.1-flash' },
-    )).toEqual(['glm-5.3-flash', 'gpt-5.6-luna'])
-  })
-
-  it('lenient path: unset spawnableModels → built-in default, no extras', () => {
-    expect(resolveEffectiveModelList(undefined)).toEqual([...SPAWNABLE_MODELS_DEFAULT])
-  })
-
-  it('lenient path: configured model fields and (when provided) the codex main model are merged in (deduped, in order)', () => {
-    expect(resolveEffectiveModelList({ reviewModel: 'glm-5.3-flash' })).toEqual([
-      ...SPAWNABLE_MODELS_DEFAULT,
-      'glm-5.3-flash',
-    ])
-    expect(resolveEffectiveModelList({ reviewModelB: 'glm-x', codingModel: '  glm-x ' })).toEqual([
-      ...SPAWNABLE_MODELS_DEFAULT,
-      'glm-x',
-    ])
-  })
-
-  it('lenient path: codex main model is merged in when detectable (deduped with same field value)', () => {
-    expect(resolveEffectiveModelList(undefined, { currentModel: 'deepseek-v4.1-flash' })).toEqual([
-      ...SPAWNABLE_MODELS_DEFAULT,
-      'deepseek-v4.1-flash',
-    ])
-    expect(resolveEffectiveModelList({ codingModel: 'deepseek-v4.1-flash' }, { currentModel: 'deepseek-v4.1-flash' })).toEqual([
-      ...SPAWNABLE_MODELS_DEFAULT,
-      'deepseek-v4.1-flash',
-    ])
-    // 主模型已在内置默认中 → 不重复
-    expect(resolveEffectiveModelList(undefined, { currentModel: 'gpt-5.6-luna' })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
-  })
-
-  it('lenient path: empty / invalid spawnableModels also merge field values and main model', () => {
-    expect(resolveEffectiveModelList({ spawnableModels: [] }, { currentModel: 'deepseek-v4.1-flash' })).toEqual([
-      ...SPAWNABLE_MODELS_DEFAULT,
-      'deepseek-v4.1-flash',
-    ])
-    expect(resolveEffectiveModelList({ spawnableModels: 'bad', reviewModel: 'glm-5.3-flash' })).toEqual([
-      ...SPAWNABLE_MODELS_DEFAULT,
-      'glm-5.3-flash',
-    ])
-  })
-
-  it('ignores blank field values and blank / undetectable main model', () => {
-    expect(resolveEffectiveModelList({ reviewModel: '  ' })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
-    expect(resolveEffectiveModelList(undefined, { currentModel: '   ' })).toEqual([...SPAWNABLE_MODELS_DEFAULT])
-  })
 })
 
 describe('createDefaultConfig spawnableModels 透传保全 (codex-model-config)', () => {

@@ -72,12 +72,12 @@ describe('integration: real templates have no MCP placeholders', () => {
     expect(rendered).toContain('gpt-6-astra')
   })
 
-  it('review-plan / review-code / apply templates carry the model availability validation rule and no unrendered placeholder', () => {
+  it('review-plan / review-code / apply templates carry the agent-model extra-setup hint and no unrendered placeholder', () => {
     for (const file of ['review-plan.md', 'review-code.md', 'apply.md']) {
       const rendered = injectConfigVariables(readFileSync(join(TEMPLATES_DIR, file), 'utf-8'), {})
-      expect(rendered, file).toContain('模型可用性校验')
-      expect(rendered, file).toContain('子代理模型配置无效')
+      expect(rendered, file).toContain('agent 模型需额外配置')
       expect(rendered, file).toContain('Available models')
+      expect(rendered, file).toContain('Unknown model')
       expect(rendered, file).toContain('无法读取配置，请运行 `lycx doctor` 检查')
       expect(rendered, file).not.toContain('{{SPAWNABLE_MODELS_DEFAULT}}')
     }

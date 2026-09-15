@@ -173,8 +173,8 @@ export function createDefaultConfig(options: {
  * codex 宿主审查模型（codexHost.reviewModel）清洗：
  * 非字符串 → undefined；仅 trim，空白视为未配置（回退当前会话模型）。
  * 与 reviewModelB/codingModel 的 sanitizeModelField 口径一致——模型指定经"模板指示 + 宿主
- * spawn 能力"落实，不再拼进 shell 命令串，无需字符白名单清洗；同时保证与 spawnableModels
- * 生效清单按原文比对时不发生清洗前后值错位（如清单内含 `@` 等字符的模型 id）。
+ * spawn 能力"落实，不再拼进 shell 命令串，无需字符白名单清洗；仅 trim 保真（含 `@` 等
+ * 字符的模型 id 原样保留）。
  */
 export function sanitizeReviewModel(value: unknown): string | undefined {
   if (typeof value !== 'string')
@@ -231,48 +231,4 @@ export function sanitizeSpawnableModels(value: unknown): SpawnableModelsSanitize
   return { state: 'ok', models }
 }
 
-/**
- * 生效清单解析：`[codexHost] spawnableModels` 清洗后合法非空用之；
- * 未配置 / 格式非法 / 清洗后为空均回退内置默认 SPAWNABLE_MODELS_DEFAULT。
- */
-export function resolveSpawnableModels(codexHost?: { spawnableModels?: unknown }): string[] {
-  const result = sanitizeSpawnableModels(codexHost?.spawnableModels)
-  return result.state === 'ok' ? result.models : [...SPAWNABLE_MODELS_DEFAULT]
-}
 
-/**
- * 子代理模型"生效清单"解析（doctor 校验 / init 与 menu 候选的统一来源）：
- * - 基准 = `[codexHost] spawnableModels` 清洗后合法非空清单；未配置 / 格式非法 / 清洗后为空
- *   回退内置默认 SPAWNABLE_MODELS_DEFAULT（与 resolveSpawnableModels 一致）。
- * - 已配置的 reviewModel/reviewModelB/codingModel 非空值（含向导自定义输入）SHALL 始终并入：
- *   用户显式指定的模型（无论来自清单选择还是自定义输入）视为合法，不被基准清单误判——
- *   审查 agent A/B 与 coding agent 统一口径，用户已配置的模型按配置列出。
- * - codex 当前主模型（~/.codex/config.toml 顶层 model，可检测时）仅在未显式配置
- *   spawnableModels（宽松路径）时并入；用户显式维护清单（严格路径）时不并入，
- *   "留空字段继承主模型"由 doctor 交叉校验 WARN 提示。
- * 返回去重后的模型名数组（保序：基准在前，并入在后）。
- */
-export function resolveEffectiveModelList(
-  codexHost?: {
-    reviewModel?: unknown
-    reviewModelB?: unknown
-    codingModel?: unknown
-    spawnableModels?: unknown
-  },
-  opts?: { currentModel?: string },
-): string[] {
-  const spawn = sanitizeSpawnableModels(codexHost?.spawnableModels)
-  const base = spawn.state === 'ok' ? spawn.models : [...SPAWNABLE_MODELS_DEFAULT]
-  const extras: string[] = []
-  for (const value of [codexHost?.reviewModel, codexHost?.reviewModelB, codexHost?.codingModel]) {
-    const model = sanitizeModelField(value)
-    if (model)
-      extras.push(model)
-  }
-  if (spawn.state !== 'ok') {
-    const current = opts?.currentModel?.trim()
-    if (current)
-      extras.push(current)
-  }
-  return [...new Set([...base, ...extras])]
-}

@@ -19,33 +19,24 @@ export interface ModelFieldChoices {
 
 /**
  * 模型字段候选构造（init 模型三连与 menu 审查模型编辑共用，保证候选/默认语义一致）：
- * 候选 = [默认继承当前会话模型（留空）] + 生效清单 + [自定义输入]；
- * 既有值非空且 ∈ 清单 → 默认该项；非空但 ∉ 清单 → 附加"保留当前值（不在可用列表，警告）"项并默认该项
- * （SHALL NOT 静默丢弃或覆盖既有值）；无既有值或空白 → 默认"留空"。
+ * 候选 = [默认继承当前会话模型（留空）] + [自定义输入] + [既有值（若有）]；
+ * 模型指定只保留两种方式：留空（继承当前会话模型）或自定义输入任意模型名
+ * （能否 spawn 由宿主实际能力决定，配置仅为提示）。既有值非空 → 附该项并默认，
+ * SHALL NOT 静默丢弃或覆盖；无既有值或空白 → 默认"留空"。
  */
-export function buildModelFieldChoices(input: { models: string[], current?: string }): ModelFieldChoices {
-  const { models, current } = input
+export function buildModelFieldChoices(input: { current?: string }): ModelFieldChoices {
+  const { current } = input
   const currentClean = current?.trim()
   const hasCurrent = currentClean !== undefined && currentClean !== ''
-  const inList = hasCurrent && models.includes(currentClean!)
 
   const choices: ModelFieldChoice[] = [
     { name: ansis.gray(i18n.t('init:model.unsetChoice')), value: MODEL_CHOICE_UNSET },
-    ...models.map(id => ({ name: id, value: id })),
     { name: ansis.cyan(i18n.t('init:model.customChoice')), value: MODEL_CHOICE_CUSTOM },
   ]
   let defaultChoice = MODEL_CHOICE_UNSET
   if (hasCurrent) {
-    if (inList) {
-      defaultChoice = currentClean!
-    }
-    else {
-      choices.push({
-        name: ansis.yellow(i18n.t('init:model.keepCurrentChoice', { model: currentClean! })),
-        value: currentClean!,
-      })
-      defaultChoice = currentClean!
-    }
+    choices.push({ name: currentClean!, value: currentClean! })
+    defaultChoice = currentClean!
   }
   return { choices, defaultChoice }
 }

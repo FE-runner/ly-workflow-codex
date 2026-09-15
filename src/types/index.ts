@@ -28,8 +28,8 @@ export interface LyConfig {
     reviewModelB?: string
     // coding subagent（实施）模型；未配置或空白时回退当前会话模型
     codingModel?: string
-    // 当前宿主显式 spawn 子代理可用的模型清单（候选/校验唯一来源）；
-    // 未配置或清洗后为空时回退内置默认 SPAWNABLE_MODELS_DEFAULT
+    // 提示参考：本机实测可 spawn 的模型清单（不作候选/校验来源，agent 模型可用性
+    // 由环境实际能力决定）；未配置或清洗后为空时提示口径回退 SPAWNABLE_MODELS_DEFAULT
     spawnableModels?: string[]
   }
 }

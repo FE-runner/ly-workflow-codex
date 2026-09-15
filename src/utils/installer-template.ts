@@ -58,10 +58,8 @@ export interface InjectConfig {
  * 此处只处理历史占位符兼容：{{REVIEWER_MODEL}}/{{IMPLEMENTER_MODEL}} 统一渲染为 codex、
  * 实施者条件块折叠、liteMode 标志剥离（Web UI/ly-wrapper 已不存在）。
  *
- * {{SPAWNABLE_MODELS_DEFAULT}}：注入内置默认列表文本（仅作后备）——模板正文在使用该占位时
- * 表达的语义是"未配置 spawnableModels 时用内置默认清单"；生效清单一律由模板运行时读取
- * `~/.ly/config.toml` 的 `[codexHost] spawnableModels` 决定，不把用户配置快照注入模板
- * （配置变更无需重装即可生效，避免模板携带过期配置值）。
+ * {{SPAWNABLE_MODELS_DEFAULT}}：历史占位符（简化契约后当前模板正文已不再引用，agent 模型
+ * 可用性不再做清单预校验）；保留替换机制兼容旧模板/旧安装位，内置默认仅作提示参考文本。
  */
 export function injectConfigVariables(content: string, _config?: InjectConfig): string {
   let processed = content

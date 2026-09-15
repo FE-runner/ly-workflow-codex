@@ -6,7 +6,7 @@ import { join } from 'pathe'
 import { version as packageVersion } from '../../package.json'
 import { i18n } from '../i18n'
 import { readCodexCurrentModel } from '../utils/codex-provider'
-import { LY_PROMPTS_DIR, readLyConfig, resolveEffectiveModelList, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels } from '../utils/config'
+import { LY_PROMPTS_DIR, readLyConfig, sanitizeModelField, sanitizeReviewModel, sanitizeSpawnableModels } from '../utils/config'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
 import { detectOpenspecCli, detectOpenspecSkills } from '../utils/preflight'
 
@@ -35,94 +35,67 @@ export interface SubagentModelFieldResult {
   key: string
   /** 配置值（清洗后）；undefined = 留空（回退当前会话模型） */
   value?: string
-  status: 'ok' | 'fail'
-  /** 判定原因：'unset' 留空 | 'in-list' 在可用清单内 | 'out-of-list' 不在可用清单内 */
-  okKind: 'unset' | 'in-list' | 'out-of-list'
+  status: 'ok'
+  /** 判定原因：'unset' 留空 | 'configured' 已配置 */
+  okKind: 'unset' | 'configured'
 }
 
 export interface SubagentModelConfigResult {
-  /** 总体状态：fail（存在清单外模型）> warn（spawnableModels 形态异常）> ok */
-  status: 'ok' | 'warn' | 'fail'
+  /** 总体状态：warn（spawnableModels 形态异常）> ok；模型字段本身只做提示不做强校验 */
+  status: 'ok' | 'warn'
   fields: SubagentModelFieldResult[]
-  /** 生效清单（用户配置或内置默认） */
-  effectiveModels: string[]
-  /** 清单来源：configured = 用户配置；builtin = 内置默认 */
-  listSource: 'configured' | 'builtin'
   /** spawnableModels 字段形态（empty/invalid 时对总体输出 WARN，区别于未配置的静默通过） */
   spawnState: 'unset' | 'ok' | 'empty' | 'invalid'
-  /** 留空字段将继承的当前会话模型不在生效清单（仅交叉校验命中时存在；WARN 提示来源） */
-  inheritedModel?: { model: string }
 }
 
 /**
  * 子代理模型配置审查（doctor 第 7 项核心判定，独立导出便于单测）：
- * 以生效清单（基准 = spawnableModels 或内置默认；已配置模型字段值始终并入、codex 主模型
- * 在未显式配置清单时并入，见 resolveEffectiveModelList）为校验来源，三个模型字段逐项判定——
- * 留空 = 通过（回退当前会话模型）；非空且 ∈ 生效清单 = 通过；非空且 ∉ = FAIL。
- * spawnableModels 字段显式存在但格式非法/清洗后为空 → 总体 WARN（区别于未配置）。
- * 可选交叉校验（opts.currentModel = ~/.codex/config.toml 顶层 model）：存在留空字段时，
- * 当前会话模型可检测到但 ∉ 生效清单（仅用户显式配置 spawnableModels 时可能）→ 总体 WARN
- * （提示"留空继承的模型可能不可 spawn"，事前体检尽力而为，运行期 spawn 失败兜底仍由
- * 模板规则承担）；未检测到则不提示。
+ * 三个模型字段只做提示不做清单强校验——留空 = 通过（回退当前会话模型）；非空 = 通过
+ * （已配置，标注"agent 模型需额外配置"：能否 spawn 由环境实际能力决定，不做预校验，
+ * 运行期以宿主 spawn 报错为准，见模板示例 prompt 验证方法）。spawnableModels 字段显式
+ * 存在但格式非法/清洗后为空 → 总体 WARN（区别于未配置，仅作形态提示）。
  */
-export function assessSubagentModelConfig(
-  codexHost: LyConfig['codexHost'],
-  opts?: { currentModel?: string },
-): SubagentModelConfigResult {
+export function assessSubagentModelConfig(codexHost: LyConfig['codexHost']): SubagentModelConfigResult {
   const spawn = sanitizeSpawnableModels(codexHost?.spawnableModels)
-  const effectiveModels = resolveEffectiveModelList(codexHost, { currentModel: opts?.currentModel })
 
   const fields: SubagentModelFieldResult[] = [
     { key: 'reviewModel', value: sanitizeReviewModel(codexHost?.reviewModel) },
     { key: 'reviewModelB', value: sanitizeModelField(codexHost?.reviewModelB) },
     { key: 'codingModel', value: sanitizeModelField(codexHost?.codingModel) },
-  ].map((f) => {
-    const ok = !f.value || effectiveModels.includes(f.value)
-    return {
-      key: f.key,
-      value: f.value,
-      status: ok ? 'ok' : 'fail',
-      okKind: !f.value ? 'unset' : ok ? 'in-list' : 'out-of-list',
-    }
-  })
+  ].map((f) => ({
+    key: f.key,
+    value: f.value,
+    status: 'ok' as const,
+    okKind: f.value ? 'configured' as const : 'unset' as const,
+  }))
 
-  const anyFail = fields.some(f => f.status === 'fail')
   const spawnWarn = spawn.state === 'empty' || spawn.state === 'invalid'
-  const currentModel = opts?.currentModel?.trim()
-  const hasUnsetField = fields.some(f => !f.value)
-  const inheritedModel = currentModel && hasUnsetField && !effectiveModels.includes(currentModel)
-    ? { model: currentModel }
-    : undefined
   return {
-    status: anyFail ? 'fail' : spawnWarn || inheritedModel ? 'warn' : 'ok',
+    status: spawnWarn ? 'warn' : 'ok',
     fields,
-    effectiveModels,
-    listSource: spawn.state === 'ok' ? 'configured' : 'builtin',
     spawnState: spawn.state,
-    inheritedModel,
   }
 }
 
-/** 第 7 项检查详情：逐字段判定 + 生效清单 + spawnableModels 形态 WARN */
+/** 第 7 项检查详情（单行）：逐字段提示 + spawnableModels 形态 WARN */
 function buildSubagentModelCheckDetail(result: SubagentModelConfigResult): string {
-  const parts = result.fields.map((f) => {
-    if (f.status === 'ok') {
-      return f.value
-        ? i18n.t('doctor:modelConfig.okInList', { key: f.key, model: f.value })
-        : i18n.t('doctor:modelConfig.okUnset', { key: f.key })
-    }
-    return i18n.t('doctor:modelConfig.failNotInList', { key: f.key, model: f.value })
-  })
-  const list = result.listSource === 'configured'
-    ? i18n.t('doctor:modelConfig.listConfigured', { list: result.effectiveModels.join(', ') })
-    : i18n.t('doctor:modelConfig.listBuiltin', { list: result.effectiveModels.join(', ') })
-  const spawnWarn = result.spawnState === 'empty' || result.spawnState === 'invalid'
-    ? `; ${i18n.t('doctor:modelConfig.warnInvalid')}`
-    : ''
-  const inheritedWarn = result.inheritedModel
-    ? `; ${i18n.t('doctor:modelConfig.warnInheritNotInList', { model: result.inheritedModel.model })}`
-    : ''
-  return `${parts.join('; ')}; ${list}${spawnWarn}${inheritedWarn}`
+  const parts = result.fields.map((f) =>
+    f.value
+      ? i18n.t('doctor:modelConfig.okConfigured', { key: f.key, model: f.value })
+      : i18n.t('doctor:modelConfig.okUnset', { key: f.key }),
+  )
+  if (result.spawnState === 'empty' || result.spawnState === 'invalid')
+    parts.push(i18n.t('doctor:modelConfig.warnInvalid'))
+  return parts.join('; ')
+}
+
+/** 第 7 项补充提示（附在检查列表后）：agent 模型需额外配置 + 示例验证 prompt */
+function buildSubagentModelHintLines(currentModel?: string): string[] {
+  const lines = [i18n.t('doctor:modelConfig.agentNeedConfig')]
+  if (currentModel)
+    lines.push(i18n.t('doctor:modelConfig.inheritNote', { model: currentModel }))
+  lines.push(i18n.t('doctor:modelConfig.verifyHint'))
+  return lines
 }
 
 export async function doctor(): Promise<void> {
@@ -179,14 +152,15 @@ export async function doctor(): Promise<void> {
     detail: hasOpenspecSkills ? i18n.t('common:doctor.skillsInitialized') : i18n.t('common:doctor.skillsMissing'),
   })
 
-  // 7. Codex 子代理模型配置（候选/校验来源 = 生效清单：spawnableModels 基准 + 已配置字段值始终并入 + 未显式配置清单时并入 codex 主模型）。
+  // 7. Codex 子代理模型配置（提示型）：三字段留空 = 继承当前会话模型；非空 = 已配置
+  // （agent 模型需额外配置，能否 spawn 由环境实际能力决定，不做清单强校验）。
   // config 缺失时第 7 项仍按全字段未配置判定 OK（行为可接受）：config 文件缺失已由
   // 第 1 项 config 检查（WARN）兜底，此处无需重复报错。
   const currentModel = await readCodexCurrentModel()
-  const modelCheck = assessSubagentModelConfig(config?.codexHost, { currentModel })
+  const modelCheck = assessSubagentModelConfig(config?.codexHost)
   checks.push({
     label: i18n.t('doctor:modelConfig.label'),
-    status: modelCheck.status === 'fail' ? FAIL : modelCheck.status === 'warn' ? WARN : OK,
+    status: modelCheck.status === 'warn' ? WARN : OK,
     detail: buildSubagentModelCheckDetail(modelCheck),
   })
 
@@ -197,6 +171,8 @@ export async function doctor(): Promise<void> {
   for (const { label, status, detail } of checks) {
     console.log(`  ${status} ${ansis.bold(label.padEnd(20))} ${ansis.gray(detail)}`)
   }
+  for (const line of buildSubagentModelHintLines(currentModel))
+    console.log(ansis.gray(`     ${line}`))
 
   const failures = checks.filter(c => c.status === FAIL)
   console.log()
