@@ -115,7 +115,7 @@ export async function writeLyConfig(config: LyConfig): Promise<void> {
 export function createDefaultConfig(options: {
   language: SupportedLang
   installedWorkflows: string[]
-  codexHost?: { reviewModel?: string }
+  codexHost?: { reviewModel?: string; reviewModelB?: string; codingModel?: string }
   /** 已安装宿主集合（兼容旧配置；codex 单宿主缺省 ['codex']） */
   installedHosts?: HostId[]
 }): LyConfig {
@@ -138,8 +138,16 @@ export function createDefaultConfig(options: {
     },
   }
   const reviewModel = sanitizeReviewModel(options.codexHost?.reviewModel)
-  if (reviewModel) {
-    config.codexHost = { reviewModel }
+  // 新字段（reviewModelB/codingModel）直接透传：仅做 trim、空白视为未配置（回退当前会话模型），
+  // 不做字符白名单清洗——它们不再拼进 shell 命令串，由模板指示 + 宿主 spawn 能力落实
+  const reviewModelB = options.codexHost?.reviewModelB?.trim() || undefined
+  const codingModel = options.codexHost?.codingModel?.trim() || undefined
+  if (reviewModel || reviewModelB || codingModel) {
+    config.codexHost = {
+      ...(reviewModel ? { reviewModel } : {}),
+      ...(reviewModelB ? { reviewModelB } : {}),
+      ...(codingModel ? { codingModel } : {}),
+    }
   }
   return config
 }
@@ -147,8 +155,8 @@ export function createDefaultConfig(options: {
 /**
  * codex 宿主审查模型（codexHost.reviewModel）清洗：
  * 非字符串 → undefined；先 trim，再按白名单 [A-Za-z0-9._:/-] 剔除非法字符
- * （该值会拼进 `codex exec -m <model>` 命令串，只允许模型名安全字符）；
- * 剔除后为空 → undefined（渲染时回退当前会话模型，exec 不带 -m）。
+ * （该值作为审查 agent A 的模型指定写入模板指示，只允许模型名安全字符）；
+ * 剔除后为空 → undefined（回退当前会话模型）。
  */
 export function sanitizeReviewModel(value: unknown): string | undefined {
   if (typeof value !== 'string')

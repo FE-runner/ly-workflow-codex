@@ -79,7 +79,7 @@ const zhCN = {
   init: {
     selectLanguage: '选择语言 / Select language',
     host: {
-      reviewModelPrompt: '审查模型（渲染进 codex exec -m，留空回退当前会话模型）',
+      reviewModelPrompt: '审查 agent A 模型（留空回退当前会话模型；agent B / coding 模型暂不在此设置）',
       reviewModelHint: '常见如 gpt-5.1-codex / gpt-5.1 / o4-mini，可自由输入；留空回退',
       codexSummaryTitle: 'Codex 配置摘要:',
       reviewModelUnset: '未配置（回退当前会话模型）',
@@ -289,7 +289,7 @@ const en: typeof zhCN = {
   init: {
     selectLanguage: 'Select language / 选择语言',
     host: {
-      reviewModelPrompt: 'Review model (rendered into codex exec -m; empty = fall back to the current session model)',
+      reviewModelPrompt: 'Model for review agent A (empty = fall back to the current session model; agent B / coding model not configured here)',
       reviewModelHint: 'e.g. gpt-5.1-codex / gpt-5.1 / o4-mini, free-form input; leave empty to fall back',
       codexSummaryTitle: 'Codex Configuration Summary:',
       reviewModelUnset: 'not configured (fall back to the current session model)',

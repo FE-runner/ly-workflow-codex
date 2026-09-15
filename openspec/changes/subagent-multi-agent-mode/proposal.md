@@ -38,7 +38,9 @@ v0.1.0 拆分后的执行模型为：审查走 `codex exec` 独立子会话（�
 - `src/types/index.ts`：`codexHost` 新增 `codingModel?` / `reviewModelB?`。
 - `src/utils/host-adapters.ts` / `installer-template.ts`：模板渲染按新字段回退语义处理（未配置 → 模板指示当前会话模型）。
 - `docs/codex-exec-contract.md`：标 DEPRECATED；模板不再引用。
+- `AGENTS.md`：审查/实施执行模型与关键设计决策同步为 subagent 多 Agent 模式。
 - `openspec/changes/subagent-multi-agent-mode/specs/ly-lifecycle-commands/spec.md`：新增 delta——`ly-lifecycle-commands` 实施主体语义同步。
+- `src/i18n/index.ts`：init 向导审查模型提示语改为"审查 agent A 模型"语义；`src/utils/installer-data.ts`：apply 命令注册描述改为 coding subagent 实施。
 - 测试：`src/utils/__tests__/host-adapters.test.ts`、`installer.test.ts` 中 exec 契约断言更新为 subagent 语义；`config.test.ts` 补新字段断言。
 - 文档：根 CLAUDE.md / templates/CLAUDE.md / README 中"审查执行模型"与 exec 契约引用同步。
 - 升级路径：模板/契约改动仅在重装后生效——已安装用户（`~/.agents/skills/lyx-*`）需运行 `lycx update` 重新渲染模板，旧 exec 契约引用随重装移除。

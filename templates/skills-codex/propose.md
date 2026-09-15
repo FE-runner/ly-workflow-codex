@@ -122,11 +122,11 @@ argument-hint: '<需求描述>'
 
 **全程无隔离方式询问、不自动 archive。**
 
-1. 自动执行 `@lyx-review-plan <change-name>` 编排流程（完整指示见 `@ly@lyx-review-plan skill 的指示`，按其指示逐轮执行审查-修复循环；审查对象为 `propose:` commit，清零时由循环统一提交修复）。
+1. 自动执行 `@lyx-review-plan <change-name>` 编排流程（完整指示见 `@lyx-review-plan skill 的指示`，按其指示逐轮执行审查-修复循环；审查由**双审查 subagent** 执行——fork 当前会话上下文 + 范围点名 + 独立审 → 交换 → 共识，模型按 `reviewModel`/`reviewModelB` 分别指定；审查对象为 `propose:` commit，清零时由循环统一提交修复）。
    - Critical 清零 → 进入下一步。
    - 其余任一种终止（熔断、分歧未决、无法安全修复、验证失败、审查调用失败、达到轮数上限）→ **停止流水线**，复用该循环已产出的终止报告（不重新生成或重复一份）报告终止原因，结束，不执行后续步骤。
-2. 自动执行 `@lyx-apply <change-name>` 编排流程（完整指示见 `@ly@lyx-apply skill 的指示`；实施，产物立即 commit `apply: <change-name>`）。
-3. 自动执行 `@lyx-review-code <change-name>` 编排流程（完整指示见 `@ly@lyx-review-code skill 的指示`；审查对象为 `apply:` commit，清零时由循环统一提交修复）。
+2. 自动执行 `@lyx-apply <change-name>` 编排流程（完整指示见 `@lyx-apply skill 的指示`；实施由 **coding subagent** 执行——fork 当前会话上下文 + 只实施 change 范围，模型按 `codexHost.codingModel` 指定、未配置回退当前会话模型；实施完成回传主会话，主会话确认后统一提交 `apply: <change-name>`）。
+3. 自动执行 `@lyx-review-code <change-name>` 编排流程（完整指示见 `@lyx-review-code skill 的指示`；审查同样由**双审查 subagent** 执行；审查对象为 `apply:` commit，清零时由循环统一提交修复）。
    - Critical 清零 → 流水线结束，提示可手动 `@lyx-archive` 归档。
    - 其余任一种终止 → **停止流水线**，复用该循环已产出的终止报告报告终止原因，结束。
 4. 流水线执行过程中任一环节 `git commit` 失败：如实报告 Git 原始错误，停止流水线。
@@ -139,7 +139,7 @@ argument-hint: '<需求描述>'
    ```
    - **否** → 编排结束。方案已 commit；日后由用户自行 `@lyx-apply` 实施、`@lyx-review-code` 审查。
    - **是** → 继续步骤 2。
-2. 执行 `@lyx-review-plan <change-name>` 编排流程（审查对象为 `propose:` commit，清零时由循环统一提交修复）。
+2. 执行 `@lyx-review-plan <change-name>` 编排流程（审查由**双审查 subagent** 执行；审查对象为 `propose:` commit，清零时由循环统一提交修复）。
 3. 循环终止（无论何种原因）后编排结束，**不再询问隔离方式、不再询问提交、不自动衔接 apply**——日后的实施与代码审查由用户另行 `@lyx-apply`、`@lyx-review-code` 触发。
 
 ---

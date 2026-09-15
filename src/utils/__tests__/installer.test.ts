@@ -170,7 +170,7 @@ describe('template variable completeness', () => {
 
     it(`${relativePath}: no unprocessed {{variables}} after full injection`, () => {
       const content = readFileSync(file, 'utf-8')
-      // codex 模板渲染链：injectConfigVariables → renderCodexTemplate(REVIEW_MODEL)
+      // codex 模板渲染链：injectConfigVariables → renderCodexTemplate(REVIEW_MODEL 兼容处理)
       const result = renderCodexTemplate(content, { reviewModel: 'gpt-5.1' })
 
       // Find any remaining {{ }} template variables
@@ -182,6 +182,24 @@ describe('template variable completeness', () => {
       expect(lyVars, `unprocessed variables in ${relativePath}: ${lyVars.join(', ')}`).toEqual([])
     })
   }
+
+  it('rendered review/apply templates contain subagent orchestration, no exec residue', () => {
+    const cases: Array<[string, string]> = [
+      ['review-plan.md', 'subagent'],
+      ['review-code.md', 'subagent'],
+      ['apply.md', 'coding subagent'],
+    ]
+    for (const [file, marker] of cases) {
+      const content = readFileSync(join(TEMPLATES_DIR, file), 'utf-8')
+      const rendered = renderCodexTemplate(content, { reviewModel: 'gpt-5.1' })
+      expect(rendered, file).toContain(marker)
+      expect(rendered, file).not.toContain('codex exec')
+      expect(rendered, file).not.toContain('CODEAGENT_EOF')
+      expect(rendered, file).not.toContain('resume')
+      expect(rendered, file).not.toContain('session_id')
+      expect(rendered, file).not.toContain('{{REVIEW_MODEL}}')
+    }
+  })
 })
 
 // ─────────────────────────────────────────────────────────────

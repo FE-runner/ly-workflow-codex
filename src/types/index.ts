@@ -22,8 +22,12 @@ export interface LyConfig {
   }
   // codex 宿主（单 Agent 模式）专属配置
   codexHost?: {
-    // 审查模型：渲染进 codex 版审查命令模板的 `-m` 参数；未配置时回退当前会话模型
+    // 审查 agent A 模型（双审查 subagent 之一）；未配置或空白时回退当前会话模型
     reviewModel?: string
+    // 审查 agent B 模型（双审查 subagent 之二）；未配置或空白时回退当前会话模型
+    reviewModelB?: string
+    // coding subagent（实施）模型；未配置或空白时回退当前会话模型
+    codingModel?: string
   }
 }
 

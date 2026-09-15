@@ -1,3 +1,5 @@
+> ⚠️ **DEPRECATED（自本 change `subagent-multi-agent-mode` 起）**：审查/实施已迁移 **subagent 多 Agent 模式**（双审查 subagent + coding subagent，spawn 协议/任务构造/共识与分歧裁决内联写入 `templates/skills-codex/review-plan.md`、`review-code.md`、`apply.md`），**模板不再引用本文档**。本文档仅作历史参考保留——subagent 为宿主原生能力，不再有 shell 调用契约的版本漂移维护面。
+
 # codex exec 独立子会话调用契约
 
 > 适用范围：`templates/skills-codex/review-plan.md` 与 `templates/skills-codex/review-code.md` 的审查子会话调用。

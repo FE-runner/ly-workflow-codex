@@ -10,7 +10,7 @@
 
 | 目录 | 用途 | 安装目标 |
 |------|------|----------|
-| `skills-codex/` | 14 个 SKILL.md 模板（codex 宿主单 Agent 版，`name`/`description`/`argument-hint` frontmatter；审查走 `codex exec` 独立子会话 + resume 续聊，apply 当前会话自实施，无 wrapper/OVERALL/条件块） | `~/.agents/skills/lyx-*/SKILL.md` |
+| `skills-codex/` | 14 个 SKILL.md 模板（codex 宿主单 Agent 版，`name`/`description`/`argument-hint` frontmatter；审查走**双审查 subagent**、实施走 **coding subagent**——fork 当前会话上下文 + 范围点名，模型经模板指示 + 宿主能力落实，无 wrapper/OVERALL/条件块） | `~/.agents/skills/lyx-*/SKILL.md` |
 | `prompts/codex/` | 2 个审查角色提示词（plan-reviewer/reviewer），审查命令 ROLE_FILE 引用 | `~/.ly/prompts/codex/` |
 
 ## skills-codex/（14 个）
@@ -20,10 +20,10 @@
 | `init.md` | 真逻辑 | 生成 AGENTS.md + `openspec init` + 自动 commit |
 | `explore.md` | 薄壳委托 | 直接调用 `@openspec-explore skill`，收敛到方案时提示转 `@lyx-propose` |
 | `propose.md` | 真逻辑 | 委托 `@openspec-propose skill` + 创建方案前隔离三选一（隔离 worktree【同会话 cd 续跑】/本项目切新分支/留在当前分支）+ 全自动/手动两路径 + commit 前方案自审 |
-| `apply.md` | 真逻辑 | 当前会话本人读 tasks.md 逐任务实施+验证+勾 checkbox → commit `apply: <change-name>`；无外部委托 |
+| `apply.md` | 真逻辑 | coding subagent 读 tasks.md 逐任务实施+验证+勾 checkbox → 回传主会话，主会话确认后统一 commit `apply: <change-name>`；环境级不可用回退当前会话，业务失败转人工 |
 | `archive.md` | 真逻辑 | 委托 `@openspec-archive-change skill` 归档 + 自动 commit |
-| `review-plan.md` | 真逻辑 | `codex exec` 独立子会话审方案（`plan-reviewer.md`），审查-修复循环（全局轮数上限 5，清零优先），清零后统一提交 |
-| `review-code.md` | 真逻辑 | `codex exec` 独立子会话审代码（`reviewer.md`），Critical/Warning/Info 分级，审查-修复循环，清零后统一提交 |
+| `review-plan.md` | 真逻辑 | 双审查 subagent 审方案（`plan-reviewer.md`，fork 上下文 + 范围点名），独立审→交换→共识，分歧主会话拍板；审查-修复循环（全局轮数上限 5，清零优先），清零后统一提交 |
+| `review-code.md` | 真逻辑 | 双审查 subagent 审代码（`reviewer.md`，fork 上下文 + 范围点名），Critical/Warning/Info 分级，同循环 |
 | `commit.md` `rollback.md` `clean-branches.md` | Git 工具 | 不变 |
 | `worktree.md` | Git 工具 | 默认 `~/.ly/worktrees/<项目名>/` 单层平铺；`switch` 子命令已移除，隔离切换由 `@lyx-propose` 触发 |
 | `release.md` | 真逻辑 | GitFlow 四场景（feature/release/hotfix/dev-offline），SemVer + Conventional Commits 自动推导版本号 |
@@ -40,7 +40,7 @@
 
 | 占位符 | 说明 |
 |--------|------|
-| `{{REVIEW_MODEL}}` | 审查子会话模型（codex exec `-m` 参数）；未配置时不渲染，回退当前会话模型 |
+| `{{REVIEW_MODEL}}` | **历史兼容占位**（subagent 多 Agent 模式已不再使用）：模型经模板指示 + 宿主 spawn 能力落实（`reviewModel`/`reviewModelB`/`codingModel` 写入模板正文，未配置回退当前会话模型），模板不含模型渲染占位符；`{{REVIEW_MODEL}}` 处理仅保留给历史模板/旧安装位渲染兼容 |
 
 其余旧占位符（`{{REVIEWER_MODEL}}`/`{{IMPLEMENTER_MODEL}}`/`{{LITE_MODE_FLAG}}` 等，双宿主时代的后端路由/条件块语义）已随本次裁剪移除。
 

@@ -44,13 +44,24 @@ describe('codex template set', () => {
     }
   })
 
-  it('review templates render codex exec orchestration (no wrapper residue)', () => {
+  it('review templates render dual-reviewer subagent orchestration (no exec residue)', () => {
     for (const name of ['review-plan.md', 'review-code.md']) {
       const content = readFileSync(join(SKILLS_TEMPLATES_DIR, name), 'utf-8')
-      expect(content).toContain('codex exec -C "$WORKDIR" --json -m {{REVIEW_MODEL}} -')
-      expect(content).toContain('codex exec -C "$WORKDIR" --json resume <session-id> -')
-      expect(content).toContain('session_id')
-      expect(content).toMatch(/ROLE_FILE: ~\/\.ly\/prompts\/codex\/(plan-reviewer|reviewer)\.md/)
+      // 双审查 subagent 编排指示
+      expect(content).toMatch(/2 个并行审查 subagent|两个审查 subagent|双审查 subagent/)
+      expect(content).toContain('独立审查')
+      expect(content).toContain('交换')
+      expect(content).toContain('共识')
+      expect(content).toContain('显式提示用户"这是审查分歧"')
+      expect(content).toContain('reviewModelB')
+      expect(content).not.toContain('codingModel') // review 模板不引用实施模型
+      expect(content).toMatch(/~\/\.ly\/prompts\/codex\/(plan-reviewer|reviewer)\.md/)
+      // 不再走 codex exec 独立子会话
+      expect(content).not.toContain('codex exec')
+      expect(content).not.toContain('CODEAGENT_EOF')
+      expect(content).not.toContain('resume')
+      expect(content).not.toContain('session_id')
+      expect(content).not.toContain('{{REVIEW_MODEL}}')
       expect(content).not.toContain('ly-wrapper')
       expect(content).not.toContain('{{LITE_MODE_FLAG}}')
       expect(content).not.toContain('{{REVIEWER_MODEL}}')
@@ -60,9 +71,22 @@ describe('codex template set', () => {
     }
   })
 
-  it('apply template is self-implementation only (no delegation machinery)', () => {
+  it('apply template is coding-subagent implementation (main session commits)', () => {
     const content = readFileSync(join(SKILLS_TEMPLATES_DIR, 'apply.md'), 'utf-8')
-    expect(content).toContain('逐任务实施')
+    expect(content).toContain('coding subagent')
+    expect(content).toContain('codingModel')
+    expect(content).toContain('fork 当前会话上下文')
+    expect(content).toContain('只实施 change 范围')
+    expect(content).toContain('回传主会话，不自行 commit')
+    // 环境级不可用回退 vs 业务失败转人工
+    expect(content).toContain('环境级不可用')
+    expect(content).toContain('转人工')
+    // 实施产物由主会话统一提交；无 exec 残留
+    expect(content).toContain('git commit -m "apply: <change-name>"')
+    expect(content).not.toContain('codex exec')
+    expect(content).not.toContain('CODEAGENT_EOF')
+    expect(content).not.toContain('resume')
+    expect(content).not.toContain('session_id')
     expect(content).not.toContain('ly-wrapper')
     expect(content).not.toMatch(/OVERALL:\s*(PASS|FAIL)/)
     expect(content).not.toContain('LY:IF')
@@ -179,20 +203,24 @@ describe('installWorkflows — codex host', () => {
     expect(installed).toContain('lyx-review-plan')
     expect(fs.existsSync(join(codexSkillsDir, 'lyx-apply', 'SKILL.md'))).toBe(true)
 
-    // 渲染产物：REVIEW_MODEL 未配置 → -m 参数被剥离；无 wrapper 残留
+    // 渲染产物：双审查 subagent 编排指示；REVIEW_MODEL 未配置也无 -m/exec 残留；无 wrapper 残留
     const reviewPlan = readFileSync(join(codexSkillsDir, 'lyx-review-plan', 'SKILL.md'), 'utf-8')
-    expect(reviewPlan).toContain('codex exec -C "$WORKDIR" --json -')
-    expect(reviewPlan).toContain('session_id')
+    expect(reviewPlan).toContain('双审查')
+    expect(reviewPlan).toContain('reviewModelB')
+    expect(reviewPlan).toContain('/.ly/prompts/codex/plan-reviewer.md')
+    expect(reviewPlan).not.toContain('codex exec')
+    expect(reviewPlan).not.toContain('CODEAGENT_EOF')
+    expect(reviewPlan).not.toContain('resume')
+    expect(reviewPlan).not.toContain('session_id')
     expect(reviewPlan).not.toContain('ly-wrapper')
     expect(reviewPlan).not.toContain('{{REVIEW_MODEL}}')
-    expect(reviewPlan).toContain('/.ly/prompts/codex/plan-reviewer.md')
 
     // 共享角色词安装到 lyPromptsDir/codex/
     expect(fs.existsSync(join(lyPromptsDir, 'codex', 'reviewer.md'))).toBe(true)
     expect(fs.existsSync(join(lyPromptsDir, 'codex', 'plan-reviewer.md'))).toBe(true)
   })
 
-  it('renders configured reviewModel into installed templates', async () => {
+  it('rendered review templates keep subagent orchestration when reviewModel configured', async () => {
     const result = await installWorkflows(
       getAllCommandIds(),
       codexDir,
@@ -201,7 +229,12 @@ describe('installWorkflows — codex host', () => {
     )
     expect(result.success).toBe(true)
     const reviewPlan = readFileSync(join(codexSkillsDir, 'lyx-review-plan', 'SKILL.md'), 'utf-8')
-    expect(reviewPlan).toContain('codex exec -C "$WORKDIR" --json -m gpt-5.1-codex -')
+    // 模型经模板指示 + 宿主 spawn 能力落实：配置的 reviewModel 值以指示文字形式存在于模板，
+    // 不出现 codex exec -m 调用形态
+    expect(reviewPlan).toContain('reviewModel')
+    expect(reviewPlan).toContain('双审查')
+    expect(reviewPlan).not.toContain('codex exec')
+    expect(reviewPlan).not.toContain('-m {{REVIEW_MODEL}}')
   })
 
   it('does not create claude-side artifacts', async () => {

@@ -46,7 +46,10 @@ export const PACKAGE_ROOT = findPackageRoot(__dirname)
 
 /**
  * Replace template variables in content based on user configuration.
- * codex 单宿主：审查/实施均发生在当前 Codex 会话，占位符统一渲染为 codex、
+ * codex 单宿主（subagent 多 Agent 模式）：审查/实施模型经"模板指示 + 宿主能力"落实——
+ * 模板正文写明各 subagent 取 `codexHost.reviewModel`/`reviewModelB`/`codingModel` 的哪个字段、
+ * 未配置回退当前会话模型，无 shell 层模型参数，因此模板不含这些模型的渲染占位符。
+ * 此处只处理历史占位符兼容：{{REVIEWER_MODEL}}/{{IMPLEMENTER_MODEL}} 统一渲染为 codex、
  * 实施者条件块折叠、liteMode 标志剥离（Web UI/ly-wrapper 已不存在）。
  */
 export function injectConfigVariables(content: string, _config?: { reviewModel?: string }): string {

@@ -51,7 +51,7 @@ const CORE_CONFIGS: WorkflowConfig[] = [
   // ── OpenSpec lifecycle (thin delegation to opsx:* skills) ──
   cmd('explore', 20, 'opsx', '探索模式', 'Explore', '委托 opsx:explore，想清楚再动手', 'Delegates to opsx:explore — think before you build'),
   cmd('propose', 21, 'opsx', '提出方案', 'Propose', '委托 opsx:propose，生成 proposal/design/tasks', 'Delegates to opsx:propose — generates proposal/design/tasks'),
-  cmd('apply', 22, 'opsx', '实施方案', 'Apply', '当前会话自实施 tasks：读 tasks.md 逐任务实施+验证+勾选，全部完成后立即 commit', 'Implements tasks in the current session: reads tasks.md, implements + verifies + checks, commits immediately on completion'),
+  cmd('apply', 22, 'opsx', '实施方案', 'Apply', 'coding subagent 实施 tasks：读 tasks.md 逐任务实施+验证+勾选，回传主会话统一 commit', 'Implements tasks via a coding subagent: reads tasks.md, implements + verifies + checks, returns to the main session for commit'),
   cmd('archive', 23, 'opsx', '归档方案', 'Archive', '委托 opsx:archive，完成后归档', 'Delegates to opsx:archive — archives a completed change'),
 
   // ── Review gates (Codex-backed) ──────────────────────

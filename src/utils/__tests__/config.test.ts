@@ -110,6 +110,26 @@ describe('createDefaultConfig (codex 单宿主)', () => {
     expect(config.codexHost?.reviewModel).toBe('gpt-5.1-codex')
   })
 
+  it('stores codexHost.reviewModelB and codingModel when provided (direct pass-through)', () => {
+    const config = createDefaultConfig({
+      ...baseOptions,
+      codexHost: { reviewModel: 'a', reviewModelB: 'b', codingModel: 'c' },
+    })
+    expect(config.codexHost?.reviewModel).toBe('a')
+    expect(config.codexHost?.reviewModelB).toBe('b')
+    expect(config.codexHost?.codingModel).toBe('c')
+  })
+
+  it('treats blank new fields as unset (fall back to session model)', () => {
+    const config = createDefaultConfig({
+      ...baseOptions,
+      codexHost: { reviewModel: 'a', reviewModelB: '  ', codingModel: '' },
+    })
+    expect(config.codexHost?.reviewModel).toBe('a')
+    expect(config.codexHost?.reviewModelB).toBeUndefined()
+    expect(config.codexHost?.codingModel).toBeUndefined()
+  })
+
   it('omits codexHost when reviewModel is blank', () => {
     const config = createDefaultConfig({ ...baseOptions, codexHost: { reviewModel: '  ' } })
     expect(config.codexHost).toBeUndefined()
@@ -140,7 +160,7 @@ describe('sanitizeReviewModel', () => {
     expect(sanitizeReviewModel(undefined)).toBeUndefined()
   })
 
-  // 白名单 [A-Za-z0-9._:/-]——该值拼进 `codex exec -m` 命令串
+  // 白名单 [A-Za-z0-9._:/-]——该值作为审查 agent A 模型指定写入模板指示
   it('keeps whitelist characters (letters/digits/dot/underscore/colon/slash/hyphen)', () => {
     expect(sanitizeReviewModel('gpt-5.1-codex')).toBe('gpt-5.1-codex')
     expect(sanitizeReviewModel('openai/gpt-5.1:high')).toBe('openai/gpt-5.1:high')
