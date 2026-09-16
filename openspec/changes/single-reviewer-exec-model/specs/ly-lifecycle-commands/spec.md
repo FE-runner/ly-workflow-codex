@@ -2,7 +2,7 @@
 
 ### Requirement: Explore 命令是纯委托；Apply 由当前会话本人实施完成立即提交；Propose 是编排入口
 
-**实施主体变更（自本 change 起）**：本 Requirement 中 `/ly:apply` 的"由当前会话本人实施"语义 SHALL 依 `ly-propose-flow` 的 ADDED Requirement"apply 实施由 coding subagent 执行"改写——实施环节由 coding subagent（**非 fork spawn（只携带 TASK）** + 只实施 change 范围 + 经 `context.md` 获取软上下文 + 按 `codexHost.codingModel` 指定模型）执行，主会话保留 git 提交权；本 Requirement 中"无外部委托、无 wrapper 调用"SHALL 解读为"无 wrapper/外部进程调用，subagent 委托除外"。本块场景名沿用历史标签、不作为行为依据，语义以正文为准；涉及 apply 的场景标题中"当前会话本人实施"为历史措辞，实施主体以正文（coding subagent）为准。
+**实施主体变更（自本 change 起）**：本 Requirement 中 `/ly:apply` 的"由当前会话本人实施"语义 SHALL 依 `ly-propose-flow` 的 MODIFIED Requirement"apply 实施由 coding subagent 执行"（见 `ly-propose-flow` 基线既有 Requirement，本次 delta 为修改而非新增）改写——实施环节由 coding subagent（**非 fork spawn（只携带 TASK）** + 只实施 change 范围 + 经 `context.md` 获取软上下文 + 按 `codexHost.codingModel` 指定模型）执行，主会话保留 git 提交权；本 Requirement 中"无外部委托、无 wrapper 调用"SHALL 解读为"无 wrapper/外部进程调用，subagent 委托除外"。本块场景名沿用历史标签、不作为行为依据，语义以正文为准；涉及 apply 的场景标题中"当前会话本人实施"为历史措辞，实施主体以正文（coding subagent）为准。
 
 `/ly:explore` 必须（SHALL）只调用 `opsx:explore`，原样转发 `$ARGUMENTS`，不得包含自定义的多模型分派、环境校验，或超出底层技能本身的输出后处理逻辑；讨论收敛到"要落地方案"时提示用户切换 `/ly:propose`，explore 本身不接管 artifact 创建。
 

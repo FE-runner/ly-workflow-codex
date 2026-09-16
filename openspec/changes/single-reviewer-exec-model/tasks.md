@@ -8,7 +8,7 @@
 
 ## 2. propose / apply 模板与 context.md 生命周期
 
-- [ ] 2.1 `templates/skills-codex/propose.md`：在"方案自审 → commit"之间新增 context.md 产出环节（内容边界按 review-context-artifact：决策/否决理由/范围边界/已知坑，≤100 行，无实质内容产出最小骨架），纳入 `propose:` commit
+- [ ] 2.1 `templates/skills-codex/propose.md`：在"方案自审 → commit"之间新增 context.md 产出环节（内容边界按 review-context-artifact：决策/否决理由/范围边界/已知坑，≤100 行，无实质内容产出最小骨架；产出时完成内容边界自检——无整段重复、决策可溯源、行数达标，自检不过修订重检），纳入 `propose:` commit
 - [ ] 2.2 `templates/skills-codex/apply.md`：coding subagent 改为非 fork spawn（TASK 含 context.md 路径引用 + 只实施 change 范围点名）；新增"实施完成后回写 context.md（只增不删，随 apply: commit）"环节
 - [ ] 2.3 `templates/prompts/codex/reviewer.md` 与 `plan-reviewer.md` 确认无需改动（角色词行为契约不重写；若其中含"等待另一 agent 结论"类措辞才做最小修正）
 
@@ -23,7 +23,7 @@
 
 - [ ] 4.1 `AGENTS.md` 审查执行模型章节重写（单审 + 非 fork + context.md + 驳回硬线 + reviewModelB 弃用）；`templates/CLAUDE.md` 对应导航段同步
 - [ ] 4.2 `README.md` 中描述双审查/模型三连的段落同步
-- [ ] 4.3 归档后待办提醒（写入 change 备注或 issue）：archive 后手动同步 ly-review-gates / subagent-agent-config / ly-propose-flow 主 spec 的 Purpose 段（delta 不覆盖 Purpose）
+- [ ] 4.3 归档后待办提醒（写入 change 备注或 issue）：archive 后手动同步 ly-review-gates / subagent-agent-config / ly-propose-flow 主 spec 的 Purpose 段（delta 不覆盖 Purpose）；清理历史措辞标题——subagent-agent-config 的"模型三连/三个模型字段"Requirement 标题改为"模型二连"、ly-lifecycle-commands 的"apply 由当前会话本人实施"场景标题、ly-review-gates 场景"第 2 轮以 resume 模式续聊同一会话"更名（归档后主 spec 不受 delta 场景名保留约束，可自由更名）
 
 ## 验证方式
 

@@ -30,6 +30,7 @@
 - 生命周期：propose 产出（自审后、commit 前）→ apply 维护（实施决策回写）→ review-plan / review-code / coding subagent 消费（TASK 只传路径，不贴全文）。
 - 内容边界：只记"文档之外的讨论结论"（关键决策/否决理由/范围边界/已知坑），与 artifact 重复内容一句话指路；建议 ≤100 行（它是每次 spawn 的固定读取成本）。
 - 无实质内容时产出最小骨架，SHALL NOT 省略文件（消费方 TASK 引用固定路径）；历史 change 缺失时容错继续（如实报告"软上下文不可用"）。
+- 质量关卡：产出时完成内容边界自检（无整段重复、决策可溯源、行数达标），review-plan 范围点名含 context.md——审查关卡可捕获其内容与 design 的矛盾（审查 agent 发现疑点可反馈修订）。
 - apply 更新只追加/修订，不删 propose 沉淀（过时标注）。
 - 备选已否决：spawn 时主会话现场写摘要——质量不稳定、不可审计；固定 artifact 让软上下文可 review、可随 commit 留痕。
 
