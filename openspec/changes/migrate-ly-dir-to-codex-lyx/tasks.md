@@ -2,44 +2,68 @@
 
 - [ ] 1.1 修改 `src/utils/package-meta.ts`：`LY_DIR` 从 `join(homedir(), '.ly')` 改为 `join(homedir(), '.codex', 'lyx')`，同步更新其上方注释（`~/.ly` → `~/.codex/lyx`）；`CONFIG_FILE`/`PROMPTS_DIR` 无需改动（派生自 `LY_DIR`）。验证：`grep -n "LY_DIR" src/utils/package-meta.ts` 确认新路径。
 
-## 2. 移除旧路径迁移/共存检测逻辑
+## 2. 移除旧路径迁移/共存检测逻辑（config 迁移 + 角色词迁移）
 
 - [ ] 2.1 从 `src/utils/config.ts` 删除 `hasCoexistingLegacyLyProducts` 函数（含其文档注释）与 `migrateLegacyConfig` 函数（含其文档注释），删除文件顶部"配置目录统一到 ~/.ly/（v0.1.0 起；旧 ~/.claude/.ly/ 由 migrateLegacyConfig 迁移）"注释；删除 `readLyConfig`/`writeLyConfig` 内对 `migrateLegacyConfig()` 的调用。验证：`grep -n "migrateLegacyConfig\|hasCoexistingLegacyLyProducts" src/utils/config.ts` 无输出。
-- [ ] 2.2 从 `src/utils/installer.ts` 移除对 `hasCoexistingLegacyLyProducts` 的导入与调用（第 6 行导入、第 206 行调用所在的共存检测分支），改为直接执行原分支后续逻辑（不再有"共存则跳过"判断点，因为该判断点本就服务于旧迁移逻辑）。验证：`grep -n "hasCoexistingLegacyLyProducts" src/utils/installer.ts` 无输出；`npm run build`（或项目对应的类型检查命令）通过。
-- [ ] 2.3 从 `src/utils/__tests__/config.test.ts` 删除覆盖 `migrateLegacyConfig` 的全部测试用例（含 import 中的 `migrateLegacyConfig`），若存在覆盖 `hasCoexistingLegacyLyProducts` 的独立测试用例一并删除。验证：`grep -n "migrateLegacyConfig\|hasCoexistingLegacyLyProducts" src/utils/__tests__/config.test.ts` 无输出；`npm test -- config.test.ts` 通过。
+- [ ] 2.2 从 `src/utils/installer.ts` 删除 `migrateLegacyPrompts` 函数（含其文档注释、`PromptsMigrationResult` 接口，若该接口仅被此函数使用）；移除对 `hasCoexistingLegacyLyProducts` 的导入（原第 6 行）。验证：`grep -n "migrateLegacyPrompts\|hasCoexistingLegacyLyProducts" src/utils/installer.ts` 无输出；`npm run build`（或项目对应的类型检查命令）通过。
+- [ ] 2.3 从 `src/commands/init.ts` 删除对 `migrateLegacyPrompts` 的导入与调用（原第 19、336-342 行附近），及其触发的安装完成提示文案（原第 381 行 `→ ~/.ly/prompts/` 相关输出，随调用点一并删除或改写为不依赖迁移结果的提示）。验证：`grep -n "migrateLegacyPrompts" src/commands/init.ts` 无输出；相关单测/手测确认 init 流程不再执行角色词迁移。
+- [ ] 2.4 从 `src/index.ts` 删除 `migrateLegacyPrompts` 的公开导出（原第 20 行）。验证：`grep -n "migrateLegacyPrompts" src/index.ts` 无输出；`npm run build` 通过（确认没有其他模块依赖此导出）。
+- [ ] 2.5 从 `src/utils/__tests__/config.test.ts` 删除覆盖 `migrateLegacyConfig` 的全部测试用例（含 import 中的 `migrateLegacyConfig`），删除覆盖 `hasCoexistingLegacyLyProducts` 的独立测试用例（若有）。验证：`grep -n "migrateLegacyConfig\|hasCoexistingLegacyLyProducts" src/utils/__tests__/config.test.ts` 无输出；`npm test -- config.test.ts` 通过。
+- [ ] 2.6 从 `src/utils/__tests__/host-adapters.test.ts` 删除覆盖 `migrateLegacyPrompts` 的 `describe('migrateLegacyPrompts', ...)` 测试块（原第 316-372 行附近）及其 import。验证：`grep -n "migrateLegacyPrompts" src/utils/__tests__/host-adapters.test.ts` 无输出；`npm test -- host-adapters.test.ts` 通过。
 
-## 3. uninstall 策略重写（真正删除 + worktree 存活检测）
+## 3. uninstall 策略重写（真正删除 + worktree 存活检测，对应 `lyx-uninstall-cleanup` capability）
 
-- [ ] 3.1 修改 `src/utils/installer.ts` 的 `uninstallWorkflows`：把"共享配置：保守保留 + 提示"这段（约第 422-428 行）改为——先检测 `~/.codex/lyx/worktrees/` 下每个子目录是否为有效 git worktree（在该子目录执行 `git rev-parse --git-dir` 判断，命令失败或非 git 目录视为"非存活 worktree"；执行异常/权限错误时保守按"存活"处理）；不存在任何存活 worktree → 删除整个 `~/.codex/lyx/`（`config.toml`、`prompts/`、`worktrees/` 一并清理）；存在存活 worktree → 只删除 `config.toml` 与 `prompts/`，保留 `worktrees/` 目录并警告提示"检测到未清理的 worktree，请先运行 `lycx worktree remove` 清理后再手动删除 `~/.codex/lyx/`"。同步更新 `UninstallResult` 接口的字段注释（`configTomlKept` 字段含义随之改变——不再是"保守保留"，而是"因存活 worktree 而部分保留"，如无存活 worktree 该字段应为 `false`）。验证：新增/更新 `src/utils/__tests__/host-adapters.test.ts` 或 `installer.test.ts` 中的对应断言（见任务 5.x）。
-- [ ] 3.2 修改 `src/cli-setup.ts` 的 uninstall 确认提示文案（约第 131 行）：把"共享配置 ~/.ly/config.toml 与 ~/.ly/ 其余内容（含 worktrees）保留"改为如实描述新行为——"将移除 ~/.agents/skills/lyx-*（含旧残留）、~/.ly/prompts/codex/ 与 ~/.codex/lyx/（配置、角色词、worktrees）；若 ~/.codex/lyx/worktrees/ 下存在未清理的实际 git worktree，该子目录会被保留并提示需先手动清理"。验证：人工比对文案与任务 3.1 实现的实际行为一致。
+- [ ] 3.1 修改 `src/utils/installer.ts` 的 `uninstallWorkflows`：把"共享配置：保守保留 + 提示"这段（约第 422-428 行）改为——**递归**检测 `~/.codex/lyx/worktrees/` 目录树下每个叶子目录是否为有效 git worktree（在该叶子目录，或其内部任一目录下执行 `git rev-parse --git-dir` 成功，均视为该 worktree 存活；不能只检测第一层子目录，因为 worktree 实际路径可能是 `worktrees/<项目名>/<开发分支名>` 这样的多层路径，且开发分支名本身可能含 `/`；执行异常/权限错误时保守按"存在有效 worktree"处理）；整棵目录树下不存在任何有效 worktree → 删除整个 `~/.codex/lyx/`（`config.toml`、`prompts/`、`worktrees/` 一并清理）；存在至少一个有效 worktree → 只删除 `config.toml` 与 `prompts/`，保留 `worktrees/` 目录并警告提示"检测到未清理的 worktree，请先运行 `lycx worktree remove` 清理后再手动删除 `~/.codex/lyx/`"。**字段调整**：`UninstallResult` 接口移除 `configTomlKept` 字段（`config.toml` 现在无条件删除，不再存在"保留"语义，该字段名若继续沿用会与实际行为名实不符）；新增 `worktreesKept: boolean` 字段表达"因存在存活 worktree 而保留了 `worktrees/` 子目录"（无存活 worktree 时为 `false`）。验证：见任务 5.2 的新增测试。
+- [ ] 3.2 修改 `src/cli-setup.ts` 的 uninstall 命令描述（原第 123 行）、确认提示文案（原第 131 行）与卸载结果汇总文案（原第 147、149 行，改用新字段 `result.worktreesKept` 而非 `result.configTomlKept`）：全部改为如实描述新行为——"将移除 `~/.agents/skills/lyx-*`（含旧残留）与 `~/.codex/lyx/`（配置 `config.toml`、角色词 `prompts/`、worktrees）；若 `~/.codex/lyx/worktrees/` 下存在未清理的实际 git worktree，该子目录会被保留并提示需先手动清理"。**注意**：新文案中不应再出现 `~/.ly/prompts/codex/` 或"共享配置"字样——`~/.ly/` 已是完全无关的旧目录，不属于本次卸载动作的任何一部分。验证：人工比对文案与任务 3.1 实现的实际行为一致；`grep -n "~/\.ly[^x]" src/cli-setup.ts` 无输出。
 - [ ] 3.3 更新 `installer.ts` 中所有"共享命名空间/共享配置/共享角色词"相关注释（约第 40、157、309、311、319、320、330、409 行），改为描述新的私有目录语义（不再提"ly-workflow 共享命名空间"）。验证：`grep -n "共享命名空间" src/utils/installer.ts` 无输出。
+- [ ] 3.4 更新 `src/commands/menu.ts`（约第 457-460 行）：`result.configTomlKept` 判断改为 `result.worktreesKept`，对应 i18n key 从 `menu:uninstall.configTomlKept` 改为 `menu:uninstall.worktreesKept`（或等价的新 key 名，与任务 6.1/6.2 的 i18n 文案改动保持一致）。验证：`grep -n "configTomlKept" src/commands/menu.ts` 无输出。
+- [ ] 3.5 运行 `openspec validate --changes migrate-ly-dir-to-codex-lyx` 确认新增的 `lyx-uninstall-cleanup` delta spec（New Capability，含 `## Purpose`）结构合法。
 
 ## 4. 角色词模板与技能模板路径更新
 
 - [ ] 4.1 更新 `templates/skills-codex/apply.md`：第 37、38 行 `~/.ly/config.toml` 改为 `~/.codex/lyx/config.toml`。
 - [ ] 4.2 更新 `templates/skills-codex/review-code.md`：第 56、57 行 `~/.ly/config.toml`、`~/.ly/prompts/codex/reviewer.md` 改为 `~/.codex/lyx/config.toml`、`~/.codex/lyx/prompts/codex/reviewer.md`。
 - [ ] 4.3 更新 `templates/skills-codex/review-plan.md`：第 58、59 行 `~/.ly/config.toml`、`~/.ly/prompts/codex/plan-reviewer.md` 改为对应 `~/.codex/lyx/...` 路径。
-- [ ] 4.4 更新 `templates/skills-codex/propose.md`：第 24、34、41 行的 worktree 路径示例 `~/.ly/worktrees/...` 改为 `~/.codex/lyx/worktrees/...`。
+- [ ] 4.4 更新 `templates/skills-codex/propose.md`：覆盖该文件中**所有** `~/.ly/worktrees/...` 与 `$HOME/.ly/worktrees/...`（含第 24、34、41、44 行等出现处，不要只按初次排查到的行号点位——实施时以 `grep -n "\.ly" templates/skills-codex/propose.md` 重新枚举当前全部出现行）改为 `~/.codex/lyx/worktrees/...` / `$HOME/.codex/lyx/worktrees/...`。
 - [ ] 4.5 更新 `templates/skills-codex/worktree.md`：`description` 字段（第 3 行）与正文（第 49、84、131、156、159 行）中的 `~/.ly/worktrees/` 改为 `~/.codex/lyx/worktrees/`。
 - [ ] 4.6 更新 `templates/CLAUDE.md`：第 14、28 行的 `~/.ly/prompts/codex/`、`~/.ly/worktrees/<项目名>/` 改为 `~/.codex/lyx/...`。
-- [ ] 4.7 验证以上 6 个模板文件安装后生效：运行 `lycx init --force`（或对应的安装测试）后检查生成的 `~/.agents/skills/lyx-*/SKILL.md` 中角色词绝对路径确为 `~/.codex/lyx/...`；或直接 `grep -rn "~/.ly[^x]" templates/` 确认模板目录下无遗留（注意排除误匹配 `~/.lyx` 本身，用 `~/.ly[^x]` 或 `~/\.ly/` 排除后缀 x 的情况）。
+- [ ] 4.7 确认 `templates/prompts/codex/{reviewer,plan-reviewer}.md`（角色词内容本身）不含 `~/.ly` 路径字面量，无需改动——仅其安装目标路径随 `LY_DIR` 常量变化（由任务 1.1 与安装逻辑处理，非模板内容本身）。验证：`grep -n "~/.ly" templates/prompts/codex/*.md` 无输出（预期本就无输出，此任务用于在实施时二次确认，避免误判需要改动）。
+- [ ] 4.8 验证以上模板文件安装后生效：运行 `lycx init --force`（或对应的安装测试）后检查生成的 `~/.agents/skills/lyx-*/SKILL.md` 中角色词绝对路径确为 `~/.codex/lyx/...`；或直接 `grep -rln "~/\.ly[^x]\|\$HOME/\.ly[^x]" templates/` 确认模板目录下无遗留。
 
-## 5. 测试更新（安装器路径断言）
+## 5. 测试更新
 
-- [ ] 5.1 更新 `src/utils/__tests__/host-adapters.test.ts` 中对 `~/.ly/prompts/codex/...` 路径的断言（第 60、213 行附近）改为 `~/.codex/lyx/prompts/codex/...`；更新第 251-260 行附近"卸载"相关注释与测试对 `lyDir`/`sharedPromptsDir` 变量的构造（`join(base, '.ly')` 改为 `join(base, '.codex', 'lyx')`）。验证：`npm test -- host-adapters.test.ts` 通过。
-- [ ] 5.2 新增/更新针对任务 3.1 新行为的测试用例（在 `host-adapters.test.ts` 或专门的 installer 测试文件中）：覆盖三种场景——(a) `worktrees/` 不存在或为空 → 整个 `~/.codex/lyx/` 被删除；(b) `worktrees/` 下存在一个有效 git worktree（用临时目录 `git init` + `git worktree add` 构造）→ `config.toml`/`prompts/` 被删，`worktrees/` 保留并输出警告；(c) `worktrees/` 下的子目录已不是有效 worktree（如原仓库已删除）→ 视为可删除，整体清理。验证：新增测试通过。
+- [ ] 5.1 全面更新 `src/utils/__tests__/config.test.ts` 中所有硬编码 `.ly` 路径（不只是任务 2.5 涉及的迁移测试，二者是分开的两件事）：
+  1. 顶部 `beforeEach` 清理目录（原第 24 行附近，`rmSync(join(osMocks.home, '.ly'), ...)`）改为清理 `join(osMocks.home, '.codex', 'lyx')`（`.claude` 清理保留不变），否则不同用例写入 `~/.codex/lyx/config.toml` 会互相残留污染。
+  2. `points all path constants into the new ~/.ly location` 用例（原第 84-95 行附近）的 `${osMocks.home}/.ly/prompts`、`${osMocks.home}/.ly/backup` 改为 `${osMocks.home}/.codex/lyx/prompts`、`${osMocks.home}/.codex/lyx/backup`；用例描述字符串同步改名。
+  3. `writes and reads back config at ~/.ly/config.toml` 用例（原第 465 行附近）的 `join(osMocks.home, '.ly', 'config.toml')` 改为 `join(osMocks.home, '.codex', 'lyx', 'config.toml')`；用例描述字符串同步改名。
+  4. `ignores legacy routing/performance fields on read and drops them on write` 用例（原第 488-505 行附近）：`mkdirSync`/`writeFileSync`/`readFileSync` 里所有 `join(osMocks.home, '.ly', ...)` 改为 `join(osMocks.home, '.codex', 'lyx', ...)`——该用例手动构造配置文件后调用 `readLyConfig`/`writeLyConfig`，路径不改则测试会读到 `null` 而非预期内容。
+  5. 实施时以 `grep -n "\.ly" src/utils/__tests__/config.test.ts` 重新枚举当前全部出现行，逐一确认，不要只按上述列出的四处点位处理——避免遗漏本清单未列出的其他用例。
+  验证：`npm test -- config.test.ts` 通过（含新增/修改的全部用例）。
+- [ ] 5.2 更新 `src/utils/__tests__/host-adapters.test.ts`：（a）对 `~/.ly/prompts/codex/...` 路径的断言（第 60、213 行附近）改为 `~/.codex/lyx/prompts/codex/...`；（b）原"卸载"相关测试对 `lyDir`/`sharedPromptsDir` 变量的构造（`join(base, '.ly')` 改为 `join(base, '.codex', 'lyx')`）；（c）**重写**现有 `removes only package-owned artifacts; keeps worktrees, shared config & user prompts` 用例（约第 275-298 行）：该用例的 `seed()`（约第 262-272 行）目前用普通目录 + 文本文件（`join(lyDir, 'worktrees', 'proj-x')` 下写一个 `real-file.txt`）模拟"第三方 worktree checkout"，不是真正的 git worktree——按新契约（`git rev-parse --git-dir` 判定）它会被判定为"非存活"、`worktrees/` 会被整体清理，与该用例现有断言（第 295-298 行附近，`real-file.txt` 保留、`configTomlKept` 为 `true`）直接矛盾。需将 `seed()` 中的 `worktrees/proj-x` 改造为一个**真正的 git worktree**（在临时目录 `git init` 一个仓库，`git worktree add` 到 `join(lyDir, 'worktrees', 'proj-x')`），其余断言（`removedSkills`、`user-prompt.md` 不误删、`removedSharedPrompts`）保持不变，`config.toml`/`configTomlKept` 相关断言改为 `worktreesKept === true` 且 `worktrees/proj-x` 目录整体保留、`config.toml` 已被删除（不再断言"config.toml 保留"）。用例描述字符串同步改名（去掉"shared config"措辞）。（d）新增/更新针对任务 3.1 新行为的测试用例：覆盖四种场景——①`worktrees/` 不存在或为空 → 整个 `~/.codex/lyx/` 被删除，`worktreesKept` 为 `false`；②`worktrees/` 下存在一个单层有效 git worktree（可与上述重写后的 (c) 用例合并，不必重复构造）→ `config.toml`/`prompts/` 被删，`worktrees/` 保留，`worktreesKept` 为 `true` 并输出警告；③`worktrees/` 下存在一个多层路径（含 `/` 的分支名，如 `worktrees/proj/feature/login`）的有效 worktree → 同样被识别为存活，`worktrees/` 保留（验证递归检测不会漏判）；④`worktrees/` 下的子目录已不是有效 worktree（如原仓库已删除，或如 (c) 修复前那种"普通目录+文本文件"的非 git 内容）→ 视为可删除，整体清理，`worktreesKept` 为 `false`。验证：`npm test -- host-adapters.test.ts` 通过。
 - [ ] 5.3 检查 `src/utils/__tests__/legacy-cleanup.test.ts` 是否有依赖旧 `~/.ly` 路径的断言（该文件主要覆盖 `~/.codex/` 侧清理，预期无关，但需确认）；若有则同步更新。验证：`npm test -- legacy-cleanup.test.ts` 通过。
+- [ ] 5.4（可选加强）新增一个自动化测试：在临时 `HOME` 下预先放置一个模拟的旧 `~/.ly/config.toml`（含任意内容），运行 `lycx init`（或直接调用 `createDefaultConfig`/`writeLyConfig` 等函数）后断言该旧文件内容未被读取、未被修改、未被删除——验证"不做任何读取/迁移/删除"的设计意图，而不仅依赖人工核对。验证：新增测试通过。
 
-## 6. 项目文档更新
+## 6. CLI 用户可见文案更新（i18n、命令提示）
 
-- [ ] 6.1 更新 `AGENTS.md`：第 25-27、41、47、66、76、79、93-95、107、116、125 行的 `~/.ly` 路径全部改为 `~/.codex/lyx`；第 47、107 行提及 `migrateLegacyConfig` 的描述改为如实说明"不再做旧路径迁移"；第 107 行整段关于"旧配置自动迁移"的描述删除或改写为"不迁移，全新开始"。验证：`grep -n "~/.ly[^x]\|migrateLegacyConfig" AGENTS.md` 无输出（且未出现误改 `~/.codex/lyx` 为其他形式）。
-- [ ] 6.2 更新 `README.md`：第 16-18、53、63 行的 `~/.ly` 路径改为 `~/.codex/lyx`；第 17、63 行提及"自动从旧 ~/.claude/.ly/config.toml 迁移"的描述删除或改写为"不迁移"。验证：`grep -n "~/.ly[^x]" README.md` 无输出。
-- [ ] 6.3 更新根目录 `CLAUDE.md`：第 11、22、47 行的 `~/.ly` 路径改为 `~/.codex/lyx`；第 22 行"自动从旧 ~/.claude/.ly/config.toml 迁移"描述删除或改写。验证：`grep -n "~/.ly[^x]" CLAUDE.md` 无输出。
-- [ ] 6.4 检查 `README.md` "与 ly-workflow 的关系" 一节（约第 59-64 行）：更新"共存/迁移路径"描述，明确说明本次改动后 ly-workflow-codex 的配置目录已与 ly-workflow 彻底解耦，不再有任何自动迁移；`~/.ly/` 下的旧文件（若存在）不受影响、不被读取。验证：人工核对该节文字与本 change 的实际行为一致。
+- [ ] 6.1 更新 `src/i18n/index.ts` 中文文案（约第 111、113、227、232-233 行）：`spawnableHint` 里的 `~/.ly/config.toml`、`promptsMigrated` 的 `~/.ly/prompts/`、`confirm`（卸载确认，需同步任务 3.2 的新文案与范围）、`removedSharedPrompts` 里的 `~/.ly` 路径改为 `~/.codex/lyx` 对应路径。**`configTomlKept` key 处理**：随任务 3.1/3.4 的字段重命名，该 key 改名为 `worktreesKept`（或等价新 key），文案改写为"检测到未清理的 worktree（`~/.codex/lyx/worktrees/`），已保留该目录，请先运行 `lycx worktree remove` 清理后再手动删除"，不再是"共享配置已保留"的旧语义。
+- [ ] 6.2 更新 `src/i18n/index.ts` 英文文案（约第 348、350、464、469-470 行）：同任务 6.1，对应英文字符串同步改为 `~/.codex/lyx` 路径与新语义，`configTomlKept` key 同步改名为 `worktreesKept`。
+- [ ] 6.3 更新 `src/commands/doctor.ts`（约第 147、159、165 行）：`Not found (~/.ly/config.toml)`、`shared ~/.ly/prompts/codex/`、`None (~/.ly/prompts/codex/)` 等展示文案改为 `~/.codex/lyx/...`。
+- [ ] 6.4 更新 `src/commands/init.ts`（约第 336、381、394 行）：随任务 2.3 一并处理——移除迁移相关代码注释与提示后，剩余的安装完成提示（如 `Config: ~/.ly/config.toml`，约第 394 行）改为 `~/.codex/lyx/config.toml`。
+- [ ] 6.5 更新 `src/commands/update.ts`（约第 201 行）代码注释中的 `~/.ly/prompts/`、`~/.ly/config.toml` 改为 `~/.codex/lyx/...`。
+- [ ] 6.6 更新 `src/utils/host-adapters.ts`（约第 33 行）与 `src/utils/installer-template.ts`（约第 95 行）代码注释中的路径示例（`~/.ly/prompts/`、`ROLE_FILE: ~/.ly/prompts/...`）改为 `~/.codex/lyx/...`。
+- [ ] 6.7 更新根目录 `workflow.md`（约第 15 行）流程图中的 worktree 路径 `~/.ly/worktrees/项目名/开发分支名` 改为 `~/.codex/lyx/worktrees/项目名/开发分支名`。
+- [ ] 6.8 验证：`npm test`（覆盖 i18n 快照/断言测试，若有）通过；手动运行 `lycx doctor`、`lycx uninstall`（干跑或阅读源码确认文案）核对中英文提示均已更新，且不再出现 `configTomlKept`/"共享配置"相关旧措辞。
 
-## 7. 全量收尾验证
+## 7. 项目文档更新
 
-- [ ] 7.1 全仓库扫描确认无遗留：`grep -rn "~/\.ly[^x]\|~/\.ly$\|migrateLegacyConfig\|hasCoexistingLegacyLyProducts\|共享命名空间" src/ templates/ AGENTS.md README.md CLAUDE.md` 只应命中本 change 未覆盖到的合理例外（如 openspec/specs/ 下未被本次 Modified Capability 覆盖的历史文本——需人工确认属于范围外，不属于遗漏）。
-- [ ] 7.2 运行完整测试套件与类型检查（如 `npm test` / `npm run typecheck` / `npm run build`，以项目实际脚本为准），全部通过。
-- [ ] 7.3 手动验证一次端到端安装：在临时 `HOME`（或测试专用环境变量注入）下运行 `lycx init`，确认生成 `~/.codex/lyx/config.toml`、`~/.codex/lyx/prompts/codex/{reviewer,plan-reviewer}.md`；确认 `~/.ly/`（若测试环境中预先放置了旧文件）保持原样未被触碰。
-- [ ] 7.4 运行 `openspec validate --changes migrate-ly-dir-to-codex-lyx` 确认 3 份 delta spec 结构合法。
+- [ ] 7.1 更新 `AGENTS.md`：第 25-27、41、47、66、76、79、93-95、107、116、125 行的 `~/.ly` 路径全部改为 `~/.codex/lyx`；第 47、107 行提及 `migrateLegacyConfig` 的描述改为如实说明"不再做旧路径迁移"；第 107 行整段关于"旧配置自动迁移"的描述删除或改写为"不迁移，全新开始"。验证：`grep -n "~/.ly[^x]\|migrateLegacyConfig" AGENTS.md` 无输出（且未出现误改 `~/.codex/lyx` 为其他形式）。
+- [ ] 7.2 更新 `README.md`：第 16-18、53、63 行的 `~/.ly` 路径改为 `~/.codex/lyx`；第 17、63 行提及"自动从旧 ~/.claude/.ly/config.toml 迁移"的描述删除或改写为"不迁移"。验证：`grep -n "~/.ly[^x]" README.md` 无输出。
+- [ ] 7.3 更新根目录 `CLAUDE.md`：第 11、22、47 行的 `~/.ly` 路径改为 `~/.codex/lyx`；第 22 行"自动从旧 ~/.claude/.ly/config.toml 迁移"描述删除或改写。验证：`grep -n "~/.ly[^x]" CLAUDE.md` 无输出。
+- [ ] 7.4 检查 `README.md` "与 ly-workflow 的关系" 一节（约第 59-64 行）：更新"共存/迁移路径"描述，明确说明本次改动后 ly-workflow-codex 的配置目录已与 ly-workflow 彻底解耦，不再有任何自动迁移；`~/.ly/` 下的旧文件（若存在）不受影响、不被读取。验证：人工核对该节文字与本 change 的实际行为一致。
+
+## 8. 全量收尾验证
+
+- [ ] 8.1 全仓库扫描确认无遗留：`grep -rnE "~/\.ly([^x]|$)|\\\$HOME/\.ly([^x]|$)|\\\$\{HOME\}/\.ly([^x]|$)|migrateLegacyConfig|migrateLegacyPrompts|hasCoexistingLegacyLyProducts|共享命名空间|configTomlKept" src/ templates/ AGENTS.md README.md CLAUDE.md workflow.md`（不含 `CHANGELOG.md` 与 `openspec/specs/` 下未被本次 4 个 Capability（3 个 Modified + 1 个新增 `lyx-uninstall-cleanup`）覆盖的基线 spec 文本——这两类为范围外历史记录，命中时人工确认后排除，不视为遗漏）。扫描模式需同时覆盖 `~/.ly`、`$HOME/.ly`、`${HOME}/.ly` 三种写法，避免像 `templates/skills-codex/propose.md` 里 `cd "$HOME/.ly/worktrees/..."` 这类非 `~/` 前缀写法漏报。
+- [ ] 8.2 运行完整测试套件与类型检查（如 `npm test` / `npm run typecheck` / `npm run build`，以项目实际脚本为准），全部通过。
+- [ ] 8.3 手动验证一次端到端安装：在临时 `HOME`（或测试专用环境变量注入）下运行 `lycx init`，确认生成 `~/.codex/lyx/config.toml`、`~/.codex/lyx/prompts/codex/{reviewer,plan-reviewer}.md`；确认 `~/.ly/`（若测试环境中预先放置了旧文件）保持原样未被触碰。
+- [ ] 8.4 运行 `openspec validate --changes migrate-ly-dir-to-codex-lyx` 确认全部 4 份 delta spec（3 份 Modified + 1 份新增 `lyx-uninstall-cleanup`）结构合法。
