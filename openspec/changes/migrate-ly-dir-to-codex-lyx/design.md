@@ -47,7 +47,11 @@
 
 ### 4. 角色词模板与文档的路径替换：全量替换，不保留兼容
 
-`templates/prompts/codex/*.md` 中的 `ROLE_FILE` 绝对路径、`AGENTS.md`/`README.md`/`CLAUDE.md` 中的路径引用、`ly:worktree` 技能描述中的路径示例，全部从 `~/.ly/...` 改为 `~/.codex/lyx/...`。不保留任何"两个路径都认"的兼容层——`~/.ly/` 已被判定为无关目录，兼容层没有意义、反而增加维护负担。
+`templates/skills-codex/*.md`（`apply.md`/`review-code.md`/`review-plan.md`/`propose.md`/`worktree.md`）中写死的 `ROLE_FILE` 绝对路径与 worktree 路径示例、`AGENTS.md`/`README.md`/`CLAUDE.md` 中的路径引用，全部从 `~/.ly/...` 改为 `~/.codex/lyx/...`。角色词内容本身（`templates/prompts/codex/{reviewer,plan-reviewer}.md`）不含路径字面量，无需改动，仅其安装目标路径随 `LY_DIR` 常量变化。不保留任何"两个路径都认"的兼容层——`~/.ly/` 已被判定为无关目录，兼容层没有意义、反而增加维护负担。
+
+### 5. 一并清理"共享（Shared）"语义的命名残留
+
+`UninstallResult` 的 `removedSharedPrompts` 字段与 `installer.ts` 内部局部变量 `sharedPromptsDir`/`sharedCodexPromptsDir`，以及对应 i18n key（`removedSharedPrompts`）与文案（"共享角色词"/"Shared prompts"），沿用的是旧"ly-workflow 共享命名空间"设计下的命名——现在 `~/.codex/lyx/prompts/` 已是私有目录，继续用"共享/Shared"描述会话名不副实。借这次改动一并改名：字段改为 `removedPrompts`，i18n key 同步为 `removedPrompts`，文案去掉"共享"措辞；`installer.ts` 内部变量名改为不含"shared"字样的名称（如 `codexPromptsDir`/`codexPromptsSubDir`，具体命名由实施时决定，不是行为契约，无需锚定唯一名称）。这是纯命名清理，不改变该字段/变量所表达的实际行为（仍是"是否删除了 `prompts/codex/` 子目录"）。
 
 ## Risks / Trade-offs
 
