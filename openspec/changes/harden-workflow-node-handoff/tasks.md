@@ -25,18 +25,18 @@
 
 ### apply 模板加固 `templates/skills-codex/apply.md`
 - [x] 在"spawn coding subagent 实施 tasks"中补**轮内纪律**：spawn 后 SHALL 在本轮内 wait coding subagent 返回，收到结果先逐字转达再确认；禁止以自然语言描述代替实际 spawn 与等待；消费完毕 SHALL 关闭子 agent
-- [ ] 在主会话确认阶段补**文件清单核对**：spawn coding subagent 前先记录一次 `git status --porcelain` 快照（实施前基线，subagent 实施与回退自实施两路统一，回退自实施以主会话自己记录的实施改动文件清单充当回传清单）；先识别 partial apply（残留判据限定为"改动路径落在本次实施目标文件集合内"——既存 dirty 路径 ∩ 本次实施目标文件集合 ≠ ∅，或 tasks.md 已勾选但对应改动未提交 → 停止转人工；与本次实施无关的既存改动不算残留）；回传后比对只针对快照之后新增/变化的路径（排除既存改动，快照前已 dirty 的路径出现在回传清单 → 停止转人工并回指 propose 步骤 1 的既存改动处置选择），不一致 SHALL 停止并列出差异，不 commit；一致才提交——提交前显式隔离 index（`git commit --only -- <本次实际改动文件>`，SHALL NOT 用全量 `git commit` 吞并 index 既存 staged 内容，或先 unstage 非本次文件、提交后恢复），提交后以 `git show --name-only` 校验提交文件集合严格等于本次清单，才允许生成 `apply: <change-name>` commit
+- [x] 在主会话确认阶段补**文件清单核对**：spawn coding subagent 前先记录一次 `git status --porcelain` 快照（实施前基线，subagent 实施与回退自实施两路统一，回退自实施以主会话自己记录的实施改动文件清单充当回传清单）；先识别 partial apply（残留判据限定为"改动路径落在本次实施目标文件集合内"——既存 dirty 路径 ∩ 本次实施目标文件集合 ≠ ∅，或 tasks.md 已勾选但对应改动未提交 → 停止转人工；与本次实施无关的既存改动不算残留）；回传后比对只针对快照之后新增/变化的路径（排除既存改动，快照前已 dirty 的路径出现在回传清单 → 停止转人工并回指 propose 步骤 1 的既存改动处置选择），不一致 SHALL 停止并列出差异，不 commit；一致才提交——提交前显式隔离 index（`git commit --only -- <本次实际改动文件>`，SHALL NOT 用全量 `git commit` 吞并 index 既存 staged 内容，或先 unstage 非本次文件、提交后恢复），提交后以 `git show --name-only` 校验提交文件集合严格等于本次清单，才允许生成 `apply: <change-name>` commit
 - [x] 环境级不可用回退自实施时输出显式状态标记 `[回退] subagent 不可用: <原始报错>`
 - [x] 实施中/验证失败呈报转人工时，在失败详情后附**下一步可用命令指引**（如 `@lyx-apply <change-name>` 重跑、`@lyx-review-code <change-name>` 暂缓）
 
 ### propose 模板加固 `templates/skills-codex/propose.md`
 - [x] 全自动步骤 8 补**进入 apply 的前置校验**：判据为本会话记录的 review-plan 循环终止类型 == 正常清零且无未决人工介入项，节点处显式打印一行校验结论（含依据），校验不过停在该节点复用终止报告说明阻断原因，不硬闯 apply
-- [ ] 全自动步骤 8 补**进入 review-code 的前置校验**：apply 提交后记录本次 HEAD SHA，校验最近一期 `apply: <change-name>` commit 的 SHA 等于该记录（旧 commit 不得绕过），校验不过停在该节点如实报告实施收尾失败，不硬闯 review-code。注意：`propose.md` 模板步骤 8 第 4 项现落地为旧判据（`git log --grep` 匹配非空即过，纯存在性校验），需替换为——apply 提交后以 `git rev-parse HEAD` 记录本次 SHA，用 `git log --grep="^apply: <change-name>" -1 --format=%H` 取最近一期 `apply:` commit SHA 并相等校验，不等/缺失即停在该节点报告（旧 commit 不得绕过）
+- [x] 全自动步骤 8 补**进入 review-code 的前置校验**：apply 提交后记录本次 HEAD SHA，校验最近一期 `apply: <change-name>` commit 的 SHA 等于该记录（旧 commit 不得绕过），校验不过停在该节点如实报告实施收尾失败，不硬闯 review-code。注意：`propose.md` 模板步骤 8 第 4 项现落地为旧判据（`git log --grep` 匹配非空即过，纯存在性校验），需替换为——apply 提交后以 `git rev-parse HEAD` 记录本次 SHA，用 `git log --grep="^apply: <change-name>" -1 --format=%H` 取最近一期 `apply:` commit SHA 并相等校验，不等/缺失即停在该节点报告（旧 commit 不得绕过）
 - [x] 手动步骤 9 询问"要不要现在跑一次 review-plan 审查循环"时附**状态摘要**（当前阶段：`propose: <change-name>` commit 已完成；下一步：`@lyx-review-plan <change-name>`）
-- [ ] 在 propose 模板脏改动处置的"原样保留"文案中补**重叠即停止提示**：明示"若这些改动与后续 apply 的实施目标文件重叠，apply 会直接停止转人工"（"本项目切新分支"与"留在当前分支"两个路径的"原样保留"选项共用该提示），使 apply 阶段的重叠停止报告可回指该处置选择
+- [x] 在 propose 模板脏改动处置的"原样保留"文案中补**重叠即停止提示**：明示"若这些改动与后续 apply 的实施目标文件重叠，apply 会直接停止转人工"（"本项目切新分支"与"留在当前分支"两个路径的"原样保留"选项共用该提示），使 apply 阶段的重叠停止报告可回指该处置选择
 
 ### 一致性验证
 - [x] 运行 `openspec validate --changes harden-workflow-node-handoff` 确认 delta spec 结构合法
 - [x] 运行 `pnpm typecheck && pnpm build && pnpm test` 确认模板改动未破坏项目（含模板内容相关测试）
-- [ ] 人工复核四个模板与三份 delta spec 的表述一致（轮内纪律、回退标记、前置校验语义未漂移）
+- [x] 人工复核四个模板与三份 delta spec 的表述一致（轮内纪律、回退标记、前置校验语义未漂移）
 - [ ] 冒烟验证：以本 change 加固后的模板执行——手动运行 `@lyx-review-plan harden-workflow-node-handoff` 与 `@lyx-apply harden-workflow-node-handoff` 各一次，确认 spawn → wait → 消费闭环；环境级限制导致无法 spawn 时如实记录回退标记行为

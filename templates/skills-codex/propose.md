@@ -51,7 +51,7 @@ argument-hint: '<需求描述>'
     2. 检查当前工作区未提交改动（`git status --porcelain`）：非空时用一次三选一询问处置方式，各选项文案如实说明后果：
        - **提交（WIP commit）**：`git add -A && git commit -m "wip: 切分支前暂存工作区改动"` 后再切分支——新分支从含 WIP commit 的 HEAD 切出，改动固化为新分支上的提交，review-code 审查对象不受污染；
        - **Stash**：`git stash push -u` → 切分支 → `git stash pop`——如实说明"pop 回来后改动仍在工作区，stash 仅提供日志留底"；
-       - **原样保留**：不做任何处理——明示"改动会进入 review-code 审查范围（`git diff HEAD`），可能污染审查对象"。
+       - **原样保留**：不做任何处理——明示"改动会进入 review-code 审查范围（`git diff HEAD`），可能污染审查对象"；且若这些改动与后续 apply 的实施目标文件重叠，apply 会直接停止转人工（停止报告会回指此处处置选择）。
 
        三种选择均直接执行（风险已写入文案，不二次确认）；处置动作失败（提交失败、stash 失败等）→ **如实报错停止编排，不自动兜底**。
     3. 执行 `git checkout -b <开发分支名>`（从当前 HEAD 建新分支并切换）。本路径**不运行 baseline 验证**（同一工作目录、同一 env、同一 node_modules，baseline 验证的"全新 worktree 可用性"前提不成立）、**不切换会话工作目录**、**不打印兜底续接命令**（无目录切换即无会话断链风险）。分支名已存在或非法导致 `git checkout -b` 失败时，**如实报错停止编排转人工**（不自动改名、不自动 stash），change 尚未生成。
@@ -125,11 +125,13 @@ argument-hint: '<需求描述>'
 1. 自动执行 `@lyx-review-plan <change-name>` 编排流程（完整指示见 `@lyx-review-plan skill 的指示`，按其指示逐轮执行审查-修复循环；审查由**双审查 subagent** 执行——fork 当前会话上下文 + 范围点名 + 独立审 → 交换 → 共识，模型按 `reviewModel`/`reviewModelB` 分别指定；审查对象为 `propose:` commit，清零时由循环统一提交修复）。
    - Critical 清零 → 进入下一步。
    - 其余任一种终止（熔断、分歧未决、无法安全修复、验证失败、审查调用失败、达到轮数上限）→ **停止流水线**，复用该循环已产出的终止报告（不重新生成或重复一份）报告终止原因，结束，不执行后续步骤。
-2. 自动执行 `@lyx-apply <change-name>` 编排流程（完整指示见 `@lyx-apply skill 的指示`；实施由 **coding subagent** 执行——fork 当前会话上下文 + 只实施 change 范围，模型按 `codexHost.codingModel` 指定、未配置回退当前会话模型；实施完成回传主会话，主会话确认后统一提交 `apply: <change-name>`）。
-3. 自动执行 `@lyx-review-code <change-name>` 编排流程（完整指示见 `@lyx-review-code skill 的指示`；审查同样由**双审查 subagent** 执行；审查对象为 `apply:` commit，清零时由循环统一提交修复）。
+2. **节点前置校验（进入 apply 前）**：进入 apply 之前 SHALL 校验 review-plan 是否以"正常清零"收尾——判据为**本会话记录的 review-plan 循环终止类型 == 正常清零**且无未决人工介入项（不依赖清零报告文件等会话外 artifact）。校验 SHALL 在该节点显式打印一行校验结论（含依据：终止类型、是否无未决项）；校验不过（终止类型为熔断/分歧未决/无法安全修复/验证失败/审查调用失败/轮数上限，或存在未决项）SHALL 停在该节点，复用 review-plan 已产出的终止报告说明阻断原因，SHALL NOT 硬闯 apply。
+3. 自动执行 `@lyx-apply <change-name>` 编排流程（完整指示见 `@lyx-apply skill 的指示`；实施由 **coding subagent** 执行——fork 当前会话上下文 + 只实施 change 范围，模型按 `codexHost.codingModel` 指定、未配置回退当前会话模型；实施完成回传主会话，主会话确认后统一提交 `apply: <change-name>`）。
+4. **节点前置校验（进入 review-code 前）**：apply 实施完成并提交时 SHALL 以 `git rev-parse HEAD` 记录本次 apply 提交后的 HEAD SHA；进入 review-code 之前 SHALL 用 `git log --grep="^apply: <change-name>" -1 --format=%H` 取最近一期 `apply: <change-name>` commit 的 SHA，并校验其等于本次记录（**历史存在旧 `apply:` commit 不得绕过本次校验**）。校验 SHALL 在该节点显式打印一行校验结论（含依据：本次记录的 SHA、最近一期 `apply:` commit SHA、是否相等）。校验不过（SHA 不等、commit 缺失或实施阶段未正常收尾）SHALL 停在该节点如实报告实施收尾失败详情，SHALL NOT 以旧 commit 作为本次审查对象进入 review-code。
+5. 自动执行 `@lyx-review-code <change-name>` 编排流程（完整指示见 `@lyx-review-code skill 的指示`；审查同样由**双审查 subagent** 执行；审查对象为 `apply:` commit，清零时由循环统一提交修复）。
    - Critical 清零 → 流水线结束，提示可手动 `@lyx-archive` 归档。
    - 其余任一种终止 → **停止流水线**，复用该循环已产出的终止报告报告终止原因，结束。
-4. 流水线执行过程中任一环节 `git commit` 失败：如实报告 Git 原始错误，停止流水线。
+6. 流水线执行过程中任一环节 `git commit` 失败：如实报告 Git 原始错误，停止流水线。
 
 ### 9. 手动：逐步确认
 
@@ -137,6 +139,7 @@ argument-hint: '<需求描述>'
    ```
    "要不要现在跑一次 review-plan 审查循环？"
    ```
+   询问时 SHALL 附带当前状态摘要：当前阶段（`propose: <change-name>` commit 已完成）与下一步（选"是"将调用 `@lyx-review-plan <change-name>`，审查对象为该 commit），保证选"是"后的续接无歧义。
    - **否** → 编排结束。方案已 commit；日后由用户自行 `@lyx-apply` 实施、`@lyx-review-code` 审查。
    - **是** → 继续步骤 2。
 2. 执行 `@lyx-review-plan <change-name>` 编排流程（审查由**双审查 subagent** 执行；审查对象为 `propose:` commit，清零时由循环统一提交修复）。
