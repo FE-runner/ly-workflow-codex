@@ -82,7 +82,13 @@ review-plan 与 review-code 的主会话 spawn 审查 subagent 后 SHALL 遵守�
 
 出现终止条件 2-6 中任一条时, 命令必须（SHALL）立即停止循环, 在报告中明确指出触发的具体条件、涉及的问题（文件、类别、锚点、判断依据）, 并说明需要人工介入, 不得继续自动修复；这些条件时命令 SHALL NOT 提交任何改动（见下方）——已产生的改动留在工作区交由人工处理。**终止报告的末尾 SHALL 附"下一步可用命令指引"**（如：可用 `@lyx-review-plan <change-name>` 重跑审查；`@lyx-apply` 暂不实施——按当前终止原因；改动保留在工作区，可先 `git diff` 查看），供用户在"断在明确节点、人工自行触发下一步"口径下续接。循环期间的 Warning 与 Info 发现不参与循环终止判定, 只在循环结束后的最终报告列出最后一轮的结果, 不跨轮次合并。
 
-**循环期间不提交, 仅在正常清零后统一提交一次**：每一轮修复完成、验证通过后, SHALL NOT 立即执行 git commit——改动保持在当前状态, 直到循环正常清零后由主会话统一提交一次（见"循环结束后统一提交"）；`--no-commit` 传入时连清零后的统一提交也不执行。循环期间发生任何中途提交（无论主会话手滑或外部因素）SHALL 如实报告并说明对审查范围的影响（重新以当前 HEAD 核对基线），但不以此自动进入终止条件。
+**下一轮 TASK 保持增量传递语义**：每一轮修复后, 下一轮任务必须（SHALL）包含上一轮全部 Critical 的逐字原文, 以及"本轮改动文件 + 上一轮全部 Critical 指向的文件"的路径清单（`/ly:review-plan` 场景下含 delta spec 文件）——即使某条未修改, 其指向的文件路径也要纳入, 否则审查 agent 无法读取当前内容判断问题是否仍存在。若某条上一轮 Critical 位置字段缺失可解析路径, 命令必须保守处理（一般是将该轮已知的兜底路径集合纳入清单, 不得静默丢弃）。若上一轮某条 Critical 指向的文件被删除或重命名, 路径清单改用新路径并说明状态变化。命令必须（SHALL）指示审查 agent 自行读取路径当前内容, 判断:（a）上轮各 Critical 是否已解决；（b）本轮改动是否引入新问题。未被"本轮改动"和"上一轮任一 Critical 指向"覆盖的文件 SHALL NOT 重新整段传入。subagent fork 的当前会话上下文提供连续性，但不替代 TASK 的逐字原文——每条 Critical 的逐字文本仍然要显式传, 避免审查 agent 依据模糊记忆断言。
+
+**报告逐轮展示审查 agent 原始发现**：`/ly:review-code`/`/ly:review-plan` 的每一轮审查调用（包括首轮 Critical 为 0 不进入循环的情况）都必须在报告中包含独立区块, 逐字展示该轮双审查 subagent 返回的原始 Critical/Warning/Info 内容（不经概括、改写或合并）, 并与 当前会话 对该轮每条 Critical 的认可/不认可判定并排列出（若该轮无 Critical, 只展示原文）。该区块必须在该轮审查调用返回后于本轮报告呈现。
+
+**报告格式**: 循环终止原因、总轮数、已修复的 Critical 摘要（含每轮改动文件清单）、最后一轮 Warning/Info。仅当全程无任何 Critical/Warning/Info 时才可以使用"未发现问题"表述；只要发现并修复过 Critical, 报告必须明确"本次已自动修复 N 个 Critical"。每条 Critical 摘要用相关人员易懂的语言概括问题与已做改动, 逐字原文区块作为补充材料并存。
+
+**循环期间不提交, 仅在正常清零后统一提交一次**：每一轮修复完成、验证通过后, SHALL NOT 立即执行 git commit——改动保持在当前状态, 直到循环正常清零后由主会话统一提交一次（见"循环结束后统一提交"）；`--no-commit` 传入时连清零后的统一提交也不执行。循环期间发生任何中途提交（无论主会话手滑或外部因素）SHALL 如实报告，并仍以固定基线重新计算 `git diff <固定SHA>` 说明该中途 commit 是否落在审查范围内（核对 ≠ 替换基线），但不以此自动进入终止条件。
 
 #### Change: 第 2 轮起改为"重新 spawn 全新审查 subagent + 增量 TASK"，删除"沿用同一批会话、SHALL NOT 重新 spawn"的跨轮续聊假设；终止报告补下一步可用命令指引；循环期间发生中途提交的如实报告口径。
 
@@ -96,7 +102,7 @@ review-plan 与 review-code 的主会话 spawn 审查 subagent 后 SHALL 遵守�
 
 #### Scenario: 循环期间发生意外提交
 - **WHEN** 审查-修复循环期间工作区出现一次非本循环统一提交的中途 commit
-- **THEN** 命令如实报告该提交及其影响（审查范围diff以当前 HEAD 重新核对固定基线），不静默忽略，也不仅因此自动终止
+- **THEN** 命令如实报告该提交及其影响（仍以固定基线重新计算 `git diff <固定SHA>`，核对该中途 commit 是否落在审查范围内，核对不等于替换基线），不静默忽略，也不仅因此自动终止
 
 
 #### Scenario: 一轮修复后 Critical 清零（review-code）
@@ -186,7 +192,7 @@ review-plan 与 review-code 的主会话 spawn 审查 subagent 后 SHALL 遵守�
 
 #### Scenario: 轮间续聊开启时, 第 2 轮仍按增量传递语义构造 TASK
 - **WHEN** `/ly:review-plan` 第 2 轮重新 spawn 一对全新审查 subagent（fork 当前会话上下文）
-- **THEN** TASK 仍只包含上一轮全部 Critical 逐字原文 + 路径清单（增量），不整段重新传入基线 artifact 全文；会话记忆提供上下文，不代表 TASK 可省略逐字 Critical 原文
+- **THEN** TASK 仍只包含上一轮全部 Critical 逐字原文 + 路径清单（增量），不整段重新传入基线 artifact 全文；fork 的当前会话上下文提供连续性，不代表 TASK 可省略逐字 Critical 原文
 
 ### Requirement: 代码审查读取 git diff 并分级输出发现
 
@@ -245,4 +251,3 @@ review-plan 与 review-code 的主会话 spawn 审查 subagent 后 SHALL 遵守�
 - **THEN** 第 2 轮重新 spawn 一对全新审查 subagent（fork 当前会话上下文）, TASK 只包含上一轮全部 Critical 逐字原文与路径清单; SHALL NOT 构造 shell 层 `codex exec resume <session_id>`，也不重新拼贴完整基线 diff, 不依赖上一轮 subagent 会话存活
 
 #### Change: 审查范围补基线锚定（首轮固定 commit SHA）；第 2 轮改为重新 spawn 审查 subagent，不依赖跨轮续聊。
-
