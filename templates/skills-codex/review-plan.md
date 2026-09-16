@@ -105,6 +105,7 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 
 1. 上一轮审查 subagent 报告的全部 Critical 原文（逐字，不经改写，包含被判定"不认可"的条目——非 fork 的审查 agent 无任何历史记忆，上一轮原文是判断"问题是否已解决"的唯一依据）。
 2. 路径清单，必须覆盖"本轮实际改动的 artifact/delta spec 文件"（4.4 记录的清单）∪"上一轮全部 Critical 各自指向的 artifact/delta spec 文件"（即使未被修改）。若上一轮某条 Critical 指向的文件已被删除或重命名，路径清单改用新路径（若有）并说明状态变化。
+3. 该 change 目录下 `context.md` 的路径引用——非 fork spawn 每轮都是全新子代理、无任何历史记忆，缺少该引用即彻底失去软上下文通道，SHALL NOT 因为 `context.md` 不在本轮改动/上一轮 Critical 指向的文件集合内而省略；`context.md` 仍只作背景引用，不计入上述"路径清单"所指的修复对象范围。
 
 路径清单之外的文件不重新整段传入。若某条上一轮 Critical 的位置字段缺失可解析路径，命令保守处理：将该 change 目录下全部 artifact/delta spec 路径纳入下一轮路径清单，并在报告中说明该情况（不得静默丢弃该 Critical）。
 

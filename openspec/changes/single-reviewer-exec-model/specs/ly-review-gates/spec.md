@@ -28,7 +28,7 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 
 **软上下文载体**：非 fork 意味着主会话讨论中的软上下文（关键决策、取舍、已知边界）不再随 fork 自动到达审查 agent；TASK SHALL 指示审查 subagent 读取该 change 目录下的 `context.md`（见 `review-context-artifact` 能力）获取软上下文，SHALL NOT 在 TASK 中整段复制其内容。
 
-**范围点名与角色词**：审查任务 SHALL 点名审查范围（review-plan 为"只审 change 产物：proposal/design/specs/tasks/context.md"，review-code 为"只审最近一次相关 commit 对应 diff（`apply:` commit，未有 `apply:` 时退化为 `propose:` commit）及未跟踪清单"），SHALL NOT 超出点名范围作业；SHALL 继续引用对应 ROLE_FILE（`~/.ly/prompts/codex/plan-reviewer.md` / `reviewer.md`），角色词内容不重写。
+**范围点名与角色词**：审查任务 SHALL 点名审查范围（review-plan 为"只审 change 产物：proposal/design/specs/tasks"，review-code 为"只审最近一次相关 commit 对应 diff（`apply:` commit，未有 `apply:` 时退化为 `propose:` commit）及未跟踪清单"），`context.md` 不计入该点名范围——它只是背景引用来源（见「软上下文载体」），SHALL NOT 被当作可挑错的审查对象或修复对象；SHALL NOT 超出点名范围作业；SHALL 继续引用对应 ROLE_FILE（`~/.ly/prompts/codex/plan-reviewer.md` / `reviewer.md`），角色词内容不重写。
 
 **模型与推理档**：SHALL 经"模板指示 + 宿主 spawn 能力"落实——审查 subagent 用 `codexHost.reviewModel` + 非空 `reviewReasoningEffort`；模型未配置或空白时继承当前会话模型，推理档 trim 后为空时不传 `reasoning_effort`。`reviewModelB`/`reviewReasoningEffortB` SHALL NOT 被审查流程读取使用（字段降级为弃用，见 `subagent-agent-config`）。SHALL NOT 依赖任何 shell 层模型或推理档参数，SHALL NOT 内置"模型名 → 推理档"的硬编码映射。审查 subagent 具备自主执行 shell 命令与读取文件的能力；TASK SHALL 只传基线引用或路径清单，SHALL NOT 由当前会话预先读取并拼贴审查内容全文。
 
@@ -146,7 +146,7 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 
 #### Scenario: 第 2 轮以 resume 模式续聊同一会话
 - **WHEN** `/ly:review-code` 首轮存在未清零 Critical, 循环进入第 2 轮
-- **THEN** 第 2 轮重新 spawn 一个全新审查 subagent（非 fork, 只携带 TASK）, TASK 只包含上一轮全部 Critical 逐字原文与路径清单; SHALL NOT 构造 shell 层 `codex exec resume <session_id>` 续聊任何旧会话，也不重新拼贴完整基线 diff, 不依赖上一轮 subagent 会话存活
+- **THEN** 第 2 轮重新 spawn 一个全新审查 subagent（非 fork, 只携带 TASK）, TASK 包含上一轮全部 Critical 逐字原文、路径清单与 `context.md` 路径引用; SHALL NOT 构造 shell 层 `codex exec resume <session_id>` 续聊任何旧会话，也不重新拼贴完整基线 diff, 不依赖上一轮 subagent 会话存活
 
 ### Requirement: 方案审查分级输出发现
 
@@ -221,7 +221,7 @@ review-plan 与 review-code 的主会话 spawn 审查 subagent 后 SHALL 遵守�
 
 出现终止条件 2-6 中任一条时, 命令必须（SHALL）立即停止循环, 在报告中明确指出触发的具体条件、涉及的问题（文件、类别、锚点、判断依据）, 并说明需要人工介入, 不得继续自动修复；这些条件时命令 SHALL NOT 提交任何改动（见下方）——已产生的改动留在工作区交由人工处理。**终止报告的末尾 SHALL 附"下一步可用命令指引"**（如：可用 `@lyx-review-plan <change-name>` 重跑审查；`@lyx-apply` 暂不实施——按当前终止原因；改动保留在工作区，可先 `git diff` 查看），供用户在"断在明确节点、人工自行触发下一步"口径下续接。循环期间的 Warning 与 Info 发现不参与循环终止判定, 只在循环结束后的最终报告列出最后一轮的结果, 不跨轮次合并。
 
-**下一轮 TASK 保持增量传递语义**：每一轮修复后, 下一轮任务必须（SHALL）包含上一轮全部 Critical 的逐字原文, 以及"本轮改动文件 + 上一轮全部 Critical 指向的文件"的路径清单（`/ly:review-plan` 场景下含 delta spec 文件）——即使某条未修改, 其指向的文件路径也要纳入, 否则审查 agent 无法读取当前内容判断问题是否仍存在。若某条上一轮 Critical 位置字段缺失可解析路径, 命令必须保守处理（一般是将该轮已知的兜底路径集合纳入清单, 不得静默丢弃）。若上一轮某条 Critical 指向的文件被删除或重命名, 路径清单改用新路径并说明状态变化。命令必须（SHALL）指示审查 agent 自行读取路径当前内容, 判断:（a）上轮各 Critical 是否已解决；（b）本轮改动是否引入新问题。未被"本轮改动"和"上一轮任一 Critical 指向"覆盖的文件 SHALL NOT 重新整段传入。**非 fork spawn 不携带任何会话历史**——上一轮 Critical 的逐字原文与路径清单是审查 agent 判断"问题是否已解决"的唯一依据, 必须显式传, 避免审查 agent 依据模糊记忆断言。
+**下一轮 TASK 保持增量传递语义**：每一轮修复后, 下一轮任务必须（SHALL）包含上一轮全部 Critical 的逐字原文, 以及"本轮改动文件 + 上一轮全部 Critical 指向的文件"的路径清单（`/ly:review-plan` 场景下含 delta spec 文件）——即使某条未修改, 其指向的文件路径也要纳入, 否则审查 agent 无法读取当前内容判断问题是否仍存在。**每一轮 TASK（含第 2 轮起）必须（SHALL）同时保持该 change 目录下 `context.md` 的路径引用**——非 fork spawn 每轮都是全新子代理、无任何历史记忆，缺少该引用即彻底失去软上下文通道（见 `review-context-artifact` 能力「审查与实施 subagent 经 context.md 获取软上下文」）；`context.md` 仍只作背景引用，不计入"路径清单"所指的修复对象范围。若某条上一轮 Critical 位置字段缺失可解析路径, 命令必须保守处理（一般是将该轮已知的兜底路径集合纳入清单, 不得静默丢弃）。若上一轮某条 Critical 指向的文件被删除或重命名, 路径清单改用新路径并说明状态变化。命令必须（SHALL）指示审查 agent 自行读取路径当前内容, 判断:（a）上轮各 Critical 是否已解决；（b）本轮改动是否引入新问题。未被"本轮改动"和"上一轮任一 Critical 指向"覆盖的文件 SHALL NOT 重新整段传入。**非 fork spawn 不携带任何会话历史**——上一轮 Critical 的逐字原文与路径清单是审查 agent 判断"问题是否已解决"的唯一依据, 必须显式传, 避免审查 agent 依据模糊记忆断言。
 
 **报告逐轮展示审查 agent 原始发现**：`/ly:review-code`/`/ly:review-plan` 的每一轮审查调用（包括首轮 Critical 为 0 不进入循环的情况）都必须在报告中包含独立区块, 逐字展示该轮审查 subagent 返回的原始 Critical/Warning/Info 内容（不经概括、改写或合并）, 并与 当前会话 对该轮每条 Critical 的裁决（认可/不认可及可核验依据）并排列出（若该轮无 Critical, 只展示原文）。该区块必须在该轮审查调用返回后于本轮报告呈现。
 
@@ -319,7 +319,7 @@ review-plan 与 review-code 的主会话 spawn 审查 subagent 后 SHALL 遵守�
 
 #### Scenario: 轮间续聊开启时, 第 2 轮仍按增量传递语义构造 TASK
 - **WHEN** `/ly:review-plan` 第 2 轮重新 spawn 一个全新审查 subagent（非 fork, 无会话历史）
-- **THEN** TASK 仍只包含上一轮全部 Critical 逐字原文 + 路径清单（增量），不整段重新传入基线 artifact 全文；上一轮原文是审查 agent 判断"问题是否已解决"的唯一依据, SHALL NOT 因 TASK 精简而省略
+- **THEN** TASK 仍包含上一轮全部 Critical 逐字原文 + 路径清单 + `context.md` 路径引用（增量），不整段重新传入基线 artifact 全文；上一轮原文是审查 agent 判断"问题是否已解决"的唯一依据, SHALL NOT 因 TASK 精简而省略
 
 ### Requirement: 全局轮数上限作为最后兜底
 `/ly:review-code` 与 `/ly:review-plan` 的审查-修复循环必须（SHALL）设置一个全局轮数上限（默认 5 轮）。达到该上限时, 无论熔断/驳回硬线/审查对象类型持续系统性误判等信号是否已触发, 命令必须（SHALL）立即停止循环, 报告"已达到全局轮数上限, 停止自动化, 转人工介入", 并附完整轮次轨迹（每轮 Critical 摘要）。该上限 SHALL NOT 作为正常场景下的主要终止信号, 仅用于兜底防止其余终止条件因某种原因未生效而导致的真正无限循环。**清零优先于轮数上限**：轮数上限的判定必须（SHALL）发生在"本轮审查结果确认为非清零"之后——若第 N 轮（包括恰好第 5 轮）审查结果本身是 Critical 清零, 命令必须（SHALL）按正常清零处理并输出清零报告, SHALL NOT 因为该轮恰好命中轮数上限而报告为"达到全局轮数上限"。
