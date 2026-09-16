@@ -16,7 +16,7 @@ import {
   sanitizeReviewModel,
   writeLyConfig,
 } from '../utils/config'
-import { getCoreCommandIds, installWorkflows, migrateLegacyPrompts } from '../utils/installer'
+import { getCoreCommandIds, installWorkflows } from '../utils/installer'
 import { buildModelFieldChoices, MODEL_CHOICE_CUSTOM, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
 import { PACKAGE_NAME } from '../utils/package-meta'
 
@@ -333,20 +333,6 @@ export async function init(options: InitOptions = {}): Promise<void> {
     // Save config FIRST - ensure it's created even if installation fails
     await writeLyConfig(config)
 
-    // Legacy prompts migration (~/.claude/.ly/prompts/ → ~/.ly/prompts/) — 失败不阻断
-    try {
-      const migration = await migrateLegacyPrompts()
-      if (migration.migrated) {
-        console.log()
-        console.log(`  ${ansis.green('✓')} ${i18n.t('init:promptsMigrated')}`)
-      }
-      else if (migration.error) {
-        console.log()
-        console.log(`  ${ansis.yellow('⚠')} ${i18n.t('init:promptsMigrationFailed', { error: migration.error })}`)
-      }
-    }
-    catch { /* non-blocking */ }
-
     // Install codex host commands + shared role prompts
     const result = await installWorkflows(selectedWorkflows, '', options.force, {
       reviewModel: collectedModels.reviewModel,
@@ -378,7 +364,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
       console.log()
       console.log(`  ${ansis.cyan(i18n.t('init:installedPrompts'))}`)
       for (const name of result.installedPrompts) {
-        console.log(`    ${ansis.green('✓')} ${name} ${ansis.gray('→ ~/.ly/prompts/')}`)
+        console.log(`    ${ansis.green('✓')} ${name} ${ansis.gray('→ ~/.codex/lyx/prompts/')}`)
       }
     }
 
@@ -391,7 +377,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
     console.log()
     console.log(ansis.green(`  ✓ ${i18n.t('init:installSuccess')}`))
-    console.log(ansis.gray(`    Config: ~/.ly/config.toml`))
+    console.log(ansis.gray(`    Config: ~/.codex/lyx/config.toml`))
     console.log()
   }
   catch (error) {

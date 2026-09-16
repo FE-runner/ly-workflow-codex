@@ -1,9 +1,9 @@
 import type { InstallResult } from '../types'
 import type { HostAdapter, HostAdapterContext } from './host-adapters'
-import { homedir } from 'node:os'
+import { execFileSync } from 'node:child_process'
 import fs from 'fs-extra'
 import { basename, join } from 'pathe'
-import { getLyDir, hasCoexistingLegacyLyProducts, LY_PROMPTS_DIR } from './config'
+import { getLyDir, LY_PROMPTS_DIR } from './config'
 import { ADAPTERS } from './host-adapters'
 import { getWorkflowById } from './installer-data'
 import { injectConfigVariables, PACKAGE_ROOT, replaceHomePathsInTemplate } from './installer-template'
@@ -37,7 +37,7 @@ export { injectConfigVariables } from './installer-template'
 export interface InstallWorkflowsConfig {
   /** codex 宿主审查模型（LyConfig.codexHost.reviewModel） */
   reviewModel?: string
-  /** 共享角色词目录（默认 ~/.ly/prompts/） */
+  /** 角色词目录（默认 ~/.codex/lyx/prompts/） */
   promptsDir?: string
   /** codex skills 安装目录（默认 ~/.agents/skills/，测试可注入） */
   codexSkillsDir?: string
@@ -154,7 +154,7 @@ ${workflow.description}
 
 /**
  * Install expert prompt .md files from templates/prompts/codex/
- * → 共享角色词位置 ~/.ly/prompts/codex/（codex 审查命令 ROLE_FILE 指向这里）。
+ * → 角色词位置 ~/.codex/lyx/prompts/codex/（codex 审查命令 ROLE_FILE 指向这里）。
  */
 async function installPromptFiles(ctx: InstallContext): Promise<void> {
   const srcDir = join(ctx.templateDir, 'prompts', 'codex')
@@ -183,49 +183,6 @@ async function installPromptFiles(ctx: InstallContext): Promise<void> {
 // Public API: install / uninstall
 // ═══════════════════════════════════════════════════════
 
-/**
- * 旧位置角色词迁移：~/.claude/.ly/prompts/ → ~/.ly/prompts/（内容移动 + 旧目录清理）。
- * 失败不抛出（返回 error 字段，调用方报告但不阻断安装主流程）。
- */
-export interface PromptsMigrationResult {
-  migrated: boolean
-  from?: string
-  to?: string
-  error?: string
-}
-
-export async function migrateLegacyPrompts(options?: { homeDir?: string, promptsDir?: string }): Promise<PromptsMigrationResult> {
-  const home = options?.homeDir ?? homedir()
-  const oldDir = join(home, '.claude', '.ly', 'prompts')
-  const newDir = options?.promptsDir || LY_PROMPTS_DIR
-  if (!(await fs.pathExists(oldDir))) {
-    return { migrated: false }
-  }
-  try {
-    // 共存场景不搬走：~/.claude/ 下仍有活跃 ly-workflow 产物时，角色词属于他方
-    if (await hasCoexistingLegacyLyProducts(home)) {
-      console.warn(`[lycx] 检测到 ${join(home, '.claude')} 仍被 ly-workflow 使用（共存场景），跳过角色词迁移，保留他方在用文件`)
-      return { migrated: false, from: oldDir, to: newDir }
-    }
-    await fs.ensureDir(newDir)
-    const entries = await fs.readdir(oldDir)
-    for (const entry of entries) {
-      if (entry === '.DS_Store')
-        continue
-      const src = join(oldDir, entry)
-      const dst = join(newDir, entry)
-      // 目标已存在时不覆盖：迁移只在目标缺失时移动（低-8）
-      if (await fs.pathExists(dst))
-        continue
-      await fs.move(src, dst, { overwrite: false })
-    }
-    await fs.remove(oldDir)
-    return { migrated: true, from: oldDir, to: newDir }
-  }
-  catch (error) {
-    return { migrated: false, from: oldDir, to: newDir, error: String(error) }
-  }
-}
 
 export async function installWorkflows(
   workflowIds: string[],
@@ -265,7 +222,7 @@ export async function installWorkflows(
     return ctx.result
   }
 
-  // ── Shared assets: role prompts at the neutral location (~/.ly/prompts/) ──
+  // ── Role prompts at the private location (~/.codex/lyx/prompts/) ──
   await fs.ensureDir(ctx.promptsDir)
   await installPromptFiles(ctx)
 
@@ -306,18 +263,56 @@ export interface UninstallResult {
   removedSkills: string[]
   /** 清理的旧安装位残留 ~/.codex/prompts/ly-*.md 文件名 */
   removedLegacyPrompts: string[]
-  /** 是否清除了共享角色词子目录 ~/.ly/prompts/codex/（父目录与其余子目录保留） */
-  removedSharedPrompts: boolean
-  /** 共享配置 ~/.ly/config.toml 是否保留（保守策略：一律保留，仅提示） */
-  configTomlKept: boolean
+  /** 是否清除了角色词子目录 ~/.codex/lyx/prompts/codex/（父目录与其余子目录保留） */
+  removedPrompts: boolean
+  /** 是否因 worktrees/ 下存在未清理的实际 git worktree 而保留了该子目录（无存活 worktree 时为 false，此时 config.toml/prompts/worktrees 均已删除） */
+  worktreesKept: boolean
   errors: string[]
+}
+
+/**
+ * 递归检测某目录树下是否存在有效的 git worktree（候选目录自身或其内部任一目录命中
+ * `git rev-parse --git-dir` 即视为存活）。不能只检测第一层子目录——worktree 实际路径可能是
+ * `<项目名>/<开发分支名>` 这样的多层路径，`<项目名>` 容器目录本身不是 git 仓库。
+ * 读取/执行异常时保守返回 true（视为存在，跳过删除，不冒险误删）。
+ */
+async function hasLiveWorktree(dir: string): Promise<boolean> {
+  let entries: string[]
+  try {
+    entries = await fs.readdir(dir)
+  }
+  catch {
+    return false
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry)
+    try {
+      const stat = await fs.stat(full)
+      if (!stat.isDirectory())
+        continue
+      try {
+        execFileSync('git', ['-C', full, 'rev-parse', '--git-dir'], { stdio: 'ignore' })
+        return true
+      }
+      catch {
+        // full 本身不是有效 git 目录，继续检测其子目录
+      }
+      if (await hasLiveWorktree(full))
+        return true
+    }
+    catch {
+      return true
+    }
+  }
+  return false
 }
 
 /**
  * Uninstall workflows（codex 单宿主）：
  * - 移除 ~/.agents/skills/ly-* skill 目录，并清理旧安装位 ~/.codex/prompts/ly-*.md 残留
- * - 仅移除共享角色词子目录 ~/.ly/prompts/codex/（本包归属产物；父目录与其余子目录保留）
- * - 保留共享配置 ~/.ly/config.toml（~/.ly 为 ly-workflow 共享命名空间，含 worktrees 等真实数据）
+ * - 移除角色词子目录 ~/.codex/lyx/prompts/codex/（本包归属产物；父目录与其余子目录保留）
+ * - 真正删除 ~/.codex/lyx/config.toml 与 ~/.codex/lyx/prompts/codex/（该目录已是本包私有产物）；
+ *   ~/.codex/lyx/worktrees/ 下存在存活 git worktree 时警告并保留该子目录，否则随其余内容一并清理
  * - 触发 codex 侧残留清理（AGENTS.md 区块 / config.toml 旧区块 / 旧 agents）
  */
 export async function uninstallWorkflows(
@@ -327,7 +322,7 @@ export async function uninstallWorkflows(
     lyPromptsDir?: string
     /** codex skills 安装目录（默认 ~/.agents/skills/，测试可注入） */
     codexSkillsDir?: string
-    /** 共享配置目录（默认 ~/.ly，测试可注入） */
+    /** 配置目录（默认 ~/.codex/lyx，测试可注入） */
     lyDir?: string
   },
 ): Promise<UninstallResult> {
@@ -335,8 +330,8 @@ export async function uninstallWorkflows(
     success: true,
     removedSkills: [],
     removedLegacyPrompts: [],
-    removedSharedPrompts: false,
-    configTomlKept: false,
+    removedPrompts: false,
+    worktreesKept: false,
     errors: [],
   }
 
@@ -406,25 +401,52 @@ export async function uninstallWorkflows(
     result.errors.push(`Failed to clean legacy codex prompts: ${error}`)
   }
 
-  // ── 共享角色词：仅删本包归属的 ~/.ly/prompts/codex/ 子目录，严禁整删 ~/.ly/prompts/ 或 ~/.ly/ ──
-  const sharedPromptsDir = options?.lyPromptsDir || LY_PROMPTS_DIR
-  const sharedCodexPromptsDir = join(sharedPromptsDir, 'codex')
-  if (await fs.pathExists(sharedCodexPromptsDir)) {
+  // ── 角色词：仅删本包归属的 ~/.codex/lyx/prompts/codex/ 子目录，父目录与其余子目录保留；本就不存在则跳过，不报错 ──
+  const codexPromptsDir = options?.lyPromptsDir || LY_PROMPTS_DIR
+  const codexPromptsSubDir = join(codexPromptsDir, 'codex')
+  if (await fs.pathExists(codexPromptsSubDir)) {
     try {
-      await fs.remove(sharedCodexPromptsDir)
-      result.removedSharedPrompts = true
+      await fs.remove(codexPromptsSubDir)
+      result.removedPrompts = true
     }
     catch (error) {
-      result.errors.push(`Failed to remove shared codex prompts directory: ${error}`)
+      result.errors.push(`Failed to remove codex prompts directory: ${error}`)
     }
   }
 
-  // ── 共享配置：保守保留 + 提示（~/ly 含 worktrees 等第三方真实数据，卸载不整删、不动 config.toml）──
+  // ── 配置与 worktrees：config.toml 无条件删除（本就不存在则跳过，不报错）；
+  //    worktrees/ 下存在存活 git worktree 则整体保留并警告，否则随 ~/.codex/lyx/ 一并删除 ──
   const lyDir = options?.lyDir || getLyDir()
   const configToml = join(lyDir, 'config.toml')
-  if (await fs.pathExists(configToml)) {
-    result.configTomlKept = true
-    console.warn('[lycx] 保留共享配置 ~/.ly/config.toml：~/.ly 为 ly-workflow 共享命名空间（含 worktrees/ 等真实数据），卸载仅清理本包归属产物。如需清除该配置，请人工确认后自行处理。')
+  const worktreesDir = join(lyDir, 'worktrees')
+  let liveWorktree = false
+  try {
+    if (await fs.pathExists(worktreesDir))
+      liveWorktree = await hasLiveWorktree(worktreesDir)
+  }
+  catch (error) {
+    liveWorktree = true
+    result.errors.push(`Worktree liveness check failed, conservatively kept worktrees/: ${error}`)
+  }
+
+  if (liveWorktree) {
+    result.worktreesKept = true
+    try {
+      if (await fs.pathExists(configToml))
+        await fs.remove(configToml)
+    }
+    catch (error) {
+      result.errors.push(`Failed to remove config.toml: ${error}`)
+    }
+    console.warn('[lycx] 检测到 ~/.codex/lyx/worktrees/ 下存在未清理的实际 git worktree，已保留该目录；请先运行 `lycx worktree remove` 清理后再手动删除 ~/.codex/lyx/')
+  }
+  else {
+    try {
+      await fs.remove(lyDir)
+    }
+    catch (error) {
+      result.errors.push(`Failed to remove ~/.codex/lyx/: ${error}`)
+    }
   }
 
   // 残留清理：回收 codex 侧旧包残留（AGENTS.md 区块 / config.toml 旧区块 / 旧 agents，非阻断）

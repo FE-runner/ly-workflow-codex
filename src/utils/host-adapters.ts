@@ -30,7 +30,7 @@ export interface HostAdapterContext {
   force: boolean
   /** npm 包内 templates/ 目录 */
   templateDir: string
-  /** 共享角色词位置（~/.ly/prompts/，测试可注入） */
+  /** 角色词位置（~/.codex/lyx/prompts/，测试可注入） */
   promptsDir: string
   /** codex skills 安装目录（~/.agents/skills/，测试可注入） */
   codexSkillsDir: string

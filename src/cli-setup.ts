@@ -120,7 +120,7 @@ export async function setupCommands(cli: CAC): Promise<void> {
 
   // Uninstall ly-workflow-codex (codex host)
   cli
-    .command('uninstall', 'Uninstall ly-workflow-codex workflows (~/.agents/skills/lyx-*, ~/.ly/prompts/codex/)')
+    .command('uninstall', 'Uninstall ly-workflow-codex workflows (~/.agents/skills/lyx-*, ~/.codex/lyx/)')
     .option('--yes, -y', 'Skip confirmation')
     .action(async (options: { yes?: boolean }) => {
       const installDir = join(homedir(), '.codex')
@@ -128,7 +128,7 @@ export async function setupCommands(cli: CAC): Promise<void> {
         const { confirm } = await inquirer.prompt([{
           type: 'confirm',
           name: 'confirm',
-          message: `确定要卸载 ${PACKAGE_NAME} 吗？将移除 ~/.agents/skills/lyx-*（含旧 ~/.agents/skills/ly-* 与 ~/.codex/prompts/ly-*.md 残留）与 ~/.ly/prompts/codex/；共享配置 ~/.ly/config.toml 与 ~/.ly/ 其余内容（含 worktrees）保留。`,
+          message: `确定要卸载 ${PACKAGE_NAME} 吗？将移除 ~/.agents/skills/lyx-*（含旧 ~/.agents/skills/ly-* 与 ~/.codex/prompts/ly-*.md 残留）与 ~/.codex/lyx/（配置 config.toml、角色词 prompts/、worktrees）；若 ~/.codex/lyx/worktrees/ 下存在未清理的实际 git worktree，该子目录会被保留并提示需先手动清理。`,
           default: false,
         }])
         if (!confirm) {
@@ -143,10 +143,10 @@ export async function setupCommands(cli: CAC): Promise<void> {
           console.log(ansis.gray(`  lyx-* skills: ${result.removedSkills.length} removed`))
         if (result.removedLegacyPrompts.length > 0)
           console.log(ansis.gray(`  Legacy ~/.codex/prompts residue: ${result.removedLegacyPrompts.length} removed`))
-        if (result.removedSharedPrompts)
-          console.log(ansis.gray('  Shared prompts (~/.ly/prompts/codex/): removed'))
-        if (result.configTomlKept)
-          console.log(ansis.gray('  Shared config (~/.ly/config.toml): kept (~/.ly is the ly-workflow shared namespace)'))
+        if (result.removedPrompts)
+          console.log(ansis.gray('  Prompts (~/.codex/lyx/prompts/codex/): removed'))
+        if (result.worktreesKept)
+          console.log(ansis.gray('  Worktrees (~/.codex/lyx/worktrees/): kept (live git worktree detected — run `lycx worktree remove` first)'))
       }
       else {
         console.error(ansis.red('✗ Uninstall failed'))

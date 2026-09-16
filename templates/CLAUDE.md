@@ -11,7 +11,7 @@
 | 目录 | 用途 | 安装目标 |
 |------|------|----------|
 | `skills-codex/` | 14 个 SKILL.md 模板（codex 宿主单 Agent 版，`name`/`description`/`argument-hint` frontmatter；审查走**单审查 subagent（非 fork）**、实施走 **coding subagent（非 fork）**——软上下文经 change 目录 `context.md` 到达 + 范围点名，模型与推理档经模板指示 + 宿主能力落实，无 wrapper/OVERALL/条件块） | `~/.agents/skills/lyx-*/SKILL.md` |
-| `prompts/codex/` | 2 个审查角色提示词（plan-reviewer/reviewer），审查命令 ROLE_FILE 引用 | `~/.ly/prompts/codex/` |
+| `prompts/codex/` | 2 个审查角色提示词（plan-reviewer/reviewer），审查命令 ROLE_FILE 引用 | `~/.codex/lyx/prompts/codex/` |
 
 ## skills-codex/（14 个）
 
@@ -25,7 +25,7 @@
 | `review-plan.md` | 真逻辑 | 单审查 subagent（非 fork）审方案（`plan-reviewer.md`，范围点名 + context.md 路径引用；模型 `reviewModel`，非空推理档 `reviewReasoningEffort`），主会话逐条裁决（不认可须附可核验依据），驳回硬线（逐条复现 / 连续 2 轮全驳回）即停转人工；审查-修复循环（全局轮数上限 5，清零优先），清零后统一提交 |
 | `review-code.md` | 真逻辑 | 单审查 subagent（非 fork）审代码（`reviewer.md`，范围点名 + context.md 路径引用；模型与推理档同 review-plan），Critical/Warning/Info 分级，同循环 |
 | `commit.md` `rollback.md` `clean-branches.md` | Git 工具 | 不变 |
-| `worktree.md` | Git 工具 | 默认 `~/.ly/worktrees/<项目名>/` 单层平铺；`switch` 子命令已移除，隔离切换由 `@lyx-propose` 触发 |
+| `worktree.md` | Git 工具 | 默认 `~/.codex/lyx/worktrees/<项目名>/` 单层平铺；`switch` 子命令已移除，隔离切换由 `@lyx-propose` 触发 |
 | `release.md` | 真逻辑 | GitFlow 四场景（feature/release/hotfix/dev-offline），SemVer + Conventional Commits 自动推导版本号 |
 | `changelog.md` | 真逻辑 | Keep a Changelog 格式生成/更新 CHANGELOG.md |
 | `publish.md` | 真逻辑 | npm 发布四场景（bmc Nexus/GitHub Packages/npmjs+GitHub Release/CI），前置检查→版本号推导→构建→发布→验证 |

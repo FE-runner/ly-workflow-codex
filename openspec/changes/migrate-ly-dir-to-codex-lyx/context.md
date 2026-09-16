@@ -19,3 +19,9 @@
 ## 审查循环备注
 
 review-plan 经 4 轮收敛（Critical: 5→4→1→0），过程中方案文档本身多次出现"改了一处忘了改另一处"的自我矛盾（如 3.2 任务文案笔误、字段改名遗漏消费点）——这提示 apply 阶段实施时同样要留意"改名/改路径类"任务容易顾此失彼，建议实施后用 tasks.md 8.1 的收尾 grep 命令自查一遍，而不是仅凭逐条 checkbox 打勾就认为完成。
+
+## 实施阶段发现（apply）
+
+- **两处同名但语义不同的"假阳性"**，收尾 grep 会命中但不属于本次范围，已确认排除、未改动：`src/commands/doctor.ts` 的 `join(process.cwd(), '.ly', 'tasks')` 是**项目当前工作目录**下的任务跟踪目录（与用户 home 下的 `~/.ly` 配置路径完全不同的概念）；`src/commands/update.ts` 的 `BACKUP_SUFFIX = '.ly-update-bak'` 是备份文件后缀字符串，不是路径。未来若再跑类似的全仓库 `.ly` 扫描，这两处会重复命中，注意甄别。
+- 实施中在 `host-adapters.test.ts` 新增测试时手误写入一行无意义的路径替换代码（试图"占位"但逻辑错误），已在同一实施过程中自查删除；提醒审查/后续维护者对这批新增的 git-worktree fixture 测试代码多留意，它们是本次改动里唯一引入"真实调用 `git` 子进程"的测试。
+- `removedSharedPrompts`/`sharedPromptsDir` 等"共享（Shared）"命名清理（任务 3.6）是 review-plan 循环中新发现、追加进 tasks.md 的范围，不在最初 propose 产出的方案里——已完整落地（`installer.ts` 字段与局部变量、`menu.ts`/`i18n` 消费点、测试断言全部同步改名）。

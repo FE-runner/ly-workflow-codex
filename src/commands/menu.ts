@@ -449,14 +449,14 @@ async function uninstall(): Promise<void> {
       }
     }
 
-    if (result.removedSharedPrompts) {
+    if (result.removedPrompts) {
       console.log()
-      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedSharedPrompts')}`))
+      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedPrompts')}`))
     }
 
-    if (result.configTomlKept) {
+    if (result.worktreesKept) {
       console.log()
-      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.configTomlKept')}`))
+      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.worktreesKept')}`))
     }
 
     if (isGlobalInstall) {

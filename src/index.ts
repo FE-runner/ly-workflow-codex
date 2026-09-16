@@ -17,7 +17,6 @@ export {
   getWorkflowById,
   getWorkflowConfigs,
   installWorkflows,
-  migrateLegacyPrompts,
   uninstallWorkflows,
 } from './utils/installer'
 export {

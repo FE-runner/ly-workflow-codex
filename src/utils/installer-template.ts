@@ -92,6 +92,6 @@ export function replaceHomePathsInTemplate(content: string, _installDir: string)
   // PowerShell and CMD also support forward slashes for most commands
   const toForwardSlash = (path: string) => path.replace(/\\/g, '/')
 
-  // codex 单宿主：模板中的 ~/ 展开为用户 home（如 ROLE_FILE: ~/.ly/prompts/...）
+  // codex 单宿主：模板中的 ~/ 展开为用户 home（如 ROLE_FILE: ~/.codex/lyx/prompts/...）
   return content.replace(/~\//g, `${toForwardSlash(homedir())}/`)
 }

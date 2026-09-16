@@ -8,10 +8,10 @@ export const BIN_NAME = 'lycx'
 export const CODE_PROMPTS_DIR = join(homedir(), '.codex', 'prompts')
 /** codex skills 安装位（~/.agents/skills，v0.2.0 起：Codex 官方 skill 发现目录） */
 export const AGENTS_SKILLS_DIR = join(homedir(), '.agents', 'skills')
-/** ly 配置根目录（~/.ly） */
-export const LY_DIR = join(homedir(), '.ly')
-/** ly 配置文件（~/.ly/config.toml） */
+/** ly 配置根目录（~/.codex/lyx） */
+export const LY_DIR = join(homedir(), '.codex', 'lyx')
+/** ly 配置文件（~/.codex/lyx/config.toml） */
 export const CONFIG_FILE = join(LY_DIR, 'config.toml')
-/** 共享角色词目录（~/.ly/prompts） */
+/** 共享角色词目录（~/.codex/lyx/prompts） */
 export const PROMPTS_DIR = join(LY_DIR, 'prompts')
 export const ISSUES_URL = 'https://github.com/FE-runner/ly-workflow-codex/issues'

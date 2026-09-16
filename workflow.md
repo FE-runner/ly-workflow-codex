@@ -12,7 +12,7 @@ flowchart TD
     AskIso -->|隔离 worktree| WtDirty{"脏改动?<br/>(git status --porcelain)"}
     WtDirty -->|有| WtHint["提示: 改动留在原 worktree<br/>确认后继续"]
     WtDirty -->|无| WtCreate
-    WtHint --> WtCreate["git worktree add -b 开发分支名<br/>~/.ly/worktrees/项目名/开发分支名<br/>(从当前分支 HEAD 切出) + baseline"]
+    WtHint --> WtCreate["git worktree add -b 开发分支名<br/>~/.codex/lyx/worktrees/项目名/开发分支名<br/>(从当前分支 HEAD 切出) + baseline"]
     WtCreate --> WtCd["同会话 cd 进 worktree + 目录校验<br/>(失败即停,不静默继续)"]
     WtCd --> AskAuto
     AskIso -->|本项目切新分支| Dirty1{"脏改动?"}

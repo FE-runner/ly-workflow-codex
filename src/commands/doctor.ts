@@ -144,7 +144,7 @@ export async function doctor(): Promise<void> {
   checks.push({
     label: 'config',
     status: config ? OK : WARN,
-    detail: config ? `v${config.general?.version || '?'}, lang=${config.general?.language || '?'}` : 'Not found (~/.ly/config.toml)',
+    detail: config ? `v${config.general?.version || '?'}, lang=${config.general?.language || '?'}` : 'Not found (~/.codex/lyx/config.toml)',
   })
 
   // 3. Commands (lyx-* SKILL.md under ~/.agents/skills)
@@ -156,13 +156,13 @@ export async function doctor(): Promise<void> {
     detail: `${cmdCount} installed (~/.agents/skills/lyx-*/)`,
   })
 
-  // 4. Role prompts (shared ~/.ly/prompts/codex/)
+  // 4. Role prompts (~/.codex/lyx/prompts/codex/)
   const roleDir = join(LY_PROMPTS_DIR, 'codex')
   const roleFiles = (await dirFiles(roleDir)).filter(f => f.endsWith('.md'))
   checks.push({
     label: 'Roles',
     status: roleFiles.length >= 2 ? OK : roleFiles.length > 0 ? WARN : FAIL,
-    detail: roleFiles.length > 0 ? roleFiles.join(', ') : 'None (~/.ly/prompts/codex/)',
+    detail: roleFiles.length > 0 ? roleFiles.join(', ') : 'None (~/.codex/lyx/prompts/codex/)',
   })
 
   // 5. OpenSpec CLI

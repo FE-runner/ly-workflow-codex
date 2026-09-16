@@ -198,7 +198,7 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
 
   // codex 单宿主：备份新安装位 ~/.agents/skills/lyx-* skill 目录（含旧 ly-* 开发形态残留），
   // 以及旧安装位 ~/.codex/prompts/ly-*.md 残留（v0.2.0 前产物，升级清理）。
-  // （共享角色词 ~/.ly/prompts/ 与配置 ~/.ly/config.toml 由 init --force 重装/保留，
+  // （角色词 ~/.codex/lyx/prompts/ 与配置 ~/.codex/lyx/config.toml 由 init --force 重装/保留，
   //   用户自己的 ~/.agents/skills 下非 lyx-/ly- 内容与 ~/.codex/prompts 下非 ly- *.md 一律不动）
   const codexSkillsDir = AGENTS_SKILLS_DIR
   const legacyPromptsDir = CODE_PROMPTS_DIR

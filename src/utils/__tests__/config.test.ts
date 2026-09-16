@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultConfig, migrateLegacyConfig, readLyConfig, sanitizeCodexHostExtras, sanitizeInstalledHosts, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
+import { createDefaultConfig, readLyConfig, sanitizeCodexHostExtras, sanitizeInstalledHosts, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
 
 // 模块顶层常量（CONFIG_FILE / LY_DIR 等）在 import 时基于 homedir() 求值，
 // 因此 hoisted 阶段就创建固定临时 home，再 mock homedir() 指向它——
@@ -21,7 +21,7 @@ vi.mock('node:os', async (importOriginal) => {
 
 /** 每个用例前清空临时 home 内可能残留的配置目录 */
 beforeEach(() => {
-  rmSync(join(osMocks.home, '.ly'), { recursive: true, force: true })
+  rmSync(join(osMocks.home, '.codex', 'lyx'), { recursive: true, force: true })
   rmSync(join(osMocks.home, '.claude'), { recursive: true, force: true })
 })
 
@@ -81,16 +81,16 @@ describe('createDefaultConfig (codex 单宿主)', () => {
     expect(config.installedHosts).toEqual(['codex'])
   })
 
-  it('points all path constants into the new ~/.ly location', () => {
+  it('points all path constants into the new ~/.codex/lyx location', () => {
     const config = createDefaultConfig(baseOptions)
     const normalized = {
       commands: config.paths.commands.replace(/\\/g, '/'),
       prompts: config.paths.prompts.replace(/\\/g, '/'),
       backup: config.paths.backup.replace(/\\/g, '/'),
     }
-    expect(normalized.commands).toBe(`${osMocks.home}/.ly/prompts`)
-    expect(normalized.prompts).toBe(`${osMocks.home}/.ly/prompts`)
-    expect(normalized.backup).toBe(`${osMocks.home}/.ly/backup`)
+    expect(normalized.commands).toBe(`${osMocks.home}/.codex/lyx/prompts`)
+    expect(normalized.prompts).toBe(`${osMocks.home}/.codex/lyx/prompts`)
+    expect(normalized.backup).toBe(`${osMocks.home}/.codex/lyx/backup`)
     expect(normalized.commands).not.toContain('.claude')
   })
 
@@ -404,66 +404,8 @@ describe('createDefaultConfig spawnableModels 透传保全 (codex-model-config)'
   })
 })
 
-describe('legacy config migration (~/.claude/.ly → ~/.ly)', () => {
-  it('moves legacy config to ~/.ly/config.toml and preserves its value', async () => {
-    const legacyDir = join(osMocks.home, '.claude', '.ly')
-    const legacyFile = join(legacyDir, 'config.toml')
-    mkdirSync(legacyDir, { recursive: true })
-    writeFileSync(legacyFile, 'general = { version = "0.0.1", language = "zh-CN" }\n')
-
-    expect(await migrateLegacyConfig()).toBe(true)
-    expect(existsSync(legacyFile)).toBe(false)
-    expect(existsSync(join(osMocks.home, '.ly', 'config.toml'))).toBe(true)
-
-    const config = await readLyConfig()
-    expect(config?.general?.version).toBe('0.0.1')
-  })
-
-  it('does not overwrite an existing new-location config', async () => {
-    const legacyDir = join(osMocks.home, '.claude', '.ly')
-    const legacyFile = join(legacyDir, 'config.toml')
-    mkdirSync(legacyDir, { recursive: true })
-    writeFileSync(legacyFile, 'general = { version = "1.0.0" }\n')
-    mkdirSync(join(osMocks.home, '.ly'), { recursive: true })
-    writeFileSync(join(osMocks.home, '.ly', 'config.toml'), 'general = { version = "2.0.0" }\n')
-
-    expect(await migrateLegacyConfig()).toBe(false)
-    expect(existsSync(legacyFile)).toBe(true)
-    const config = await readLyConfig()
-    expect(config?.general?.version).toBe('2.0.0')
-  })
-
-  it('returns false when the legacy location does not exist', async () => {
-    expect(await migrateLegacyConfig()).toBe(false)
-    expect(existsSync(join(osMocks.home, '.ly', 'config.toml'))).toBe(false)
-  })
-
-  it('skips migration when ~/.claude still hosts active ly-workflow products (commands/ly)', async () => {
-    const legacyDir = join(osMocks.home, '.claude', '.ly')
-    const legacyFile = join(legacyDir, 'config.toml')
-    mkdirSync(join(osMocks.home, '.claude', 'commands', 'ly'), { recursive: true })
-    mkdirSync(legacyDir, { recursive: true })
-    writeFileSync(legacyFile, 'general = { version = "9.9.9", language = "zh-CN" }\n')
-
-    expect(await migrateLegacyConfig()).toBe(false)
-    // 他方在用配置不被搬走
-    expect(existsSync(legacyFile)).toBe(true)
-    expect(existsSync(join(osMocks.home, '.ly', 'config.toml'))).toBe(false)
-  })
-
-  it('skips migration when legacy config carries claude-host markers', async () => {
-    const legacyDir = join(osMocks.home, '.claude', '.ly')
-    const legacyFile = join(legacyDir, 'config.toml')
-    mkdirSync(legacyDir, { recursive: true })
-    writeFileSync(legacyFile, 'general = { version = "8.8.8" }\ninstalledHosts = ["claude", "codex"]\n')
-
-    expect(await migrateLegacyConfig()).toBe(false)
-    expect(existsSync(legacyFile)).toBe(true)
-  })
-})
-
 describe('readLyConfig / writeLyConfig', () => {
-  it('writes and reads back config at ~/.ly/config.toml', async () => {
+  it('writes and reads back config at ~/.codex/lyx/config.toml', async () => {
     const config = createDefaultConfig({
       language: 'en',
       installedWorkflows: ['propose'],
@@ -471,7 +413,7 @@ describe('readLyConfig / writeLyConfig', () => {
     })
     await writeLyConfig(config)
 
-    expect(existsSync(join(osMocks.home, '.ly', 'config.toml'))).toBe(true)
+    expect(existsSync(join(osMocks.home, '.codex', 'lyx', 'config.toml'))).toBe(true)
     const readBack = await readLyConfig()
     expect(readBack?.general?.version).toBe(config.general.version)
     expect(readBack?.general?.language).toBe('en')
@@ -486,8 +428,8 @@ describe('readLyConfig / writeLyConfig', () => {
   })
 
   it('ignores legacy routing/performance fields on read and drops them on write', async () => {
-    mkdirSync(join(osMocks.home, '.ly'), { recursive: true })
-    writeFileSync(join(osMocks.home, '.ly', 'config.toml'), [
+    mkdirSync(join(osMocks.home, '.codex', 'lyx'), { recursive: true })
+    writeFileSync(join(osMocks.home, '.codex', 'lyx', 'config.toml'), [
       'general = { version = "0.0.3", language = "en" }',
       'workflows = { installed = ["propose"] }',
       '[routing]',
@@ -502,8 +444,22 @@ describe('readLyConfig / writeLyConfig', () => {
     expect((config as any).performance).toBeUndefined()
 
     await writeLyConfig(config!)
-    const content = readFileSync(join(osMocks.home, '.ly', 'config.toml'), 'utf-8')
+    const content = readFileSync(join(osMocks.home, '.codex', 'lyx', 'config.toml'), 'utf-8')
     expect(content).not.toContain('[routing]')
     expect(content).not.toContain('liteMode')
+  })
+
+  it('never reads, modifies or deletes a legacy ~/.ly/config.toml', async () => {
+    const legacyFile = join(osMocks.home, '.ly', 'config.toml')
+    mkdirSync(join(osMocks.home, '.ly'), { recursive: true })
+    const legacyContent = 'general = { version = "0.0.1", language = "zh-CN" }\n[codexHost]\nreviewModel = "legacy-model"\n'
+    writeFileSync(legacyFile, legacyContent)
+
+    const config = createDefaultConfig({ language: 'en', installedWorkflows: ['propose'] })
+    await writeLyConfig(config)
+    await readLyConfig()
+
+    expect(readFileSync(legacyFile, 'utf-8')).toBe(legacyContent)
+    expect(existsSync(join(osMocks.home, '.codex', 'lyx', 'config.toml'))).toBe(true)
   })
 })
