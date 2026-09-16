@@ -42,6 +42,8 @@ export interface SubagentModelFieldResult {
   reasoningEffortKey: string
   /** 推理档值（清洗后）；undefined = 未配置（不传 reasoning_effort） */
   reasoningEffort?: string
+  /** 【弃用字段标记】单审查执行模型不再读取使用（字段与存量值保留，仅提示） */
+  deprecated?: boolean
 }
 
 export interface SubagentModelConfigResult {
@@ -88,6 +90,7 @@ export function assessSubagentModelConfig(codexHost: LyConfig['codexHost']): Sub
     okKind: f.value ? 'configured' as const : 'unset' as const,
     reasoningEffortKey: f.reasoningEffortKey,
     reasoningEffort: f.reasoningEffort,
+    deprecated: f.key === 'reviewModelB' || f.reasoningEffortKey === 'reviewReasoningEffortB',
   }))
 
   const spawnWarn = spawn.state === 'empty' || spawn.state === 'invalid'
@@ -107,7 +110,8 @@ function buildSubagentModelCheckDetail(result: SubagentModelConfigResult): strin
     const reasoningPart = f.reasoningEffort
       ? i18n.t('doctor:modelConfig.okReasoningConfigured', { key: f.reasoningEffortKey, effort: f.reasoningEffort })
       : i18n.t('doctor:modelConfig.okReasoningUnset', { key: f.reasoningEffortKey })
-    return [modelPart, reasoningPart]
+    const deprecatedPart = f.deprecated ? i18n.t('doctor:modelConfig.deprecatedNote') : ''
+    return [modelPart + deprecatedPart, reasoningPart]
   })
   if (result.spawnState === 'empty' || result.spawnState === 'invalid')
     parts.push(i18n.t('doctor:modelConfig.warnInvalid'))

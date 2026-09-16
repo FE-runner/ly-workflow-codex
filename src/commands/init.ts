@@ -26,7 +26,7 @@ import { PACKAGE_NAME } from '../utils/package-meta'
 
 const OPENAI_OFFICIAL_BASE_URL = 'https://api.openai.com/v1'
 
-/** codexHost 三个模型字段的采集结果 */
+/** codexHost 模型字段的采集结果（reviewModelB 仅承载存量保真值，不再采集） */
 interface CodexHostModels {
   reviewModel?: string
   reviewModelB?: string
@@ -38,10 +38,10 @@ type ProviderChoice
     | { type: 'official' }
     | { type: 'custom' }
 
-// 三个模型字段的驱动元数据（i18n 键 + 持久化清洗归属：A 白名单、B/coding 仅 trim）
+// 模型字段的驱动元数据（i18n 键 + 持久化清洗归属：reviewModel 白名单、codingModel 仅 trim）。
+// reviewModelB 已弃用（单审查执行模型不读取），向导不再采集；存量值经 existingExtras 保真写回
 const MODEL_FIELDS = [
   { key: 'reviewModel', labelKey: 'init:model.reviewModelA', sanitize: sanitizeReviewModel },
-  { key: 'reviewModelB', labelKey: 'init:model.reviewModelB', sanitize: sanitizeModelField },
   { key: 'codingModel', labelKey: 'init:model.codingModel', sanitize: sanitizeModelField },
 ] as const
 
@@ -212,7 +212,7 @@ async function collectCodexHostConfig(options: {
   return collected
 }
 
-/** 配置摘要（交互与非交互共用）：host + 三模型 + 命令数 */
+/** 配置摘要（交互与非交互共用）：host + 模型字段 + 命令数 */
 function printSummary(input: { models: CodexHostModels, commandCount: number }): void {
   const { models, commandCount } = input
   console.log()
@@ -221,7 +221,6 @@ function printSummary(input: { models: CodexHostModels, commandCount: number }):
   console.log()
   console.log(`  ${ansis.cyan(i18n.t('init:summary.host'))}  ${ansis.green('codex')}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))}  ${models.reviewModel ? ansis.green(models.reviewModel) : ansis.gray(i18n.t('init:host.reviewModelUnset'))}`)
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelB'))}  ${models.reviewModelB ? ansis.green(models.reviewModelB) : ansis.gray(i18n.t('init:host.reviewModelUnset'))}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))}  ${models.codingModel ? ansis.green(models.codingModel) : ansis.gray(i18n.t('init:host.reviewModelUnset'))}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(commandCount.toString())}`)
   console.log(ansis.yellow('━'.repeat(50)))
@@ -273,7 +272,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
   }
 
   const selectedWorkflows = getCoreCommandIds()
-  // 既有配置中的三个模型字段作为交互/非交互默认值（空白等价未配置；保真写回不丢）
+  // 既有配置中的模型字段作为交互/非交互默认值（空白等价未配置；保真写回不丢，含弃用的 reviewModelB）
   const existingExtras = sanitizeCodexHostExtras(existingConfig?.codexHost)
   const defaultModels: CodexHostModels = {
     reviewModel: sanitizeReviewModel(existingConfig?.codexHost?.reviewModel),
@@ -288,7 +287,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
   // Interactive flow（codex 单宿主）
   // ═══════════════════════════════════════════════════════
   if (!options.skipPrompt) {
-    // ── API 提供方 → Codex 现状检测 → 模型三连 ──
+    // ── API 提供方 → Codex 现状检测 → 模型二连 ──
     collectedModels = await collectCodexHostConfig({ defaults: defaultModels })
 
     // ── 摘要 ──
@@ -306,7 +305,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     }
   }
   else {
-    // non-interactive：打印最小摘要行（保留既有三字段默认）
+    // non-interactive：打印最小摘要行（保留既有字段默认）
     printSummary({ models: collectedModels, commandCount: selectedWorkflows.length })
   }
 
@@ -324,7 +323,8 @@ export async function init(options: InitOptions = {}): Promise<void> {
       codexHost: {
         ...existingExtras,
         reviewModel: collectedModels.reviewModel,
-        reviewModelB: collectedModels.reviewModelB,
+        // reviewModelB 已弃用、不再采集：保真写回存量值，SHALL NOT 因重装而丢弃
+        reviewModelB: existingExtras.reviewModelB,
         codingModel: collectedModels.codingModel,
       },
       installedHosts: ['codex'],

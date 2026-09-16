@@ -15,9 +15,9 @@ export type HostId = 'codex' | 'claude'
 
 /** 宿主无关的模板渲染配置（共享 LyConfig 的相关切片） */
 export interface HostAdapterConfig {
-  /** 审查 agent A 模型（LyConfig.codexHost.reviewModel）；未配置或空白时回退当前会话模型 */
+  /** 审查 subagent 模型（LyConfig.codexHost.reviewModel）；未配置或空白时回退当前会话模型 */
   reviewModel?: string
-  /** 审查 agent B 模型（LyConfig.codexHost.reviewModelB）；未配置或空白时回退当前会话模型 */
+  /** 【弃用】双审查时代的审查 agent B 模型——单审查执行模型不再读取，字段保留、存量值透传不剥离 */
   reviewModelB?: string
   /** coding subagent（实施）模型（LyConfig.codexHost.codingModel）；未配置或空白时回退当前会话模型 */
   codingModel?: string
@@ -71,10 +71,10 @@ export interface HostAdapter {
  *   其余 {{REVIEW_MODEL}} 占位（正文引用）渲染为空串
  *
  * subagent 多 Agent 模式说明：模型指定改为"模板指示 + 宿主能力"落实——模板正文直接写明
- * 各 subagent 的模型取 `codexHost.reviewModel`/`reviewModelB`/`codingModel` 的哪个字段、
+ * 审查/coding subagent 的模型取 `codexHost.reviewModel`/`codingModel` 的哪个字段、
  * 未配置或空白回退当前会话模型，由运行环境的宿主 spawn 能力执行，不依赖 shell 层模型参数。
- * `codingModel`/`reviewModelB` 为新增可选字段，直接透传、无剥离需求，本函数不需要也不应
- * 处理它们；{{REVIEW_MODEL}} 处理仅保留给历史模板/旧安装位升级残留的兼容渲染。
+ * `reviewModelB` 已弃用（单审查执行模型不读取），直接透传、无剥离需求，本函数不需要也不应
+ * 处理它；{{REVIEW_MODEL}} 处理仅保留给历史模板/旧安装位升级残留的兼容渲染。
  */
 export function renderCodexTemplate(content: string, config: HostAdapterConfig): string {
   let processed = injectConfigVariables(content, config)

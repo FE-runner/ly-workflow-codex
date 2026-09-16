@@ -1,19 +1,19 @@
 ---
 name: lyx-review-plan
-description: '读取 OpenSpec change 的 proposal/design/tasks，双审查 subagent（fork 当前会话上下文，模型按 reviewModel/reviewModelB 分别指定）分级审查方案合理性，审查-修复循环直到 Critical 清零或触发终止条件'
+description: '读取 OpenSpec change 的 proposal/design/tasks，单审查 subagent（非 fork spawn，模型按 reviewModel 指定）分级审查方案合理性，主会话逐条裁决异议（不认可须附可核验依据），审查-修复循环直到 Critical 清零或触发终止条件'
 argument-hint: '[<change-name>] [--no-commit]'
 ---
 
-<!-- 双审查 subagent 执行约定（spawn 协议、任务构造、共识/分歧裁决）内联于本文件，无外部 shell 调用契约；
+<!-- 单审查 subagent 执行约定（spawn 协议、任务构造、主会话裁决与驳回硬线）内联于本文件，无外部 shell 调用契约；
      模型指定经"模板指示 + 宿主能力"落实，见"步骤 3"与模板变量说明 -->
 
 # Review Plan - 方案审查
 
 > 调用方式：`@lyx-review-plan` mention 后跟随的自然语言即参数（如 `@lyx-review-plan` 带需求描述/选项）；无参数时直接 `@lyx-review-plan`。
 
-审查当前 OpenSpec change 的方案是否合理，聚焦遗漏边界、范围不清晰、风险点——不是逐行代码风格。输出 Critical/Warning/Info 分级结果（与 `@lyx-review-code` 一致）。若存在 Critical，进入审查-修复循环：当前会话判断是否认可每条 Critical，认可则修改该 change 的 artifact 并自动重新审查，直到清零或触发终止条件。
+审查当前 OpenSpec change 的方案是否合理，聚焦遗漏边界、范围不清晰、风险点——不是逐行代码风格。输出 Critical/Warning/Info 分级结果（与 `@lyx-review-code` 一致）。若存在 Critical，进入审查-修复循环：当前会话逐条裁决每条 Critical（认可则修改该 change 的 artifact，不认可必须附可核验依据），认可部分修复后自动重新审查，直到清零或触发终止条件。
 
-审查由 **2 个并行审查 subagent** 执行（subagent 多 Agent 模式）：每个 subagent fork 当前会话上下文（关键决策、取舍、已知边界等软上下文不丢失），任务中点名"只审该 change 的产物范围"；模型按 `codexHost.reviewModel`（agent A）/ `codexHost.reviewModelB`（agent B）分别指定，未配置或空白时继承当前会话模型。两 agent 各自独立审查 → 交换结论 → 达成共识；意见分歧时主会话拍板并显式提示用户，主会话不能确认 → 判定 Critical。Critical 判定/修复由当前会话执行。
+审查由 **1 个审查 subagent** 执行（subagent 多 Agent 模式）：子会话**非 fork spawn**、只携带本模板构造的 TASK（软上下文经该 change 目录下的 `context.md` 到达），任务中点名"只审该 change 的产物范围"；模型按 `codexHost.reviewModel` 指定，未配置或空白时继承当前会话模型；`reviewModelB`/`reviewReasoningEffortB` 为弃用字段，本命令不读取使用。SHALL NOT spawn 第二个审查 agent、SHALL NOT 实现"并行双审、交换结论、共识归并"环节——单 agent 的分级结论即本轮唯一审查发现来源，质量把关由当前会话逐条裁决与"驳回硬线"终止条件承担。Critical 修复由当前会话执行。
 
 循环执行期间默认不提交；仅当循环以"正常清零"结束时，才对审查目标全部文件（该 change 的 artifact 与 delta spec，含编排方已暂存的产物与循环修复）统一提交一次（见步骤 5）。传入 `--no-commit` 时，连这次最终的统一提交也不做。
 
@@ -43,45 +43,35 @@ ls -d openspec/changes/*/ 2>/dev/null | grep -v '/archive/'
 
 **基线 spec 引用检测**：检查每份 delta spec 文件是否有显式文字引用了基线 spec 中未被本次修改的既有 Requirement（例如"见……'某 Requirement 名'"这类指代，无论出现在 `## MODIFIED Requirements` 内还是外）。若有，额外把该基线能力对应的 `openspec/specs/<capability>/spec.md` 路径也纳入路径清单，并在 TASK 中说明该文件仅作审查上下文（用于核实引用是否准确），不属于修复对象。
 
-### 3. spawn 双审查 subagent（首轮）
+### 3. spawn 单审查 subagent（首轮）
 
-本关卡审查由 **2 个并行审查 subagent** 执行（subagent 多 Agent 模式，不再走独立子进程 shell 调用）。主会话按以下指示 spawn，由运行环境的宿主 spawn 能力落实：
+本关卡审查由 **1 个审查 subagent** 执行（subagent 多 Agent 模式，不再走独立子进程 shell 调用）。主会话按以下指示 spawn，由运行环境的宿主 spawn 能力落实：
 
 **轮内纪律（主会话硬规则）**：
 
 1. **同轮等待结果**：spawn 之后 SHALL 在本轮内等待（wait）子 agent 返回，收到结果先逐字转达（写入本轮执行日志）再判定；SHALL NOT 在 spawn 后结束本轮回合，留下"子 agent 已返回但主会话已退出、结果无人消费"的断链状态。
-2. **禁止口头分发**：每一步 spawn / wait / 交换结论都 SHALL 落到宿主的实际工具调用，SHALL NOT 仅以自然语言描述"已分发/将分发审查任务给 subagent"代替实际 spawn 调用；出现"我将 spawn…"类描述而没有对应工具调用时，该输出不视为分发动作，不得据此结束本轮或进入下一阶段。
-3. **消费完即关闭**：子 agent 结果消费完毕（共识归并或主会话裁决完成、不再需要该 agent）SHALL 关闭它；关闭时机 SHALL 在共识归并或主会话裁决之后，不得提前关闭导致"交换结论失败"误判；SHALL NOT 假设 subagent 跨用户回合存活。
+2. **禁止口头分发**：每一步 spawn / wait 都 SHALL 落到宿主的实际工具调用，SHALL NOT 仅以自然语言描述"已分发/将分发审查任务给 subagent"代替实际 spawn 调用；出现"我将 spawn…"类描述而没有对应工具调用时，该输出不视为分发动作，不得据此结束本轮或进入下一阶段。
+3. **消费完即关闭**：子 agent 结果消费完毕（逐条裁决完成、不再需要该 agent）SHALL 关闭它；SHALL NOT 假设 subagent 跨用户回合存活。
 
-1. **spawn 两个审查 subagent，并行独立审查**（互不见对方结论）：
-   - **审查 agent A**：模型 = `~/.ly/config.toml` 的 `[codexHost] reviewModel`；未配置或空白 → 继承当前会话模型。推理档 = `[codexHost] reviewReasoningEffort`；先 trim，trim 后为空 → 不传该参数，trim 后非空时把 trim 后的值作为宿主 spawn 的 `reasoning_effort` 随 `reviewModel` 一并传入。
-   - **审查 agent B**：模型 = `[codexHost] reviewModelB`；未配置或空白 → 继承当前会话模型。推理档 = `[codexHost] reviewReasoningEffortB`；先 trim，trim 后为空 → 不传该参数，trim 后非空时把 trim 后的值作为宿主 spawn 的 `reasoning_effort` 随 `reviewModelB` 一并传入。
-2. **fork 当前会话上下文**：两个 agent 均 fork 当前会话上下文启动——主会话讨论中的关键决策、取舍、已知边界等"软上下文"随 fork 到达审查模型，避免关键信息丢失。模型与推理档指定只写在模板指示里（取哪个配置字段、未配置用当前会话模型或不传推理档），由宿主 spawn 能力执行，SHALL NOT 依赖任何 shell 层模型参数（无 `-m`/`--model` 类指令），SHALL NOT 内置任何"模型名 → 推理档"的硬编码映射。
-3. **agent 模型需额外配置（含推理档；spawn 前确认字段，不做清单强校验）**：审查 agent 的模型能否 spawn 由运行环境实际能力决定，SHALL NOT 依赖任何硬编码清单或 `/models` 结果预判。spawn 前 SHALL 读取 `~/.ly/config.toml` 确认 A/B 对应模型与推理档字段取值，读取失败（缺文件/解析错误）→ 视为**配置状态未知**：明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承回退。模型留空 → 回退继承当前会话模型；推理档 trim 后为空 → 不传 `reasoning_effort`。spawn 失败报错原文含 `Unknown model` 与 `Available models: ...` 时如实展示，提示"该模型当前不支持 spawn，请改用报错中 Available models 列表内的模型"；推理档被宿主/上游拒绝时同样如实展示报错原文并按既有 spawn 失败口径处理，SHALL NOT 把取值预判为"配置无效"。**验证某模型是否可 spawn 的示例 prompt**：让 Codex 用该模型 spawn 一个子代理执行简单任务（如回复 ok），报错原文即判定依据。
-4. **TASK 范围点名（只审 change 范围）**：每个审查 subagent 的任务均点名"只审该 change 的下列产物"，SHALL NOT 超出点名范围作业。TASK 先指示读取 ROLE_FILE（两个 agent 均用 `~/.ly/prompts/codex/plan-reviewer.md`，角色词内容不重写），再列出路径清单（步骤 2 枚举的 artifact + delta spec；若步骤 2 检测到基线 spec 引用，同时说明基线路径仅作审查上下文、不属于修复对象）。**首轮只传路径清单，不拼贴文件全文**——审查 subagent 具备自主读取文件的能力，需要实际内容时自行读取。
+1. **非 fork spawn**：审查 subagent SHALL 以**非 fork** 方式 spawn——子代理只携带 spawn 消息（TASK），SHALL NOT 携带父线程对话历史（宿主 V1 语义为 `fork_context: false` 默认值；V2 语义为 `fork_turns: none`）。仅当宿主不支持完全非 fork 而仅支持"最近 N 轮"fork 模式时，SHALL 取最小 N（或 0）近似非 fork 并在报告中如实说明；SHALL NOT 使用全量 fork。
+2. **软上下文经 context.md 到达**：非 fork 意味着主会话讨论中的关键决策、取舍、已知边界等"软上下文"不再随会话历史自动到达审查 agent——TASK SHALL 指示审查 subagent 读取该 change 目录下的 `context.md`（`openspec/changes/<change-name>/context.md`）获取软上下文，SHALL NOT 在 TASK 中整段复制其内容。`context.md` 缺失（历史 change）时在报告中如实注明"context.md 缺失，软上下文不可用"后继续，SHALL NOT 凭空虚构上下文。
+3. **agent 模型需额外配置（含推理档；spawn 前确认字段，不做清单强校验）**：审查 subagent 的模型 = `~/.ly/config.toml` 的 `[codexHost] reviewModel`；未配置或空白 → 继承当前会话模型。推理档 = `[codexHost] reviewReasoningEffort`；先 trim，trim 后为空 → 不传该参数，trim 后非空时把 trim 后的值作为宿主 spawn 的 `reasoning_effort` 随 `reviewModel` 一并传入。`reviewModelB`/`reviewReasoningEffortB` 为弃用字段，SHALL NOT 读取使用。模型能否 spawn 由运行环境实际能力决定，SHALL NOT 依赖任何硬编码清单或 `/models` 结果预判。spawn 前 SHALL 读取 `~/.ly/config.toml` 确认模型与推理档字段取值，读取失败（缺文件/解析错误）→ 视为**配置状态未知**：明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承回退。spawn 失败报错原文含 `Unknown model` 与 `Available models: ...` 时如实展示，提示"该模型当前不支持 spawn，请改用报错中 Available models 列表内的模型"；推理档被宿主/上游拒绝时同样如实展示报错原文并按既有 spawn 失败口径处理，SHALL NOT 把取值预判为"配置无效"。模型与推理档指定只写在模板指示里，SHALL NOT 依赖任何 shell 层模型参数（无 `-m`/`--model` 类指令），SHALL NOT 内置任何"模型名 → 推理档"的硬编码映射。**验证某模型是否可 spawn 的示例 prompt**：让 Codex 用该模型 spawn 一个子代理执行简单任务（如回复 ok），报错原文即判定依据。
+4. **TASK 范围点名（只审 change 范围）**：审查 subagent 的任务点名"只审该 change 的下列产物"，SHALL NOT 超出点名范围作业。TASK 先指示读取 ROLE_FILE（`~/.ly/prompts/codex/plan-reviewer.md`，角色词内容不重写），再列出路径清单（步骤 2 枚举的 artifact + delta spec；若步骤 2 检测到基线 spec 引用，同时说明基线路径仅作审查上下文、不属于修复对象）。**首轮只传路径清单，不拼贴文件全文**——审查 subagent 具备自主读取文件的能力，需要实际内容时自行读取。
 
-TASK 核心约束（写入每个审查 subagent 的任务）：
+TASK 核心约束（写入审查 subagent 的任务）：
 - 只审查该 change 目录下 artifact 之间的内在一致性和完整性（proposal vs design vs tasks vs spec 是否互相矛盾、是否有遗漏）
 - 可做轻量代码库确认（确认 plan 列出的文件路径是否存在、grep 硬编码数字/常量是否遗漏关联文件），但不深入读源码实现、不做逐行代码审查——后者是 apply 后 code-review 的职责
 - 不把'代码库尚未实现该方案条目'当作 Critical（方案审查阶段代码库本来就没有实现，这是正常状态）
 
-OUTPUT 约束（写入每个审查 subagent 的任务）：审查发现按严重度分级 Critical/Warning/Info，每条含位置/条目（含可解析的文件相对路径）、问题描述、建议。
-
-**两 agent 结论汇合（独立审 → 交换 → 共识）**：
-
-1. 两个 agent 独立审查完毕后，**由主会话将 A/B 结论互转给双方**（两 subagent 由宿主并行 spawn、不直连），各自针对对方结论给出最终意见后，主会话再归并共识。
-2. **共识归并**：两 agent 结论合并去重后作为本轮审查结论；部分重叠或冲突的条目 SHALL 一并列出交主会话判定，SHALL NOT 静默丢弃任一 agent 的独立发现。
-3. **意见分歧**（agent A 提出 Critical 而 agent B 未提出，或两者结论冲突）→ **主会话拍板**，且 SHALL **显式提示用户"这是审查分歧"**：主会话能确认 → 按确认结论处理；不能确认 → 判定该条为 Critical（red）进入修复循环。
-4. **分歧时序**：双 agent 首次分歧且主会话不能确认 → 判定 Critical 进入修复循环；下一轮复审双 agent 仍分歧且主会话仍不能确认 → 触发"分歧未决"终止条件（终止条件 5）。
-5. **交换结论失败兜底**：交换结论过程中任一次等待/发送失败（超时、agent 无响应）SHALL 立即终止本轮并如实报告卡点（卡在交换结论的哪一步、涉及哪个 agent），SHALL NOT 用推测补全对方结论后再归并。
+OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分级 Critical/Warning/Info，每条含位置/条目（含可解析的文件相对路径）、问题描述、建议。
 
 **审查返回有效性判定**：审查 subagent 的返回 SHALL 包含可识别的分级结论（Critical/Warning/Info 计数与条目）或明确的"无发现"声明。空响应、内容疑似截断（token 截断、输出中断）、或仅有过程描述而无结论的返回，SHALL 视为**无效返回**，按"审查调用失败"的运行期失败处理——如实报告原始返回内容与判定理由，SHALL NOT 误判为"本轮无 Critical"或视为清零通过。
 
-**审查调用失败（区分两阶段）**：
+**审查调用失败（区分三类）**：
 
-- **运行期失败**（spawn 后等待超时/卡死、返回内容格式不符或不含有效结论（含空响应与疑似截断，见"审查返回有效性判定"）、双审查任一 agent 调用失败且无法按回退口径继续、回退不可行或回退后仍失败）→ 视为**独立终止条件**，如实报告原因（含已取得的部分结论，如有）并停止循环，**不得**把失败或超时等同于"本轮无 Critical"或视为清零通过。
+- **运行期失败**（spawn 后等待超时/卡死、返回内容格式不符或不含有效结论（含空响应与疑似截断，见"审查返回有效性判定"）、审查 subagent 调用失败且无法按回退口径继续、回退不可行或回退后仍失败）→ 视为**独立终止条件**，如实报告原因（含已取得的部分结论，如有）并停止循环，**不得**把失败或超时等同于"本轮无 Critical"或视为清零通过，SHALL NOT 归入"驳回硬线"（调用失败非裁决分歧）。
 - **环境级不可用**（配置合法时宿主无 subagent 能力、初始 spawn 不可用）→ 按回退口径处理：回退为当前会话直接执行审查，并输出**显式状态标记** `[回退] subagent 不可用: <原始报错>` 作为回退事实的唯一宣告——SHALL NOT 以其他自然语言描述代替该标记，SHALL NOT 在回退后以"审查已完成"之类结论冒充真实执行；该回退 SHALL NOT 视为流程失败中断整体编排。
-- **单一 agent 失败且另一 agent 结论完整** → 以完整一方结论继续审查，如实报告降级（含失败 agent 与原因），SHALL NOT 归入"分歧未决"（环境级失败非意见分歧）；是否补跑/重试由主会话决定。
+- **配置读取失败**（缺文件或解析错误）→ 视为"配置状态未知"，见第 3 条，明确提示运行 `lycx doctor` 检查。
 
 本轮结束后，无论是否有 Critical，都先生成"本轮执行日志"（见"逐轮执行日志"一节），再判定：
 
@@ -92,10 +82,10 @@ OUTPUT 约束（写入每个审查 subagent 的任务）：审查发现按严重
 
 对本轮全部 Critical，逐条执行：
 
-**4.1 当前会话先判断是否认可该 Critical**（同 `@lyx-review-code`）
+**4.1 当前会话先裁决该 Critical**（同 `@lyx-review-code`）
 
 - **认可**：判断问题确实存在，进入 4.2 修复。
-- **不认可**：判断为误报、对上下文理解有误、或建议本身有问题，则不修改任何文件，但必须在本轮报告里写明反驳理由。
+- **不认可**：判断为误报、对上下文理解有误、或建议本身有问题，则不修改任何文件，但必须在本轮报告里写明**可核验依据**——指明具体文件路径/行号、命令输出、既有条目所在位置等可被第三方独立核验的证据，SHALL NOT 仅以"误报""不影响"之类泛泛措辞打发。**缺乏可核验依据的不认可视为未完成裁决**：当前会话 SHALL 补足依据后重新裁决，不能补足的按认可处理并修复。SHALL NOT 沉默跳过或悄悄忽略任何一条 Critical。
 
 **4.2 修复（仅针对认可的 Critical）**
 
@@ -113,26 +103,26 @@ OUTPUT 约束（写入每个审查 subagent 的任务）：审查发现按严重
 
 从第 2 轮起，TASK SHALL NOT 重新传整份 proposal/design/tasks/specs 内容；改为仅包含：
 
-1. 上一轮审查 subagent（A/B）报告的全部 Critical 原文（逐字，不经改写，包含被判定"不认可"的条目）。
+1. 上一轮审查 subagent 报告的全部 Critical 原文（逐字，不经改写，包含被判定"不认可"的条目——非 fork 的审查 agent 无任何历史记忆，上一轮原文是判断"问题是否已解决"的唯一依据）。
 2. 路径清单，必须覆盖"本轮实际改动的 artifact/delta spec 文件"（4.4 记录的清单）∪"上一轮全部 Critical 各自指向的 artifact/delta spec 文件"（即使未被修改）。若上一轮某条 Critical 指向的文件已被删除或重命名，路径清单改用新路径（若有）并说明状态变化。
 
 路径清单之外的文件不重新整段传入。若某条上一轮 Critical 的位置字段缺失可解析路径，命令保守处理：将该 change 目录下全部 artifact/delta spec 路径纳入下一轮路径清单，并在报告中说明该情况（不得静默丢弃该 Critical）。
 
-**第 2 轮起重新 spawn 一对全新审查 subagent**：主会话 SHALL 不依赖"跨轮续聊"假设——子 agent 会话随主会话回合结构而存在，回合结束即失去访问能力，因此每轮都以独立 spawn + 同轮 wait 执行，SHALL NOT 假定上一轮 spawn 的 subagent 仍可被调用。第 2 轮重新 spawn 一对全新审查 subagent（fork 当前会话上下文，上下文已含上一轮结论与修复后的现状），TASK 仍按上述增量语义构造——fork 的当前会话上下文提供连续性，但不代表 TASK 可省略逐字 Critical 原文。回到步骤 3 的执行方式（只是 TASK 内容换成上述增量内容），重新派发审查，不要求用户手动重新触发命令。生成本轮执行日志后再判定 Critical 是否清零。
+**第 2 轮起重新 spawn 一个全新审查 subagent**：主会话 SHALL 不依赖"跨轮续聊"假设——子 agent 会话随主会话回合结构而存在，回合结束即失去访问能力，因此每轮都以独立 spawn + 同轮 wait 执行，SHALL NOT 假定上一轮 spawn 的 subagent 仍可被调用。第 2 轮重新 spawn 一个全新审查 subagent（**非 fork，只携带 TASK**），TASK 仍按上述增量语义构造——非 fork 不携带任何会话历史，上一轮 Critical 的逐字原文与路径清单是审查 agent 判断"问题是否已解决"的唯一依据，SHALL NOT 省略。回到步骤 3 的执行方式（只是 TASK 内容换成上述增量内容），重新派发审查，不要求用户手动重新触发命令。生成本轮执行日志后再判定 Critical 是否清零。
 
 ### 循环终止条件（任一命中即停止，转步骤 5）
 
 复用 `@lyx-review-code` 的同一套规则，全局轮数上限同样默认 5 轮（清零优先于轮数上限：本轮先判 Critical 是否清零，仅非清零时才检查是否达到 5 轮）：
 
 1. **正常清零**：某一轮审查 Critical 数为 0
-2. **熔断**：同一个 Critical（以"文件路径 + 问题类别 + 定位锚点（artifact 内的具体条目/章节）"三者共同判定为同一问题）在相邻两轮审查中都被判定为存在，且上一轮当前会话对它是"认可"状态
+2. **熔断**：同一个 Critical（以"文件路径 + 问题类别 + 定位锚点（artifact 内的具体条目/章节）"三者共同判定为同一问题）在相邻两轮审查中都被判定为存在，且上一轮当前会话对它是"认可"状态。若上一轮当前会话对它的判断是"不认可"（未修复），相邻两轮再次出现 SHALL NOT 走熔断而走"驳回硬线"（条件 5）
 3. **无法安全自动修复**：需要产品/业务决策、依赖当前会话不具备的信息，或当前会话判断信息不足——不得进行猜测性修改
 4. **修复后验证失败**：见 4.3（`openspec validate` 未通过）
-5. **分歧未决**：当前会话上一轮判断"不认可"（未修改），下一轮审查 subagent 仍判定同一问题存在；或双 agent 复审仍分歧且主会话仍不能确认（见步骤 3"分歧时序"）
+5. **驳回硬线**（二选一命中即触发）：（a）**逐条口径**——当前会话上一轮判断"不认可"（附可核验依据，未修改），下一轮审查该 Critical 仍被提出，且当前会话依然不认可；（b）**整轮口径**——连续 2 轮审查中，当前会话对当轮**全部** Critical 均不认可（零认可、零修复，即使各轮 Critical 的判同键互不相同）——整轮口径防的是"当前会话系统性驳回一切发现"的裁决失效。命中任一口径立即停止循环，报告并列展示审查 subagent 各轮原始发现与当前会话各轮可核验依据，判定需要人工介入，不得继续自动修复或自动放弃该问题
 6. **审查对象类型持续系统性误判**：连续 3 轮（含本轮）审查中，每一轮的全部 Critical 都被当前会话判定为同一大类系统性误判——即审查 subagent 反复以"该轮 Critical 所依据的判断类别不属于方案审查范畴"为由被判定不认可（例如连续 3 轮的 Critical 均以"代码库尚未实现该方案条目"作为理由），不要求这 3 轮之间 Critical 的文件/类别/锚点相互匹配，只要求"判定为不认可的理由类别"在这 3 轮中一致
 7. **达到全局轮数上限**（5 轮，独立于上面 1-6 的判定）
 
-触发条件 2-6（或达到全局轮数上限）时，立即停止循环，不执行任何提交（改动留在工作区），报告中必须明确指出触发的具体条件、涉及的问题（文件/类别/章节/判定依据），并说明需要人工介入。"分歧未决"额外要求并列展示审查 subagent 每一轮的原始发现与当前会话每一轮的反驳理由；"审查对象类型持续系统性误判"同样要求并列展示，但展示连续 3 轮（而不是 2 轮）的原始发现与反驳理由。循环期间的 Warning/Info 不参与终止判定，只在最终报告列出**最后一轮**结果。
+触发条件 2-6（或达到全局轮数上限）时，立即停止循环，不执行任何提交（改动留在工作区），报告中必须明确指出触发的具体条件、涉及的问题（文件/类别/章节/判定依据），并说明需要人工介入。"驳回硬线"要求并列展示审查 subagent 每一轮的原始发现与当前会话每一轮的可核验依据；"审查对象类型持续系统性误判"同样要求并列展示，但展示连续 3 轮（而不是 2 轮）的原始发现与可核验依据。循环期间的 Warning/Info 不参与终止判定，只在最终报告列出**最后一轮**结果。
 
 **循环期间不提交**：每一轮修复完成、验证通过后，SHALL NOT 立即执行 git commit——改动保持在当前状态，统一提交仅发生在正常清零后（见步骤 5）；`--no-commit` 传入时连清零后的统一提交也不执行。
 
@@ -144,7 +134,7 @@ OUTPUT 约束（写入每个审查 subagent 的任务）：审查发现按严重
 
 ### 逐轮执行日志
 
-每一轮审查 subagent 派发完成后（包括首轮 Critical 为 0、直接结束的情况），都要在报告中包含一个独立区块，逐字展示该轮审查 subagent 返回的原始 Critical/Warning/Info 内容（不经概括、改写或合并），与当前会话对该轮每条 Critical 的认可/不认可判定并排列出（若该轮无 Critical，只展示原文）。这个区块在该轮审查返回之后即可呈现，不是流式展示。这是给需要核实细节的人看的补充材料；最终报告的主体是人话摘要（见步骤 5），二者并存，不互相替代。
+每一轮审查 subagent 派发完成后（包括首轮 Critical 为 0、直接结束的情况），都要在报告中包含一个独立区块，逐字展示该轮审查 subagent 返回的原始 Critical/Warning/Info 内容（不经概括、改写或合并），与当前会话对该轮每条 Critical 的裁决（认可 / 不认可及可核验依据）并排列出（若该轮无 Critical，只展示原文）。这个区块在该轮审查返回之后即可呈现，不是流式展示。这是给需要核实细节的人看的补充材料；最终报告的主体是人话摘要（见步骤 5），二者并存，不互相替代。
 
 **硬性约束（逐字执行）**：该区块中的 Warning/Info 与 Critical 同样必须逐字完整贴出，**禁止用省略号（"…"、"（同前）"等）压缩**；**清零轮（无 Critical）的判定仍需写明依据**——对照前一轮各 Critical 的修复/确认情况说明"认可清零"的理由，不得仅以"无 Critical，正常清零"一句带过。
 
@@ -168,7 +158,7 @@ OUTPUT 约束（写入每个审查 subagent 的任务）：审查发现按严重
 1. [proposal.md / design.md / tasks.md / specs/**/*.md] — <观察/建议，人话>
 
 ## 逐轮执行日志
-（见"逐轮执行日志"一节，按轮次顺序列出每轮审查 subagent 原文 + 当前会话判定，作为补充材料）
+（见"逐轮执行日志"一节，按轮次顺序列出每轮审查 subagent 原文 + 当前会话裁决，作为补充材料）
 
 ---
 总轮次: [轮数]
@@ -176,7 +166,7 @@ OUTPUT 约束（写入每个审查 subagent 的任务）：审查发现按严重
 提交: [已提交 <commit信息> / 未提交（--no-commit） / 无可提交内容 / 提交失败：<原始错误>]
 ```
 
-**熔断/分歧未决/无法安全修复/验证失败/审查调用失败/达到轮数上限/审查对象类型持续系统性误判结束：**
+**熔断/驳回硬线/无法安全修复/验证失败/审查调用失败/达到轮数上限/审查对象类型持续系统性误判结束：**
 
 不执行任何提交，改动留在工作区。
 
@@ -186,21 +176,21 @@ OUTPUT 约束（写入每个审查 subagent 的任务）：审查发现按严重
 ## 终止详情
 <用人话说清楚发现了什么问题、卡在哪、涉及哪些文件/章节>
 
-（"分歧未决"额外展示，展示 2 轮）
+（"驳回硬线"额外展示，展示 2 轮）
 ### 审查 subagent 各轮原始发现
 第 N 轮：<原文>
-### 当前会话各轮反驳理由
-第 N 轮：<理由>
+### 当前会话各轮可核验依据
+第 N 轮：<依据>
 
 （"审查对象类型持续系统性误判"额外展示，展示连续 3 轮）
 ### 审查 subagent 各轮原始发现
 第 N 轮：<原文>
 第 N+1 轮：<原文>
 第 N+2 轮：<原文>
-### 当前会话各轮反驳理由
-第 N 轮：<理由>
-第 N+1 轮：<理由>
-第 N+2 轮：<理由>
+### 当前会话各轮可核验依据
+第 N 轮：<依据>
+第 N+1 轮：<依据>
+第 N+2 轮：<依据>
 
 ## 逐轮执行日志
 （同上）

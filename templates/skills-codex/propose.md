@@ -8,7 +8,7 @@ argument-hint: '<需求描述>'
 
 > 调用方式：`@lyx-propose` mention 后跟随的自然语言即参数（如 `@lyx-propose` 带需求描述/选项）；无参数时直接 `@lyx-propose`。
 
-收尾编排入口。创建方案前先问两件事（各只一次）：本次开发的隔离方式（隔离 worktree / 本项目切新分支 / 留在当前分支，不在 worktree 内才问）、本次走全自动还是手动。产物生成后、commit 前由方案提出者执行一次方案自审（逻辑闭环 + 业务全面性，见步骤 5），自审修复随 `propose: <change-name>` commit 一次干净落库；全自动路径在同一会话内自动跑 review-plan → apply → review-code 直到审完代码，手动路径逐步确认。
+收尾编排入口。创建方案前先问两件事（各只一次）：本次开发的隔离方式（隔离 worktree / 本项目切新分支 / 留在当前分支，不在 worktree 内才问）、本次走全自动还是手动。产物生成后、commit 前由方案提出者执行一次方案自审（逻辑闭环 + 业务全面性，见步骤 5）与 context.md 软上下文产出（见步骤 5.5），自审修复与 context.md 随 `propose: <change-name>` commit 一次干净落库；全自动路径在同一会话内自动跑 review-plan → apply → review-code 直到审完代码，手动路径逐步确认。
 
 ## 步骤
 
@@ -96,19 +96,27 @@ argument-hint: '<需求描述>'
 
 自审 MUST 产出可见的**逐项结论清单**，对四项检查的每一子项（每条 What Change 的闭环情况、每个 Modified Capability 的基线波及情况、每个通用维度）分别标注四值结论之一：**通过 / 不适用（含理由）/ 已修复（含改动说明）/ 待用户决策（含问题）**。SHALL NOT 以"自审通过，无问题"之类的一句总结代替逐项清单；未写理由的静默跳过视为未执行该项。存在"待用户决策"项时 SHALL 在清单中列出完整问题再询问。
 
-**自审修改后验证**：自审产生任何 artifact 修改（尤其 delta spec）后，SHALL 运行 `openspec validate --changes <change-name>` 确认结构合法，再进入步骤 6。
+**自审修改后验证**：自审产生任何 artifact 修改（尤其 delta spec）后，SHALL 运行 `openspec validate --changes <change-name>` 确认结构合法，再进入步骤 5.5。
+
+### 5.5 产出 context.md 软上下文 artifact（commit 前）
+
+在方案自审完成之后、步骤 6 commit 之前，由当前会话产出 `openspec/changes/<change-name>/context.md`（软上下文 artifact，详见 spec 能力 `review-context-artifact`）：
+
+1. **收录内容**（只记文档之外的讨论结论）：关键决策与理由、已否决的备选方案及否决理由、范围边界（明确做什么/不做什么）、已知坑与注意事项。与 proposal/design/tasks/delta spec 重复的内容以一句话引用指路，SHALL NOT 整段摘抄。
+2. **内容边界自检（产出质量关卡）**：产出时完成一次自检——(a) 无与 artifact 重复的整段内容；(b) 每条决策/否决理由可溯源到本 change 讨论或基线 artifact 对应条目；(c) 行数 ≤ 100 行（它是每次 subagent spawn 的固定读取成本）。自检不通过 → 修订后重检，SHALL NOT 带病产出。
+3. **无实质内容时**：仍产出仅含标题与一行说明的最小骨架文件，SHALL NOT 省略文件——审查/实施 subagent 的 TASK 引用固定路径，文件缺失会造成断链。
 
 ### 6. 暂存并立即 commit（每步 commit）
 
-自审完成（含其修复）后执行。自审产生的 artifact 修复属于本次待提交内容——产物与自审修复是同一个待提交单元，随这次 commit 一次干净落库，不产生"commit + 未提交自审修复"的混合状态。
+自审完成（含其修复）与 context.md 产出后执行。自审产生的 artifact 修复与 context.md 属于本次待提交内容——产物、自审修复与 context.md 是同一个待提交单元，随这次 commit 一次干净落库，不产生"commit + 未提交自审修复"的混合状态。
 
 1. 检查整个 Git index（`git diff --cached --name-only`）：若存在该 change 目录之外的已暂存内容，**停止**，报告"检测到该 change 目录外的已暂存内容，请先处理（unstage 或另行提交）后重试"，不执行 `git add` 也不 commit。
-2. index 干净后：`git add -- openspec/changes/<change-name>/`（该目录含 `.openspec.yaml` 元数据、proposal/design/tasks 与全部 delta spec，集群暂存，不用 `git add -A`）。
+2. index 干净后：`git add -- openspec/changes/<change-name>/`（该目录含 `.openspec.yaml` 元数据、proposal/design/tasks、context.md 与全部 delta spec，集群暂存，不用 `git add -A`）。
 3. **立即 commit**：
    ```
    git commit -m "propose: <change-name>"
    ```
-4. 用 `git show --name-only --format=` 校验这次 commit 的实际文件集合严格属于 `openspec/changes/<change-name>/` 目录（含 `.openspec.yaml`）。
+4. 用 `git show --name-only --format=` 校验这次 commit 的实际文件集合严格属于 `openspec/changes/<change-name>/` 目录（含 `.openspec.yaml` 与 `context.md`）。
 5. 若该目录下无可提交内容、`git commit` 失败，或校验发现文件集合超出该目录范围，**停止后续自动化步骤**，报告具体原因。
 
 `propose: <change-name>` commit（含自审修复）即 `@lyx-review-plan` 的审查对象（见 `@lyx-review-plan` 的审查范围判定：`git log --grep="^propose: <change-name>"` 取 HEAD 侧最近一期，`git show <commit>` + `git diff HEAD` + 未跟踪清单）。

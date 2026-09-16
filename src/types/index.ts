@@ -22,15 +22,17 @@ export interface LyConfig {
   }
   // codex 宿主（单 Agent 模式）专属配置
   codexHost?: {
-    // 审查 agent A 模型（双审查 subagent 之一）；未配置或空白时回退当前会话模型
+    // 审查 subagent 模型（单审查执行模型）；未配置或空白时回退当前会话模型
     reviewModel?: string
-    // 审查 agent B 模型（双审查 subagent 之二）；未配置或空白时回退当前会话模型
+    // 【弃用】双审查时代的审查 agent B 模型——单审查执行模型不再读取使用；
+    // 字段保留（存量配置值不被任何路径删除/改写），lycx doctor 输出弃用提示
     reviewModelB?: string
     // coding subagent（实施）模型；未配置或空白时回退当前会话模型
     codingModel?: string
-    // 审查 agent A 推理档；非空时随 reviewModel spawn 传入，未配置或空白时不传
+    // 审查 subagent 推理档；非空时随 reviewModel spawn 传入，未配置或空白时不传
     reviewReasoningEffort?: string
-    // 审查 agent B 推理档；非空时随 reviewModelB spawn 传入，未配置或空白时不传
+    // 【弃用】双审查时代的审查 agent B 推理档——单审查执行模型不再读取使用；
+    // 字段保留（存量配置值不被任何路径删除/改写），lycx doctor 输出弃用提示
     reviewReasoningEffortB?: string
     // coding subagent 推理档；非空时随 codingModel spawn 传入，未配置或空白时不传
     codingReasoningEffort?: string

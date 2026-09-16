@@ -44,15 +44,17 @@ describe('codex template set', () => {
     }
   })
 
-  it('review templates render dual-reviewer subagent orchestration (no exec residue)', () => {
+  it('review templates render single-reviewer non-fork subagent orchestration (no exec residue)', () => {
     for (const name of ['review-plan.md', 'review-code.md']) {
       const content = readFileSync(join(SKILLS_TEMPLATES_DIR, name), 'utf-8')
-      // 双审查 subagent 编排指示
-      expect(content).toMatch(/2 个并行审查 subagent|两个审查 subagent|双审查 subagent/)
-      expect(content).toContain('独立审查')
-      expect(content).toContain('交换')
-      expect(content).toContain('共识')
-      expect(content).toContain('显式提示用户"这是审查分歧"')
+      // 单审查 subagent（非 fork）编排指示
+      expect(content).toMatch(/1 个审查 subagent|单审查 subagent/)
+      expect(content).toContain('非 fork')
+      expect(content).toContain('SHALL NOT spawn 第二个审查 agent')
+      expect(content).toContain('context.md')
+      expect(content).toContain('可核验依据')
+      expect(content).toContain('驳回硬线')
+      // reviewModelB 仅以弃用声明形式出现（单审查执行模型不读取使用）
       expect(content).toContain('reviewModelB')
       expect(content).not.toContain('codingModel') // review 模板不引用实施模型
       expect(content).toMatch(/~\/\.ly\/prompts\/codex\/(plan-reviewer|reviewer)\.md/)
@@ -75,7 +77,8 @@ describe('codex template set', () => {
     const content = readFileSync(join(SKILLS_TEMPLATES_DIR, 'apply.md'), 'utf-8')
     expect(content).toContain('coding subagent')
     expect(content).toContain('codingModel')
-    expect(content).toContain('fork 当前会话上下文')
+    expect(content).toContain('非 fork')
+    expect(content).toContain('context.md')
     expect(content).toContain('只实施 change 范围')
     expect(content).toContain('回传主会话，不自行 commit')
     // 环境级不可用回退 vs 业务失败转人工
@@ -203,9 +206,9 @@ describe('installWorkflows — codex host', () => {
     expect(installed).toContain('lyx-review-plan')
     expect(fs.existsSync(join(codexSkillsDir, 'lyx-apply', 'SKILL.md'))).toBe(true)
 
-    // 渲染产物：双审查 subagent 编排指示；REVIEW_MODEL 未配置也无 -m/exec 残留；无 wrapper 残留
+    // 渲染产物：单审查 subagent（非 fork）编排指示；REVIEW_MODEL 未配置也无 -m/exec 残留；无 wrapper 残留
     const reviewPlan = readFileSync(join(codexSkillsDir, 'lyx-review-plan', 'SKILL.md'), 'utf-8')
-    expect(reviewPlan).toContain('双审查')
+    expect(reviewPlan).toContain('单审查 subagent')
     expect(reviewPlan).toContain('reviewModelB')
     expect(reviewPlan).toContain('/.ly/prompts/codex/plan-reviewer.md')
     expect(reviewPlan).not.toContain('codex exec')
@@ -232,7 +235,7 @@ describe('installWorkflows — codex host', () => {
     // 模型经模板指示 + 宿主 spawn 能力落实：配置的 reviewModel 值以指示文字形式存在于模板，
     // 不出现 codex exec -m 调用形态
     expect(reviewPlan).toContain('reviewModel')
-    expect(reviewPlan).toContain('双审查')
+    expect(reviewPlan).toContain('单审查 subagent')
     expect(reviewPlan).not.toContain('codex exec')
     expect(reviewPlan).not.toContain('-m {{REVIEW_MODEL}}')
     expect(reviewPlan).not.toContain('gpt-5.1-codex')

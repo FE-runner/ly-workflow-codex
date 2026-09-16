@@ -25,6 +25,18 @@ describe('assessSubagentModelConfig (codex-model-config)', () => {
     expect(result.fields[2]).toMatchObject({ key: 'codingModel', okKind: 'unset' })
   })
 
+  it('reviewModelB / reviewReasoningEffortB are marked deprecated (存量值保留、仅提示不 FAIL)', () => {
+    const result = assessSubagentModelConfig({
+      reviewModel: 'glm-5.3-flash',
+      reviewModelB: 'gpt-5.6-luna',
+      reviewReasoningEffortB: 'low',
+    })
+    expect(result.status).toBe('ok') // 弃用提示不改变整体判定
+    expect(result.fields[0]?.deprecated).toBeFalsy()
+    expect(result.fields[1]).toMatchObject({ key: 'reviewModelB', deprecated: true, value: 'gpt-5.6-luna' })
+    expect(result.fields[2]?.deprecated).toBeFalsy()
+  })
+
   it('configured value outside any spawnable list still passes (无清单强校验)', () => {
     const result = assessSubagentModelConfig({ reviewModel: 'deepseek-v4-flash' })
     expect(result.status).toBe('ok')
