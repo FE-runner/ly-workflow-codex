@@ -1,6 +1,6 @@
 ---
 name: lyx-apply
-description: 'coding subagent 实施 tasks（subagent 多 Agent 模式）：主会话 spawn coding subagent（非 fork spawn，只携带 TASK；经 change 目录 context.md 获取软上下文 + 只实施 change 范围），逐任务实施+验证+勾选；结论与改动回传主会话，主会话确认后回写 context.md 并统一提交 apply: <change-name>；失败原样呈报转人工（不重试不兜底）'
+description: '按 [codexHost] codingExecutor 决定实施主体：main（默认）= 主 agent 直接实施；subagent = spawn coding subagent（非 fork spawn，只携带 TASK；经 change 目录 context.md 获取软上下文 + 只实施 change 范围）。两条路径均逐任务实施+验证+勾选，主会话确认后回写 context.md 并统一提交 apply: <change-name>；失败原样呈报转人工（不重试不兜底）'
 argument-hint: '[<change-name>]'
 ---
 
@@ -8,7 +8,12 @@ argument-hint: '[<change-name>]'
 
 > 调用方式：`@lyx-apply` mention 后跟随的自然语言即参数（如 `@lyx-apply` 带需求描述/选项）；无参数时直接 `@lyx-apply`。
 
-实施环节由 **coding subagent** 执行（subagent 多 Agent 模式）：主会话 spawn 一个 coding subagent，**非 fork spawn**（只携带 TASK，软上下文经该 change 目录下的 `context.md` 到达）并在任务中点名"只实施 change 范围"；coding subagent 读取 tasks.md 逐任务实施 + 验证 + 勾选后，将改动与结果**回传主会话，不自行 commit**——主会话确认后回写 `context.md`（实施决策）并统一提交 `apply: <change-name>`，作为 `@lyx-review-code` 的审查对象。失败区分两阶段：**环境级不可用**（宿主无 subagent 能力、初始 spawn 失败）按回退口径回退当前会话直接实施，SHALL NOT 视为业务失败；**实施中/验证失败** SHALL 原样呈报转人工，不自动重试、不切回自实施、不自动兜底。隔离 worktree 的询问/新建统一收敛到 `@lyx-propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
+实施主体由 `~/.codex/lyx/config.toml` 的 `[codexHost] codingExecutor` 决定（未配置、空白或非法取值等价 `"main"`）：
+
+- **`"main"`（默认）**：主 agent SHALL 在当前会话直接实施——读取该 change 的 `tasks.md` 逐任务实施 + 验证 + 勾选；SHALL NOT spawn 子代理、SHALL NOT 读取 `codingModel` / `codingReasoningEffort`、SHALL NOT 产生 `[回退]` 标记。
+- **`"subagent"`**：主会话 spawn 一个 coding subagent，**非 fork spawn**（只携带 TASK，软上下文经该 change 目录下的 `context.md` 到达）并在任务中点名"只实施 change 范围"；模型按 `codingModel`、非空推理档按 `codingReasoningEffort` 传入。coding subagent 读取 tasks.md 逐任务实施 + 验证 + 勾选后，将改动与结果**回传主会话，不自行 commit**。
+
+两条路径共同遵守：主会话确认后回写 `context.md`（实施决策）并统一提交 `apply: <change-name>`，作为 `@lyx-review-code` 的审查对象。失败区分两阶段：**环境级不可用**（仅 `subagent` 路径可能发生——宿主无 subagent 能力、初始 spawn 失败）按回退口径回退主 agent 直接实施，输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为业务失败；**实施中/验证失败** SHALL 原样呈报转人工，不自动重试、不自动兜底。隔离 worktree 的询问/新建统一收敛到 `@lyx-propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
 
 ## 步骤
 
@@ -22,7 +27,13 @@ argument-hint: '[<change-name>]'
 
 任一步骤无法唯一确定时，不得继续执行后续步骤。
 
-### 2. spawn coding subagent 实施 tasks
+### 2. 按 codingExecutor 实施 tasks
+
+读取 `~/.codex/lyx/config.toml` 的 `[codexHost] codingExecutor`（缺文件/解析错误 → 明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承）。
+
+**`"main"`（默认，含未配置）**：主 agent 在当前会话直接实施，跳过下方的 spawn 段，直接执行「实施规范」。
+
+**`"subagent"`**：按下方指示 spawn coding subagent。模型 = `codingModel`（未配置或空白 → 继承当前会话模型）；推理档 = `codingReasoningEffort`（trim 后非空才随 spawn 传入）。模型与推理档只写在任务指示里，SHALL NOT 依赖 shell 层模型参数，SHALL NOT 内置"模型名 → 推理档"的硬编码映射。
 
 主会话 spawn 一个 coding subagent（由运行环境的宿主 spawn 能力落实），并给它下述任务指示：
 

@@ -9,7 +9,8 @@ import { join } from 'pathe'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import { getConfigPath, readLyConfig, sanitizeCodexHostExtras, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import type { ExecutorKind } from '../types'
+import { getConfigPath, readLyConfig, sanitizeCodexHostExtras, sanitizeExecutor, sanitizeReviewModel, writeLyConfig } from '../utils/config'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows, uninstallWorkflows } from '../utils/installer'
 import { buildModelFieldChoices, MODEL_CHOICE_CUSTOM, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
@@ -290,44 +291,61 @@ function readLyConfigSync(): any {
 // Review model configuration
 // ═══════════════════════════════════════════════════════
 
-/** codex 宿主审查模型（codexHost.reviewModel）编辑入口 */
+/** codex 宿主审查执行者（codexHost.reviewExecutor）与审查模型（codexHost.reviewModel）编辑入口 */
 async function configReviewModel(): Promise<void> {
   const config = await readLyConfig()
   const currentReviewModel = sanitizeReviewModel(config?.codexHost?.reviewModel)
+  const currentExecutor = sanitizeExecutor(config?.codexHost?.reviewExecutor)
   // 候选/默认语义与 init 模型三连共用（buildModelFieldChoices）：
   // 留空（继承当前会话模型）+ 自定义输入 + 既有值；agent 模型需额外配置
 
   console.log()
   console.log(ansis.cyan.bold(`  ${i18n.t('init:model.title')}`))
   console.log()
-  console.log(ansis.gray(`  ${i18n.t('init:host.reviewModelHint')}`))
 
-  const { choices, defaultChoice } = buildModelFieldChoices({
-    current: currentReviewModel,
-  })
-  const { model } = await inquirer.prompt([{
+  // 先编辑审查执行者
+  const { executor } = await inquirer.prompt([{
     type: 'list',
-    name: 'model',
-    message: i18n.t('init:host.reviewModelPrompt'),
-    choices,
-    default: defaultChoice,
-    pageSize: 15,
+    name: 'executor',
+    message: i18n.t('init:executor.reviewExecutor'),
+    choices: [
+      { name: i18n.t('init:executor.main'), value: 'main' },
+      { name: i18n.t('init:executor.subagent'), value: 'subagent' },
+    ],
+    default: currentExecutor ?? 'main',
   }])
-  let next: string | undefined
-  if (model === MODEL_CHOICE_CUSTOM) {
-    // 自定义输入：保留自由输入方式（不做清单限制）；留空视为取消（保持原值语义）
-    const { custom } = await inquirer.prompt([{
-      type: 'input',
-      name: 'custom',
-      message: i18n.t('init:model.customPrompt'),
+  const nextExecutor: ExecutorKind = executor === 'subagent' ? 'subagent' : 'main'
+
+  // 执行者为 main 时模型字段不生效：跳过采集，保留既有值
+  let next: string | undefined = currentReviewModel
+  if (nextExecutor === 'subagent') {
+    console.log(ansis.gray(`  ${i18n.t('init:host.reviewModelHint')}`))
+    const { choices, defaultChoice } = buildModelFieldChoices({
+      current: currentReviewModel,
+    })
+    const { model } = await inquirer.prompt([{
+      type: 'list',
+      name: 'model',
+      message: i18n.t('init:host.reviewModelPrompt'),
+      choices,
+      default: defaultChoice,
+      pageSize: 15,
     }])
-    next = custom?.trim() || undefined
-  }
-  else {
-    next = model === MODEL_CHOICE_UNSET ? undefined : sanitizeReviewModel(model)
+    if (model === MODEL_CHOICE_CUSTOM) {
+      // 自定义输入：保留自由输入方式（不做清单限制）；留空视为取消（保持原值语义）
+      const { custom } = await inquirer.prompt([{
+        type: 'input',
+        name: 'custom',
+        message: i18n.t('init:model.customPrompt'),
+      }])
+      next = custom?.trim() || undefined
+    }
+    else {
+      next = model === MODEL_CHOICE_UNSET ? undefined : sanitizeReviewModel(model)
+    }
   }
 
-  if (next === currentReviewModel) {
+  if (next === currentReviewModel && nextExecutor === (currentExecutor ?? 'main')) {
     console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))
     return
   }
@@ -337,11 +355,12 @@ async function configReviewModel(): Promise<void> {
     console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized`)
     return
   }
-  // 写回保留既有 reviewModelB / codingModel / spawnableModels / 三个推理档（本次仍只编辑审查 agent A）
+  // 写回保留既有 codingExecutor / codingModel / spawnableModels / 两个推理档
   const existingExtras = sanitizeCodexHostExtras(fresh.codexHost)
-  if (next || Object.keys(existingExtras).length > 0) {
+  if (nextExecutor || next || Object.keys(existingExtras).length > 0) {
     fresh.codexHost = {
       ...existingExtras,
+      reviewExecutor: nextExecutor,
       ...(next ? { reviewModel: next } : {}),
     }
   }

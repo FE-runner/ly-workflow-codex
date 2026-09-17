@@ -110,43 +110,50 @@ describe('createDefaultConfig (codex 单宿主)', () => {
     expect(config.codexHost?.reviewModel).toBe('gpt-5.1-codex')
   })
 
-  it('stores codexHost.reviewModelB and codingModel when provided (direct pass-through)', () => {
+  it('stores reviewExecutor / codingExecutor and models when provided (direct pass-through)', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewModel: 'a', reviewModelB: 'b', codingModel: 'c' },
+      codexHost: { reviewExecutor: 'subagent', codingExecutor: 'subagent', reviewModel: 'a', codingModel: 'c' },
     })
+    expect(config.codexHost?.reviewExecutor).toBe('subagent')
+    expect(config.codexHost?.codingExecutor).toBe('subagent')
     expect(config.codexHost?.reviewModel).toBe('a')
-    expect(config.codexHost?.reviewModelB).toBe('b')
     expect(config.codexHost?.codingModel).toBe('c')
   })
 
-  it('stores reviewModelB alone without requiring reviewModel (only-B field)', () => {
+  it('stores reviewExecutor alone without requiring models', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewModelB: 'b-model' },
+      codexHost: { reviewExecutor: 'subagent' },
     })
+    expect(config.codexHost?.reviewExecutor).toBe('subagent')
     expect(config.codexHost?.reviewModel).toBeUndefined()
-    expect(config.codexHost?.reviewModelB).toBe('b-model')
-    expect(config.codexHost?.codingModel).toBeUndefined()
+    expect(config.codexHost?.codingExecutor).toBeUndefined()
+  })
+
+  it('treats invalid executor values as unset', () => {
+    const config = createDefaultConfig({
+      ...baseOptions,
+      codexHost: { reviewExecutor: 'auto' as never },
+    })
+    expect(config.codexHost?.reviewExecutor).toBeUndefined()
   })
 
   it('keeps out-of-list existing values as-is (custom pass-through)', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewModel: 'list-model', reviewModelB: 'other-provider/qwen', codingModel: ' custom ' },
+      codexHost: { reviewModel: 'list-model', codingModel: ' custom ' },
     })
     expect(config.codexHost?.reviewModel).toBe('list-model')
-    expect(config.codexHost?.reviewModelB).toBe('other-provider/qwen')
     expect(config.codexHost?.codingModel).toBe('custom')
   })
 
-  it('treats blank new fields as unset (fall back to session model)', () => {
+  it('treats blank model fields as unset (fall back to session model)', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewModel: 'a', reviewModelB: '  ', codingModel: '' },
+      codexHost: { reviewModel: 'a', codingModel: '' },
     })
     expect(config.codexHost?.reviewModel).toBe('a')
-    expect(config.codexHost?.reviewModelB).toBeUndefined()
     expect(config.codexHost?.codingModel).toBeUndefined()
   })
 
@@ -155,20 +162,19 @@ describe('createDefaultConfig (codex 单宿主)', () => {
     expect(config.codexHost).toBeUndefined()
   })
 
-  it('stores all three reasoning effort fields when provided', () => {
+  it('stores both reasoning effort fields when provided', () => {
     const config = createDefaultConfig({
       ...baseOptions,
       codexHost: {
+        reviewExecutor: 'subagent',
+        codingExecutor: 'subagent',
         reviewModel: 'glm-5.3-flash',
-        reviewModelB: 'qwen3.7-flash',
         codingModel: 'deepseek-v4.1-flash',
         reviewReasoningEffort: 'low',
-        reviewReasoningEffortB: 'high',
         codingReasoningEffort: 'max',
       },
     })
     expect(config.codexHost?.reviewReasoningEffort).toBe('low')
-    expect(config.codexHost?.reviewReasoningEffortB).toBe('high')
     expect(config.codexHost?.codingReasoningEffort).toBe('max')
   })
 
@@ -186,12 +192,10 @@ describe('createDefaultConfig (codex 单宿主)', () => {
       codexHost: {
         reviewModel: 'glm-5.3-flash',
         reviewReasoningEffort: ' low ',
-        reviewReasoningEffortB: '   ',
         codingReasoningEffort: '',
       },
     })
     expect(config.codexHost?.reviewReasoningEffort).toBe('low')
-    expect(config.codexHost?.reviewReasoningEffortB).toBeUndefined()
     expect(config.codexHost?.codingReasoningEffort).toBeUndefined()
   })
 
@@ -199,16 +203,16 @@ describe('createDefaultConfig (codex 单宿主)', () => {
     const config = createDefaultConfig({
       ...baseOptions,
       codexHost: {
+        reviewExecutor: 'subagent',
         reviewModel: 'glm-5.3-flash',
-        reviewModelB: 'qwen3.7-flash',
         codingModel: 'deepseek-v4.1-flash',
         reviewReasoningEffort: 'low',
         spawnableModels: ['glm-5.3-flash'],
       },
     })
     expect(config.codexHost).toEqual({
+      reviewExecutor: 'subagent',
       reviewModel: 'glm-5.3-flash',
-      reviewModelB: 'qwen3.7-flash',
       codingModel: 'deepseek-v4.1-flash',
       reviewReasoningEffort: 'low',
       spawnableModels: ['glm-5.3-flash'],
@@ -283,20 +287,20 @@ describe('sanitizeReasoningEffort', () => {
 })
 
 describe('sanitizeCodexHostExtras', () => {
-  it('returns all fields except reviewModel with sanitized text values', () => {
+  it('returns executors and other fields except reviewModel with sanitized text values', () => {
     expect(sanitizeCodexHostExtras({
+      reviewExecutor: 'subagent',
+      codingExecutor: 'subagent',
       reviewModel: 'a',
-      reviewModelB: ' b ',
       codingModel: ' c ',
       reviewReasoningEffort: ' low ',
-      reviewReasoningEffortB: ' high ',
       codingReasoningEffort: ' max ',
       spawnableModels: ['glm-5.3-flash'],
     })).toEqual({
-      reviewModelB: 'b',
+      reviewExecutor: 'subagent',
+      codingExecutor: 'subagent',
       codingModel: 'c',
       reviewReasoningEffort: 'low',
-      reviewReasoningEffortB: 'high',
       codingReasoningEffort: 'max',
       spawnableModels: ['glm-5.3-flash'],
     })
@@ -305,7 +309,6 @@ describe('sanitizeCodexHostExtras', () => {
   it('preserves spawnableModels exact shape while dropping blank text fields', () => {
     const spawnableModels = ['', 'glm-5.3-flash'] as unknown as string[]
     expect(sanitizeCodexHostExtras({
-      reviewModelB: ' ',
       codingModel: '',
       reviewReasoningEffort: ' ',
       codingReasoningEffort: '',
@@ -315,11 +318,11 @@ describe('sanitizeCodexHostExtras', () => {
 
   it('round-trips extras through createDefaultConfig', async () => {
     const extras = sanitizeCodexHostExtras({
+      reviewExecutor: 'subagent',
+      codingExecutor: 'subagent',
       reviewModel: 'old',
-      reviewModelB: 'qwen3.7-flash',
       codingModel: 'deepseek-v4.1-flash',
       reviewReasoningEffort: 'low',
-      reviewReasoningEffortB: 'high',
       codingReasoningEffort: 'max',
       spawnableModels: ['glm-5.3-flash'],
     })
@@ -380,14 +383,14 @@ describe('createDefaultConfig spawnableModels 透传保全 (codex-model-config)'
     installedWorkflows: ['propose'],
   }
 
-  it('passes through spawnableModels alongside the model trio', () => {
+  it('passes through spawnableModels alongside the executor and model fields', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewModel: 'a', reviewModelB: 'b', codingModel: 'c', spawnableModels: ['glm-5.3-flash'] },
+      codexHost: { reviewExecutor: 'subagent', reviewModel: 'a', codingModel: 'c', spawnableModels: ['glm-5.3-flash'] },
     })
     expect(config.codexHost).toEqual({
+      reviewExecutor: 'subagent',
       reviewModel: 'a',
-      reviewModelB: 'b',
       codingModel: 'c',
       spawnableModels: ['glm-5.3-flash'],
     })

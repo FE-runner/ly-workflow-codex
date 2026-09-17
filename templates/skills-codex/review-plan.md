@@ -1,6 +1,6 @@
 ---
 name: lyx-review-plan
-description: '读取 OpenSpec change 的 proposal/design/tasks，单审查 subagent（非 fork spawn，模型按 reviewModel 指定）分级审查方案合理性，主会话逐条裁决异议（不认可须附可核验依据），审查-修复循环直到 Critical 清零或触发终止条件'
+description: '读取 OpenSpec change 的 proposal/design/tasks，按 [codexHost] reviewExecutor 决定审查主体（main = 主 agent 直接审查；subagent = spawn 审查 subagent），分级审查方案合理性，审查-修复循环直到 Critical 清零或触发终止条件'
 argument-hint: '[<change-name>] [--no-commit]'
 ---
 
@@ -11,7 +11,12 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 > 调用方式：`@lyx-review-plan` mention 后跟随的自然语言即参数（如 `@lyx-review-plan` 带需求描述/选项）；无参数时直接 `@lyx-review-plan`。
 
-审查当前 OpenSpec change 的方案是否合理，聚焦遗漏边界、范围不清晰、风险点——不是逐行代码风格。输出 Critical/Warning/Info 分级结果（与 `@lyx-review-code` 一致）。若存在 Critical，进入审查-修复循环：当前会话逐条裁决每条 Critical（认可则修改该 change 的 artifact，不认可必须附可核验依据），认可部分修复后自动重新审查，直到清零或触发终止条件。
+审查当前 OpenSpec change 的方案是否合理，聚焦遗漏边界、范围不清晰、风险点——不是逐行代码风格。输出 Critical/Warning/Info 分级结果（与 `@lyx-review-code` 一致）。**审查主体由 `~/.codex/lyx/config.toml` 的 `[codexHost] reviewExecutor` 决定**（未配置、空白或非法取值等价 `"main"`）：
+
+- **`"main"`（默认）**：主 agent 在当前会话直接审查——不 spawn 子代理、不读取 `reviewModel` / `reviewReasoningEffort`、不产生 `[回退]` 标记。主 agent 的发现即最终裁决，**不适用**逐条裁决、驳回硬线、熔断、审查对象类型持续系统性误判这些为双主体仲裁设计的条件；发现 Critical 时直接修复该 change 的 artifact，修复后自查一轮确认清零，自审循环最多 2 轮（超过则停止转人工）。
+- **`"subagent"`**：进入既有单审查 subagent 流程（下方步骤），首轮之后 SHALL 优先以 `send_input` 复用同一子代理；复用失败才回退为重新 spawn 全新子代理（按增量语义携带上一轮全部 Critical 逐字原文与路径清单）。逐条裁决、驳回硬线、熔断、轮数上限等既有规则保持适用。
+
+与执行者无关的规则（目标 change 解析、工件路径枚举、基线 spec 引用检测、分级输出、每轮 `openspec validate`）在两条路径下保持一致。
 
 审查由 **1 个审查 subagent** 执行（subagent 多 Agent 模式）：子会话**非 fork spawn**、只携带本模板构造的 TASK（软上下文经该 change 目录下的 `context.md` 到达），任务中点名"只审该 change 的产物范围"；模型按 `codexHost.reviewModel` 指定，未配置或空白时继承当前会话模型；`reviewModelB`/`reviewReasoningEffortB` 为弃用字段，本命令不读取使用。SHALL NOT spawn 第二个审查 agent、SHALL NOT 实现"并行双审、交换结论、共识归并"环节——单 agent 的分级结论即本轮唯一审查发现来源，质量把关由当前会话逐条裁决与"驳回硬线"终止条件承担。Critical 修复由当前会话执行。
 
@@ -109,7 +114,7 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 
 路径清单之外的文件不重新整段传入。若某条上一轮 Critical 的位置字段缺失可解析路径，命令保守处理：将该 change 目录下全部 artifact/delta spec 路径纳入下一轮路径清单，并在报告中说明该情况（不得静默丢弃该 Critical）。
 
-**第 2 轮起重新 spawn 一个全新审查 subagent**：主会话 SHALL 不依赖"跨轮续聊"假设——子 agent 会话随主会话回合结构而存在，回合结束即失去访问能力，因此每轮都以独立 spawn + 同轮 wait 执行，SHALL NOT 假定上一轮 spawn 的 subagent 仍可被调用。第 2 轮重新 spawn 一个全新审查 subagent（**非 fork，只携带 TASK**），TASK 仍按上述增量语义构造——非 fork 不携带任何会话历史，上一轮 Critical 的逐字原文与路径清单是审查 agent 判断"问题是否已解决"的唯一依据，SHALL NOT 省略。回到步骤 3 的执行方式（只是 TASK 内容换成上述增量内容），重新派发审查，不要求用户手动重新触发命令。生成本轮执行日志后再判定 Critical 是否清零。
+**第 2 轮起优先复用同一审查 subagent（`send_input`）**：实测宿主支持在子代理首次任务完成后再次唤醒它且其保留自身会话上下文，因此"回合结束即失去访问能力"SHALL NOT 再作为必须重新 spawn 的理由。主会话 SHALL 先以 `send_input` 向首轮那个子代理发送增量内容（修复说明 + 上一轮全部 Critical 逐字原文 + 路径清单 + 该 change 目录下 `context.md` 路径引用），由它判断"问题是否已解决"。**复用失败时**（子代理会话丢失、`send_input` 报错、`resume_agent` 不可用）SHALL 回退为重新 spawn 一个全新审查 subagent（**非 fork，只携带 TASK**），TASK 按同一增量语义构造，并在本轮报告中说明复用失败原因。回到步骤 3 的执行方式，不要求用户手动重新触发命令。生成本轮执行日志后再判定 Critical 是否清零。
 
 ### 循环终止条件（任一命中即停止，转步骤 5）
 

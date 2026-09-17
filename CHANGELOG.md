@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+审查与实施改为"执行者可切换"：默认由主 agent 直接执行，`[codexHost] reviewExecutor` / `codingExecutor` 可显式切到 spawn 独立子代理；测试 / 类型检查 / 构建从审查循环移到归档前一次完整验证。
+
+### Added
+
+- `[codexHost] reviewExecutor` / `codingExecutor`：取值 `main` / `subagent`，未配置等价 `main`
+- 新能力 `archive-verification-gate`：`@lyx-archive` 在归档前执行一次项目完整验证（测试 / 类型检查 / 构建），失败阻断归档
+- `@lyx-review-plan` / `@lyx-review-code` / `@lyx-apply` 的执行者分支：主 agent 路径无 spawn、无逐条裁决 / 驳回硬线，自审循环最多 2 轮
+
+### Changed
+
+- **BREAKING 默认执行者变更**：`reviewExecutor` / `codingExecutor` 未配置等价 `main`，升级用户即使不改配置，行为也会从"spawn 子代理"变为"主 agent 直接执行"
+- **BREAKING 子代理默认复用**：subagent 路径第 2 轮起默认用 `send_input` 复用同一子代理（实测宿主支持跨轮唤醒并保留上下文），复用失败才回退重新 spawn；"回合结束即失去访问能力"的旧表述废止
+- 测试 / 类型检查 / 构建不再在审查循环每轮执行；`openspec validate` 仍保留在 review-plan 每轮
+- `lycx init` 向导新增执行者二连采集；执行者为 `main` 时不采集对应模型字段并在摘要标注"不生效"
+- `lycx doctor` 展示执行者字段；执行者为 `main` 时对非空模型 / 推理档字段输出 WARN
+
+### Removed
+
+- **BREAKING `[codexHost] reviewModelB` / `reviewReasoningEffortB`**：字段与类型定义移除，不再读取或保留写回；存量配置中的这两个键可自行删除
+- 审查循环内的慢验证步骤（review-code 的"本轮验证"与对应终止条件）
+
+### Migration
+
+- 依赖独立审查 / 独立实施的用户需显式配置 `reviewExecutor = "subagent"` / `codingExecutor = "subagent"`（旧配置中留空的 `reviewModel` 不再隐含"spawn 子代理"）
+- 存量 `reviewModelB` / `reviewReasoningEffortB` 可删除；`lycx doctor` 会提示这两个字段已移除
+
 ## [0.2.0] - 2026-09-14
 
 命令形态从「斜杠命令」迁移为 Codex 官方 skill 机制：Codex CLI 的 `/` 命令为内置硬编码，不支持从文件系统加载自定义命令，因此 14 个命令模板由 slash command 格式改造为 `SKILL.md`（frontmatter：`name`/`description`/`argument-hint`），安装位移位到 Codex 官方 skill 发现目录；命令前缀统一为 `lyx`，与上游 ly-workflow 的 `ly` 命令区分。

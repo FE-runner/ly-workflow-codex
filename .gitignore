@@ -37,7 +37,6 @@ Thumbs.db
 
 # Local spec workflows (OpenSpec 本地数据)
 .spec-workflow/
-/AGENTS.md
 
 # Old package tarballs
 *.tgz

@@ -3,6 +3,9 @@ import type { HostId } from '../utils/host-adapters'
 // 支持的语言
 export type SupportedLang = 'zh-CN' | 'en'
 
+// 子代理执行者：main = 主 agent 直接执行；subagent = spawn 独立子代理
+export type ExecutorKind = 'main' | 'subagent'
+
 // ly-workflow-codex 配置
 export interface LyConfig {
   general: {
@@ -22,19 +25,17 @@ export interface LyConfig {
   }
   // codex 宿主（单 Agent 模式）专属配置
   codexHost?: {
-    // 审查 subagent 模型（单审查执行模型）；未配置或空白时回退当前会话模型
+    // 审查执行者：main = 主 agent 直接执行（默认/未配置）；subagent = spawn 独立审查 subagent
+    reviewExecutor?: ExecutorKind
+    // coding 执行者：main = 主 agent 直接实施（默认/未配置）；subagent = spawn coding subagent
+    codingExecutor?: ExecutorKind
+    // 审查 subagent 模型；仅在 reviewExecutor === 'subagent' 时生效，未配置或空白回退当前会话模型
     reviewModel?: string
-    // 【弃用】双审查时代的审查 agent B 模型——单审查执行模型不再读取使用；
-    // 字段保留（存量配置值不被任何路径删除/改写），lycx doctor 输出弃用提示
-    reviewModelB?: string
-    // coding subagent（实施）模型；未配置或空白时回退当前会话模型
+    // coding subagent 模型；仅在 codingExecutor === 'subagent' 时生效，未配置或空白回退当前会话模型
     codingModel?: string
-    // 审查 subagent 推理档；非空时随 reviewModel spawn 传入，未配置或空白时不传
+    // 审查 subagent 推理档；仅在 reviewExecutor === 'subagent' 且非空时随 reviewModel spawn 传入
     reviewReasoningEffort?: string
-    // 【弃用】双审查时代的审查 agent B 推理档——单审查执行模型不再读取使用；
-    // 字段保留（存量配置值不被任何路径删除/改写），lycx doctor 输出弃用提示
-    reviewReasoningEffortB?: string
-    // coding subagent 推理档；非空时随 codingModel spawn 传入，未配置或空白时不传
+    // coding subagent 推理档；仅在 codingExecutor === 'subagent' 且非空时随 codingModel spawn 传入
     codingReasoningEffort?: string
     // 提示参考：本机实测可 spawn 的模型清单（不作候选/校验来源，agent 模型可用性
     // 由环境实际能力决定）；未配置或清洗后为空时提示口径回退 SPAWNABLE_MODELS_DEFAULT

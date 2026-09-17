@@ -1,4 +1,4 @@
-import type { LyConfig, SupportedLang } from '../types'
+import type { ExecutorKind, LyConfig, SupportedLang } from '../types'
 import type { HostId } from './host-adapters'
 import fs from 'fs-extra'
 import { join } from 'pathe'
@@ -77,11 +77,11 @@ export function createDefaultConfig(options: {
   language: SupportedLang
   installedWorkflows: string[]
   codexHost?: {
+    reviewExecutor?: ExecutorKind
+    codingExecutor?: ExecutorKind
     reviewModel?: string
-    reviewModelB?: string
     codingModel?: string
     reviewReasoningEffort?: string
-    reviewReasoningEffortB?: string
     codingReasoningEffort?: string
     spawnableModels?: string[]
   }
@@ -106,32 +106,32 @@ export function createDefaultConfig(options: {
       backup: join(LY_DIR, 'backup'),
     },
   }
+  const reviewExecutor = sanitizeExecutor(options.codexHost?.reviewExecutor)
+  const codingExecutor = sanitizeExecutor(options.codexHost?.codingExecutor)
   const reviewModel = sanitizeReviewModel(options.codexHost?.reviewModel)
-  // 三个模型字段统一仅 trim（sanitizeReviewModel 与 sanitizeModelField 同口径）、空白视为未配置
+  // 模型字段统一仅 trim（sanitizeReviewModel 与 sanitizeModelField 同口径）、空白视为未配置
   // （回退当前会话模型）：不再拼进 shell 命令串，由模板指示 + 宿主 spawn 能力落实
-  const reviewModelB = sanitizeModelField(options.codexHost?.reviewModelB)
   const codingModel = sanitizeModelField(options.codexHost?.codingModel)
   const reviewReasoningEffort = sanitizeReasoningEffort(options.codexHost?.reviewReasoningEffort)
-  const reviewReasoningEffortB = sanitizeReasoningEffort(options.codexHost?.reviewReasoningEffortB)
   const codingReasoningEffort = sanitizeReasoningEffort(options.codexHost?.codingReasoningEffort)
   // spawnableModels 透传并保全：不改写、不静默丢弃存量值（含格式非法的存量形态由 doctor WARN 暴露），
   // 避免"重装即丢失非法值、下次 doctor 不再告警"掩盖配置问题
   const spawnableModels = options.codexHost?.spawnableModels
   if (
-    reviewModel
-    || reviewModelB
+    reviewExecutor
+    || codingExecutor
+    || reviewModel
     || codingModel
     || reviewReasoningEffort
-    || reviewReasoningEffortB
     || codingReasoningEffort
     || spawnableModels !== undefined
   ) {
     config.codexHost = {
+      ...(reviewExecutor ? { reviewExecutor } : {}),
+      ...(codingExecutor ? { codingExecutor } : {}),
       ...(reviewModel ? { reviewModel } : {}),
-      ...(reviewModelB ? { reviewModelB } : {}),
       ...(codingModel ? { codingModel } : {}),
       ...(reviewReasoningEffort ? { reviewReasoningEffort } : {}),
-      ...(reviewReasoningEffortB ? { reviewReasoningEffortB } : {}),
       ...(codingReasoningEffort ? { codingReasoningEffort } : {}),
       ...(spawnableModels !== undefined ? { spawnableModels } : {}),
     }
@@ -140,9 +140,21 @@ export function createDefaultConfig(options: {
 }
 
 /**
+ * 执行者字段清洗（codexHost.reviewExecutor / codingExecutor）：
+ * 非字符串 → undefined；trim 后仅接受 'main' / 'subagent'，其余（含空白、非法取值）视为未配置。
+ * 未配置等价 'main'（主 agent 直接执行），由模板运行时按此默认值解析。
+ */
+export function sanitizeExecutor(value: unknown): ExecutorKind | undefined {
+  if (typeof value !== 'string')
+    return undefined
+  const cleaned = value.trim()
+  return cleaned === 'main' || cleaned === 'subagent' ? cleaned : undefined
+}
+
+/**
  * codex 宿主审查模型（codexHost.reviewModel）清洗：
  * 非字符串 → undefined；仅 trim，空白视为未配置（回退当前会话模型）。
- * 与 reviewModelB/codingModel 的 sanitizeModelField 口径一致——模型指定经"模板指示 + 宿主
+ * 与 codingModel 的 sanitizeModelField 口径一致——模型指定经"模板指示 + 宿主
  * spawn 能力"落实，不再拼进 shell 命令串，无需字符白名单清洗；仅 trim 保真（含 `@` 等
  * 字符的模型 id 原样保留）。
  */
@@ -154,7 +166,7 @@ export function sanitizeReviewModel(value: unknown): string | undefined {
 }
 
 /**
- * 模型字段通用清洗（codexHost.reviewModelB / codingModel）：
+ * 模型字段通用清洗（codexHost.codingModel）：
  * 非字符串 → undefined；先 trim，空白视为未配置（回退当前会话模型）。
  * 不做字符白名单清洗——这些值不再拼进 shell 命令串，由模板指示 + 宿主 spawn 能力落实。
  */
@@ -166,7 +178,7 @@ export function sanitizeModelField(value: unknown): string | undefined {
 }
 
 /**
- * 推理档字段清洗（codexHost 三个 *ReasoningEffort）：
+ * 推理档字段清洗（codexHost 两个 *ReasoningEffort）：
  * 非字符串 → undefined；仅 trim，空白视为未配置（不传 reasoning_effort）。
  * 不做枚举白名单校验——合法档位由宿主/上游实际能力决定。
  */
@@ -179,7 +191,7 @@ export function sanitizeReasoningEffort(value: unknown): string | undefined {
 
 export type CodexHostExtras = Pick<
   NonNullable<LyConfig['codexHost']>,
-  'reviewModelB' | 'codingModel' | 'reviewReasoningEffort' | 'reviewReasoningEffortB' | 'codingReasoningEffort' | 'spawnableModels'
+  'reviewExecutor' | 'codingExecutor' | 'codingModel' | 'reviewReasoningEffort' | 'codingReasoningEffort' | 'spawnableModels'
 >
 
 /**
@@ -190,17 +202,17 @@ export function sanitizeCodexHostExtras(codexHost: LyConfig['codexHost']): Codex
   if (!codexHost)
     return {}
 
-  const reviewModelB = sanitizeModelField(codexHost.reviewModelB)
+  const reviewExecutor = sanitizeExecutor(codexHost.reviewExecutor)
+  const codingExecutor = sanitizeExecutor(codexHost.codingExecutor)
   const codingModel = sanitizeModelField(codexHost.codingModel)
   const reviewReasoningEffort = sanitizeReasoningEffort(codexHost.reviewReasoningEffort)
-  const reviewReasoningEffortB = sanitizeReasoningEffort(codexHost.reviewReasoningEffortB)
   const codingReasoningEffort = sanitizeReasoningEffort(codexHost.codingReasoningEffort)
 
   return {
-    ...(reviewModelB ? { reviewModelB } : {}),
+    ...(reviewExecutor ? { reviewExecutor } : {}),
+    ...(codingExecutor ? { codingExecutor } : {}),
     ...(codingModel ? { codingModel } : {}),
     ...(reviewReasoningEffort ? { reviewReasoningEffort } : {}),
-    ...(reviewReasoningEffortB ? { reviewReasoningEffortB } : {}),
     ...(codingReasoningEffort ? { codingReasoningEffort } : {}),
     ...(codexHost.spawnableModels !== undefined ? { spawnableModels: codexHost.spawnableModels } : {}),
   }
@@ -241,4 +253,3 @@ export function sanitizeSpawnableModels(value: unknown): SpawnableModelsSanitize
     return { state: 'empty', models: [] }
   return { state: 'ok', models }
 }
-

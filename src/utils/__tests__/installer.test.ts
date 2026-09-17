@@ -211,7 +211,7 @@ describe('template variable completeness', () => {
       expect(rendered, file).not.toContain('qwen3.7-flash')
       expect(rendered, file).not.toContain('codex exec')
       expect(rendered, file).not.toContain('CODEAGENT_EOF')
-      expect(rendered, file).not.toContain('resume')
+      expect(rendered, file).not.toContain('codex exec resume')
       expect(rendered, file).not.toContain('session_id')
       expect(rendered, file).not.toContain('{{REVIEW_MODEL}}')
     }

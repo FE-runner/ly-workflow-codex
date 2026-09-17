@@ -1,4 +1,4 @@
-import type { InitOptions, SupportedLang } from '../types'
+import type { ExecutorKind, InitOptions, SupportedLang } from '../types'
 import type { CodexModelProvider } from '../utils/codex-provider'
 import ansis from 'ansis'
 import fs from 'fs-extra'
@@ -12,6 +12,7 @@ import {
   ensureLyDir,
   readLyConfig,
   sanitizeCodexHostExtras,
+  sanitizeExecutor,
   sanitizeModelField,
   sanitizeReviewModel,
   writeLyConfig,
@@ -26,10 +27,11 @@ import { PACKAGE_NAME } from '../utils/package-meta'
 
 const OPENAI_OFFICIAL_BASE_URL = 'https://api.openai.com/v1'
 
-/** codexHost 模型字段的采集结果（reviewModelB 仅承载存量保真值，不再采集） */
-interface CodexHostModels {
+/** codexHost 的采集结果：执行者二连 + 模型二连 */
+interface CodexHostCollected {
+  reviewExecutor?: ExecutorKind
+  codingExecutor?: ExecutorKind
   reviewModel?: string
-  reviewModelB?: string
   codingModel?: string
 }
 
@@ -39,11 +41,39 @@ type ProviderChoice
     | { type: 'custom' }
 
 // 模型字段的驱动元数据（i18n 键 + 持久化清洗归属：reviewModel 白名单、codingModel 仅 trim）。
-// reviewModelB 已弃用（单审查执行模型不读取），向导不再采集；存量值经 existingExtras 保真写回
+// 仅在对应执行者为 subagent 时提示采集；main 路径下保留既有值但不采集。
 const MODEL_FIELDS = [
   { key: 'reviewModel', labelKey: 'init:model.reviewModelA', sanitize: sanitizeReviewModel },
   { key: 'codingModel', labelKey: 'init:model.codingModel', sanitize: sanitizeModelField },
 ] as const
+
+// 执行者字段的驱动元数据（候选固定为 main / subagent，默认 main）
+const EXECUTOR_FIELDS = [
+  { key: 'reviewExecutor', labelKey: 'init:executor.reviewExecutor' },
+  { key: 'codingExecutor', labelKey: 'init:executor.codingExecutor' },
+] as const
+
+/**
+ * 执行者字段 list 选择：候选 = 主 agent 直接执行（默认）/ spawn 独立子代理。
+ * 未配置或既有值非法时默认选中 main。
+ */
+async function pickExecutorField(input: {
+  field: typeof EXECUTOR_FIELDS[number]
+  current?: ExecutorKind
+}): Promise<ExecutorKind> {
+  const { field, current } = input
+  const { pick } = await inquirer.prompt([{
+    type: 'list',
+    name: 'pick',
+    message: i18n.t(field.labelKey),
+    choices: [
+      { name: i18n.t('init:executor.main'), value: 'main' },
+      { name: i18n.t('init:executor.subagent'), value: 'subagent' },
+    ],
+    default: current ?? 'main',
+  }])
+  return pick === 'subagent' ? 'subagent' : 'main'
+}
 
 /**
  * 模型字段 list 选择（候选 = 默认继承（留空）+ 自定义输入 + 既有值）：
@@ -128,8 +158,8 @@ async function printCodexStatus(): Promise<void> {
  * 决定，配置仅为提示并附示例 prompt 教用户验证；agent 模型需额外配置）。
  */
 async function collectCodexHostConfig(options: {
-  defaults: CodexHostModels
-}): Promise<CodexHostModels> {
+  defaults: CodexHostCollected
+}): Promise<CodexHostCollected> {
   // ── Step 1: 选择 API 提供方 ──
   console.log()
   console.log(ansis.cyan.bold(`  🔌 ${i18n.t('init:mode.providerSelect')}`))
@@ -196,15 +226,35 @@ async function collectCodexHostConfig(options: {
   // ── Step 2: Codex 现状检测（只读展示）──
   await printCodexStatus()
 
-  // ── Step 3: 模型三连（候选 = 留空 + 自定义输入 + 既有值）──
+  // ── Step 3: 执行者二连（候选 = 主 agent 直接执行 / spawn 独立子代理）──
+  console.log()
+  console.log(ansis.cyan.bold(`  ${i18n.t('init:executor.title')}`))
+  console.log()
+  console.log(ansis.gray(`  ${i18n.t('init:executor.hint')}`))
+  console.log()
+
+  const collected: CodexHostCollected = {}
+  for (const field of EXECUTOR_FIELDS) {
+    collected[field.key] = await pickExecutorField({
+      field,
+      current: options.defaults[field.key],
+    })
+  }
+
+  // ── Step 4: 模型采集（仅在对应执行者为 subagent 时提示；main 下保留既有值但不采集）──
   console.log()
   console.log(ansis.cyan.bold(`  🧠 ${i18n.t('init:model.trioTitle')}`))
   console.log()
   console.log(ansis.gray(`  ${i18n.t('init:model.trioCandidatesHint')}`))
   console.log()
 
-  const collected: CodexHostModels = {}
   for (const field of MODEL_FIELDS) {
+    const executorKey = field.key === 'reviewModel' ? 'reviewExecutor' : 'codingExecutor'
+    if (collected[executorKey] !== 'subagent') {
+      // 执行者为 main：该模型字段不生效，保留既有值但不采集
+      collected[field.key] = options.defaults[field.key]?.trim() || undefined
+      continue
+    }
     const current = options.defaults[field.key]?.trim() || undefined
     const raw = await pickModelField({ field, current })
     collected[field.key] = field.sanitize(raw)
@@ -212,16 +262,31 @@ async function collectCodexHostConfig(options: {
   return collected
 }
 
-/** 配置摘要（交互与非交互共用）：host + 模型字段 + 命令数 */
-function printSummary(input: { models: CodexHostModels, commandCount: number }): void {
+/** 配置摘要（交互与非交互共用）：host + 执行者字段 + 模型字段 + 命令数 */
+function printSummary(input: { models: CodexHostCollected, commandCount: number }): void {
   const { models, commandCount } = input
+  const executorLabel = (kind: ExecutorKind | undefined): string =>
+    kind === 'subagent'
+      ? ansis.green(i18n.t('init:summary.executorSubagent'))
+      : ansis.gray(i18n.t('init:summary.executorMain'))
+  const modelLabel = (value: string | undefined, effective: boolean): string => {
+    if (!value)
+      return ansis.gray(i18n.t('init:host.reviewModelUnset'))
+    if (!effective)
+      return ansis.yellow(i18n.t('init:summary.modelIneffective', { model: value }))
+    return ansis.green(value)
+  }
+  const reviewEffective = models.reviewExecutor === 'subagent'
+  const codingEffective = models.codingExecutor === 'subagent'
   console.log()
   console.log(ansis.yellow('━'.repeat(50)))
   console.log(ansis.bold(`  ${i18n.t('init:summary.title')}`))
   console.log()
   console.log(`  ${ansis.cyan(i18n.t('init:summary.host'))}  ${ansis.green('codex')}`)
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))}  ${models.reviewModel ? ansis.green(models.reviewModel) : ansis.gray(i18n.t('init:host.reviewModelUnset'))}`)
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))}  ${models.codingModel ? ansis.green(models.codingModel) : ansis.gray(i18n.t('init:host.reviewModelUnset'))}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewExecutor'))}  ${executorLabel(models.reviewExecutor)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.codingExecutor'))}  ${executorLabel(models.codingExecutor)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))}  ${modelLabel(models.reviewModel, reviewEffective)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))}  ${modelLabel(models.codingModel, codingEffective)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(commandCount.toString())}`)
   console.log(ansis.yellow('━'.repeat(50)))
   console.log()
@@ -272,23 +337,24 @@ export async function init(options: InitOptions = {}): Promise<void> {
   }
 
   const selectedWorkflows = getCoreCommandIds()
-  // 既有配置中的模型字段作为交互/非交互默认值（空白等价未配置；保真写回不丢，含弃用的 reviewModelB）
+  // 既有配置中的执行者与模型字段作为交互/非交互默认值（空白等价未配置；保真写回不丢）
   const existingExtras = sanitizeCodexHostExtras(existingConfig?.codexHost)
-  const defaultModels: CodexHostModels = {
+  const defaultCollected: CodexHostCollected = {
+    reviewExecutor: sanitizeExecutor(existingConfig?.codexHost?.reviewExecutor),
+    codingExecutor: sanitizeExecutor(existingConfig?.codexHost?.codingExecutor),
     reviewModel: sanitizeReviewModel(existingConfig?.codexHost?.reviewModel),
-    reviewModelB: existingExtras.reviewModelB,
     codingModel: existingExtras.codingModel,
   }
-  // 模型三连候选 = 默认继承（留空）+ 自定义输入 + 既有值；agent 模型需额外配置，
-  // 能否 spawn 由宿主实际能力决定（详见模板与 lycx doctor 提示）
-  let collectedModels: CodexHostModels = { ...defaultModels }
+  // 执行者候选固定为 main / subagent；模型候选 = 留空 + 自定义输入 + 既有值。
+  // agent 模型需额外配置，能否 spawn 由宿主实际能力决定（详见模板与 lycx doctor 提示）
+  let collectedModels: CodexHostCollected = { ...defaultCollected }
 
   // ═══════════════════════════════════════════════════════
   // Interactive flow（codex 单宿主）
   // ═══════════════════════════════════════════════════════
   if (!options.skipPrompt) {
-    // ── API 提供方 → Codex 现状检测 → 模型二连 ──
-    collectedModels = await collectCodexHostConfig({ defaults: defaultModels })
+    // ── API 提供方 → Codex 现状检测 → 执行者二连 → 模型采集 ──
+    collectedModels = await collectCodexHostConfig({ defaults: defaultCollected })
 
     // ── 摘要 ──
     printSummary({ models: collectedModels, commandCount: selectedWorkflows.length })
@@ -322,9 +388,9 @@ export async function init(options: InitOptions = {}): Promise<void> {
       installedWorkflows: selectedWorkflows,
       codexHost: {
         ...existingExtras,
+        reviewExecutor: collectedModels.reviewExecutor,
+        codingExecutor: collectedModels.codingExecutor,
         reviewModel: collectedModels.reviewModel,
-        // reviewModelB 已弃用、不再采集：保真写回存量值，SHALL NOT 因重装而丢弃
-        reviewModelB: existingExtras.reviewModelB,
         codingModel: collectedModels.codingModel,
       },
       installedHosts: ['codex'],
