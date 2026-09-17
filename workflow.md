@@ -1,91 +1,136 @@
 # ly-workflow-codex 工作流程图
 
-> Codex 单 Agent 流程：同一会话内 propose/review/apply 编排；审查关卡走 `codex exec` 独立子会话（调用契约见 [docs/codex-exec-contract.md](./docs/codex-exec-contract.md)）。
+> Codex 单 Agent 流程：同一会话内 propose/review/apply 编排。审查与实施各有一个执行者开关——`reviewExecutor` / `codingExecutor` 未配置或为 `main` 时由主 agent 直接执行，为 `subagent` 时 spawn 独立子代理（非 fork，软上下文经 change 目录 `context.md` 到达）。
 
-## 1. @lyx-propose（编排入口）
+> **设计态说明**：本文档描述执行者可切换后的目标流程。该能力尚未落地到代码与模板；实现前审查关卡与 apply 仍按 subagent 路径执行。
 
-```mermaid
-flowchart TD
-    Start["@lyx-propose 触发"] --> InWt{已在 worktree 内?}
-    InWt -->|是| AskAuto["问: 全自动 / 手动?"]
-    InWt -->|否| AskIso["问: 隔离方式(三选一)"]
-    AskIso -->|隔离 worktree| WtDirty{"脏改动?<br/>(git status --porcelain)"}
-    WtDirty -->|有| WtHint["提示: 改动留在原 worktree<br/>确认后继续"]
-    WtDirty -->|无| WtCreate
-    WtHint --> WtCreate["git worktree add -b 开发分支名<br/>~/.ly/worktrees/项目名/开发分支名<br/>(从当前分支 HEAD 切出) + baseline"]
-    WtCreate --> WtCd["同会话 cd 进 worktree + 目录校验<br/>(失败即停,不静默继续)"]
-    WtCd --> AskAuto
-    AskIso -->|本项目切新分支| Dirty1{"脏改动?"}
-    Dirty1 -->|有| Disp["脏改动三选处置:<br/>WIP commit / Stash / 原样保留"]
-    Dirty1 -->|无| Branch
-    Disp --> Branch["git checkout -b 开发分支名<br/>(无 baseline/无 cd/无兜底命令)"]
-    Branch --> AskAuto
-    AskIso -->|留在当前分支| Dirty2{"脏改动?"}
-    Dirty2 -->|有| Disp
-    Dirty2 -->|无| AskAuto
-
-    AskAuto -->|手动| M1["opsx:propose 生成方案<br/>(快照比对确定 change 名)"]
-    AskAuto -->|全自动| A1["opsx:propose 生成方案<br/>(快照比对确定 change 名)"]
-
-    M1 --> SelfReview["方案自审(四项检查+逐项结论清单)<br/>机械断链直接修 / 业务判断类问用户"]
-    A1 --> SelfReview
-    SelfReview --> Commit["commit: propose: change-name<br/>(自审修复一并落库)"]
-
-    Commit -->|手动分支| C3["问: 要不要跑 review-plan?"]
-    C3 -->|否| C4["结束(方案已 commit,<br/>apply/review-code 日后手动)"]
-    C3 -->|是| C5["@lyx-review-plan 审查-修复循环<br/>(审查对象: propose commit)"]
-    C5 --> C6{终止原因}
-    C6 -->|清零| C7["结束(修复已统一提交,<br/>日后自行 apply/review-code)"]
-    C6 -->|其余终止条件| C8["输出终止报告,结束"]
-
-    Commit -->|全自动分支| B1["@lyx-review-plan 审查-修复循环"]
-    B1 --> B2{终止原因}
-    B2 -->|清零| BApply["@lyx-apply 本会话实施<br/>-> commit: apply: change-name"]
-    B2 -->|其余终止条件| B6["输出终止报告,流水线停止"]
-    BApply --> BCode["@lyx-review-code 审查-修复循环<br/>(审查对象: apply commit)"]
-    BCode --> B5{终止原因}
-    B5 -->|清零| B7["结束(archive 仍手动)"]
-    B5 -->|其余终止条件| B8["输出终止报告,停止"]
-```
-
-## 2. @lyx-apply（当前会话本人实施）
+## 1. 总览：执行者分支
 
 ```mermaid
 flowchart TD
-    Apply["@lyx-apply 触发"] --> Resolve["解析 change 名:<br/>显式参数 -> 唯一未归档 change -> 询问"]
-    Resolve --> SelfImpl["当前会话读 tasks.md<br/>逐任务实施 + 验证 + 勾 checkbox<br/>(无外部委托 / 无 wrapper)"]
-    SelfImpl --> PreCheck{"有与本次无关的预存改动?"}
-    PreCheck -->|是| PreNote["git add 仅限本次改动, 预存改动不提交"]
-    PreCheck -->|否| Normal["git add 本次实际改动"]
-    PreNote --> AppCommit["commit: apply: change-name"]
-    Normal --> AppCommit
-    AppCommit --> End["结束(apply commit 即 review-code 审查对象)"]
+    A["@lyx-propose 需求"] --> B["隔离方式三选一"]
+    B --> C["全自动 / 手动"]
+    C --> D["生成 artifacts<br/>(主 agent)"]
+    D --> E["方案自审 + context.md<br/>(主 agent)"]
+    E --> F["commit: propose: change-name"]
+    F --> G{"reviewExecutor"}
+    G -->|main| H["主 agent 自审<br/>分级发现"]
+    G -->|subagent| I["spawn 审查 subagent<br/>非 fork + context.md"]
+    H --> J["修复 Critical<br/>再自查确认清零<br/>最多 2 轮"]
+    I --> K["逐条裁决 + 修复循环<br/>最多 5 轮 / 驳回硬线"]
+    J --> L{"codingExecutor"}
+    K --> L
+    L -->|main| M["主 agent 直接实施"]
+    L -->|subagent| N["spawn coding subagent<br/>非 fork + context.md"]
+    M --> O["主会话统一 commit<br/>apply: change-name"]
+    N --> O
+    O --> P{"reviewExecutor"}
+    P -->|main| Q["主 agent 自审代码"]
+    P -->|subagent| R["spawn 审查 subagent<br/>基线 = apply commit"]
+    Q --> S["结束，可 @lyx-archive"]
+    R --> S
 ```
 
-## 3. 审查-修复循环（review-plan / review-code 共用）
+## 2. 配置如何决定走哪条路
+
+```mermaid
+flowchart LR
+    subgraph CFG["~/.codex/lyx/config.toml"]
+        RE["reviewExecutor"]
+        RM["reviewModel"]
+        CE["codingExecutor"]
+        CM["codingModel"]
+    end
+
+    RE -->|"未配置 / main"| MainRev["主 agent 直接审查"]
+    RE -->|"subagent"| SubRev["spawn 审查 subagent"]
+    RM -.->|"仅 subagent 时生效"| SubRev
+
+    CE -->|"未配置 / main"| MainCod["主 agent 直接实施"]
+    CE -->|"subagent"| SubCod["spawn coding subagent"]
+    CM -.->|"仅 subagent 时生效"| SubCod
+
+    MainRev --> RevWarn["模型 / 推理档字段被忽略<br/>doctor WARN"]
+    MainCod --> CodWarn["模型 / 推理档字段被忽略<br/>doctor WARN"]
+```
+
+## 3. 审查循环：两条路径的差异
 
 ```mermaid
 flowchart TD
-    R1["首轮: codex exec 独立子会话<br/>codex exec -C $WORKDIR --json -m 审查模型 -<br/>(ROLE_FILE + TASK 经 stdin, agentic 运行)"] --> R2{审查调用失败?<br/>超时/非零退出/空响应/<br/>格式无法解析}
-    R2 -->|是| R8a["终止条件8: 审查调用失败<br/>停止循环,报告原始失败信息"]
-    R2 -->|否| R3{本轮 Critical 数}
-    R3 -->|0| R4["终止条件1: 清零<br/>停止循环,统一提交修复(--no-commit 除外)"]
-    R3 -->|大于0| R5["逐条 Critical: 当前会话判断是否认可"]
-    R5 -->|不认可| R6["不修复,写反驳理由<br/>同一 Critical 连续 2 轮都不认可"]
-    R6 --> R7a["终止条件5: 分歧未决<br/>停止循环,并列展示两轮发现与反驳"]
-    R5 -->|认可| R8["修复(仅认可的 Critical + 必需依赖条目)"]
-    R8 --> R9{无法安全修复?<br/>需业务决策/缺凭据/<br/>改变公开接口/信息不足}
-    R9 -->|是| R9a["终止条件3: 无法安全自动修复<br/>停止循环,不做猜测性修改"]
-    R9 -->|否| R10["本轮验证<br/>review-code: 测试/类型检查/构建<br/>review-plan: openspec validate"]
-    R10 -->|失败| R10a["终止条件4: 修复后验证失败<br/>停止循环"]
-    R10 -->|通过| R11{"同一 Critical 相邻两轮仍存在<br/>且上一轮当前会话认可过?"}
-    R11 -->|是| R11a["终止条件2: 熔断<br/>停止循环"]
-    R11 -->|否| R12{"连续 3 轮全部 Critical<br/>均判为同一大类系统性误判?"}
-    R12 -->|是| R12a["终止条件6: 审查对象类型持续系统性误判<br/>停止循环,转人工"]
-    R12 -->|否| R13{"达到全局轮数上限?<br/>(默认 5 轮)"}
-    R13 -->|是| R13a["终止条件7: 达到轮数上限<br/>停止循环,附完整轮次轨迹"]
-    R13 -->|否| R14["下一轮: codex exec resume session_id<br/>增量 TASK(上一轮 Critical 原文 + 路径清单)"]
-    R14 --> R2
+    Start["进入审查"] --> Dec{"reviewExecutor"}
+
+    Dec -->|main| M1["主 agent 读 artifacts / diff<br/>产出 Critical/Warning/Info"]
+    M1 --> M2{"Critical 数大于 0 ?"}
+    M2 -->|否| MDone["确认清零，结束"]
+    M2 -->|是| M3["修复 Critical"]
+    M3 --> M4["再自查一轮确认"]
+    M4 --> M5{"已达 2 轮 ?"}
+    M5 -->|否| M1
+    M5 -->|是| MStop["停止，转人工"]
+
+    Dec -->|subagent| S1["spawn 全新审查 subagent<br/>非 fork，只携带 TASK"]
+    S1 --> S2["产出 Critical/Warning/Info"]
+    S2 --> S3{"Critical 数大于 0 ?"}
+    S3 -->|否| SDone["正常清零<br/>统一提交修复"]
+    S3 -->|是| S4["主 agent 逐条裁决<br/>不认可须附可核验依据"]
+    S4 --> S5["仅修复认可的 Critical"]
+    S5 --> S6["openspec validate / 测试验证"]
+    S6 --> S7{"命中终止条件 ?"}
+    S7 -->|"熔断 / 驳回硬线 / 5 轮上限"| SStop["停止，转人工"]
+    S7 -->|否| S8["重新 spawn 全新 subagent<br/>携带上轮 Critical 逐字原文"]
+    S8 --> S2
 ```
 
-> 循环期间不提交；仅正常清零时统一提交一次。详细契约（session_id 提取、增量传递、终止条件八条、升级 codex 复核清单）见 [docs/codex-exec-contract.md](./docs/codex-exec-contract.md)。
+## 4. apply 实施：两条路径的差异
+
+```mermaid
+flowchart TD
+    Start["@lyx-apply change-name"] --> Snap["快照 git status"]
+    Snap --> Dec{"codingExecutor"}
+
+    Dec -->|main| M1["主 agent 读 tasks.md<br/>逐任务实施 + 验证 + 勾选"]
+    M1 --> M2["主 agent 自记录改动清单"]
+    M2 --> M3["回写 context.md"]
+
+    Dec -->|subagent| S1["spawn coding subagent<br/>非 fork + context.md"]
+    S1 --> S2["逐任务实施 + 验证 + 勾选"]
+    S2 --> S3["回传改动清单，不 commit"]
+    S3 --> S4["主 agent 比对快照<br/>partial apply 检测"]
+    S4 --> M3
+
+    M3 --> Commit["主会话统一 commit<br/>apply: change-name"]
+    Commit --> Verify["git show --name-only 校验<br/>文件集合等于待提交清单"]
+```
+
+## 5. 时序：混合配置下的一次完整流水线
+
+以 `reviewExecutor = subagent`、`codingExecutor = main` 为例。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant M as 主 agent
+    participant R as 审查 subagent
+
+    U->>M: @lyx-propose 给 status 加 --json
+    M->>M: 隔离方式三选一 + 全自动/手动
+    M->>M: 生成 artifacts + 方案自审 + context.md
+    M->>M: commit propose: status-json-output
+
+    M->>R: spawn（非 fork，TASK = 路径清单 + context.md）
+    R-->>M: Critical 1 / Warning 2 / Info 1
+    M->>M: 逐条裁决（Critical 认可）+ 修复 + validate
+    M->>R: 重新 spawn（上轮 Critical 逐字原文 + 路径清单）
+    R-->>M: Critical 0
+    M->>M: commit fix: review-plan feedback
+
+    M->>M: codingExecutor = main，主 agent 直接实施
+    M->>M: 逐任务实施 + 验证 + 勾选 + 回写 context.md
+    M->>M: commit apply: status-json-output
+
+    M->>R: spawn（基线 = apply commit + context.md）
+    R-->>M: Critical 0 / Warning 1 / Info 2
+    M->>U: 流水线结束，提示可 @lyx-archive
+```
