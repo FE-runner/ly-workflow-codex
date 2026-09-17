@@ -18,7 +18,7 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 与执行者无关的规则（审查范围判定、基线锚定、未跟踪清单采集、分级输出）在两条路径下保持一致。
 
-审查 subagent 模型按 `codexHost.reviewModel` 指定，未配置或空白时继承当前会话模型；`reviewModelB`/`reviewReasoningEffortB` 为弃用字段，本命令不读取使用。SHALL NOT spawn 第二个审查 agent、SHALL NOT 实现"并行双审、交换结论、共识归并"环节——单 agent 的分级结论即本轮唯一审查发现来源，质量把关由当前会话逐条裁决与"驳回硬线"终止条件承担。Critical 修复由当前会话执行。
+审查 subagent 模型按 `codexHost.reviewModel` 指定，未配置或空白时继承当前会话模型。SHALL NOT spawn 第二个审查 agent、SHALL NOT 实现"并行双审、交换结论、共识归并"环节——单 agent 的分级结论即本轮唯一审查发现来源，质量把关由当前会话逐条裁决与"驳回硬线"终止条件承担。Critical 修复由当前会话执行。
 
 循环执行期间默认不提交；仅当循环以"正常清零"结束时，才对审查目标全部文件（`git diff HEAD` 圈定的原始改动 + 循环修复一并暂存）统一提交一次。传入 `--no-commit` 时，连这次最终的统一提交也不做。
 
@@ -58,7 +58,7 @@ git status --porcelain | grep '^??'
 
 1. **非 fork spawn**：审查 subagent SHALL 以**非 fork** 方式 spawn——子代理只携带 spawn 消息（TASK），SHALL NOT 携带父线程对话历史（宿主 V1 语义为 `fork_context: false` 默认值；V2 语义为 `fork_turns: none`）。仅当宿主不支持完全非 fork 而仅支持"最近 N 轮"fork 模式时，SHALL 取最小 N（或 0）近似非 fork 并在报告中如实说明；SHALL NOT 使用全量 fork。
 2. **软上下文经 context.md 到达**：非 fork 意味着主会话讨论中的关键决策、取舍、已知边界等"软上下文"不再随会话历史自动到达审查 agent——TASK SHALL 指示审查 subagent 读取该 change 目录下的 `context.md`（`openspec/changes/<change-name>/context.md`）获取软上下文，SHALL NOT 在 TASK 中整段复制其内容。`context.md` 缺失（历史 change）时在报告中如实注明"context.md 缺失，软上下文不可用"后继续，SHALL NOT 凭空虚构上下文。
-3. **agent 模型需额外配置（含推理档；spawn 前确认字段，不做清单强校验）**：审查 subagent 的模型 = `~/.codex/lyx/config.toml` 的 `[codexHost] reviewModel`；未配置或空白 → 继承当前会话模型。推理档 = `[codexHost] reviewReasoningEffort`；先 trim，trim 后为空 → 不传该参数，trim 后非空时把 trim 后的值作为宿主 spawn 的 `reasoning_effort` 随 `reviewModel` 一并传入。`reviewModelB`/`reviewReasoningEffortB` 为弃用字段，SHALL NOT 读取使用。模型能否 spawn 由运行环境实际能力决定，SHALL NOT 依赖任何硬编码清单或 `/models` 结果预判。spawn 前 SHALL 读取 `~/.codex/lyx/config.toml` 确认模型与推理档字段取值，读取失败（缺文件/解析错误）→ 视为**配置状态未知**：明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承回退。spawn 失败报错原文含 `Unknown model` 与 `Available models: ...` 时如实展示，提示"该模型当前不支持 spawn，请改用报错中 Available models 列表内的模型"；推理档被宿主/上游拒绝时同样如实展示报错原文并按既有 spawn 失败口径处理，SHALL NOT 把取值预判为"配置无效"。模型与推理档指定只写在模板指示里，SHALL NOT 依赖任何 shell 层模型参数（无 `-m`/`--model` 类指令），SHALL NOT 内置任何"模型名 → 推理档"的硬编码映射。**验证某模型是否可 spawn 的示例 prompt**：让 Codex 用该模型 spawn 一个子代理执行简单任务（如回复 ok），报错原文即判定依据。
+3. **agent 模型需额外配置（含推理档；spawn 前确认字段，不做清单强校验）**：审查 subagent 的模型 = `~/.codex/lyx/config.toml` 的 `[codexHost] reviewModel`；未配置或空白 → 继承当前会话模型。推理档 = `[codexHost] reviewReasoningEffort`；先 trim，trim 后为空 → 不传该参数，trim 后非空时把 trim 后的值作为宿主 spawn 的 `reasoning_effort` 随 `reviewModel` 一并传入。模型能否 spawn 由运行环境实际能力决定，SHALL NOT 依赖任何硬编码清单或 `/models` 结果预判。spawn 前 SHALL 读取 `~/.codex/lyx/config.toml` 确认模型与推理档字段取值，读取失败（缺文件/解析错误）→ 视为**配置状态未知**：明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承回退。spawn 失败报错原文含 `Unknown model` 与 `Available models: ...` 时如实展示，提示"该模型当前不支持 spawn，请改用报错中 Available models 列表内的模型"；推理档被宿主/上游拒绝时同样如实展示报错原文并按既有 spawn 失败口径处理，SHALL NOT 把取值预判为"配置无效"。模型与推理档指定只写在模板指示里，SHALL NOT 依赖任何 shell 层模型参数（无 `-m`/`--model` 类指令），SHALL NOT 内置任何"模型名 → 推理档"的硬编码映射。**验证某模型是否可 spawn 的示例 prompt**：让 Codex 用该模型 spawn 一个子代理执行简单任务（如回复 ok），报错原文即判定依据。
 4. **TASK 范围点名（只审 change 范围）**：审查 subagent 的任务点名"只审该 change 的下列代码变更"，SHALL NOT 超出点名范围作业。TASK 先指示读取 ROLE_FILE（`~/.codex/lyx/prompts/codex/reviewer.md`，角色词内容不重写），再给出审查范围说明（步骤 1 记录的基线引用说明或零 commit 场景组合）与未跟踪文件路径清单；**首轮不拼贴 diff 全文**——审查 subagent 自行执行对应命令获取实际内容（例如"运行 git diff HEAD 得到完整 diff"），不要假设范围。
 
 OUTPUT 约定（写入审查 subagent 的任务）：审查发现按严重度分级 Critical/Warning/Info，每条含位置（含可解析的文件相对路径）、问题、建议。

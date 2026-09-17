@@ -40,7 +40,7 @@
 
 | 占位符 | 说明 |
 |--------|------|
-| `{{REVIEW_MODEL}}` | **历史兼容占位**（subagent 多 Agent 模式已不再使用）：模型与推理档经模板指示 + 宿主 spawn 能力落实（`reviewModel`/`codingModel` 与 `reviewReasoningEffort`/`codingReasoningEffort` 由模板运行时读取，模型未配置回退当前会话模型，推理档空白不传；`reviewModelB`/`reviewReasoningEffortB` 弃用不读取但存量值保留），模板不含模型或推理档渲染占位符；`{{REVIEW_MODEL}}` 处理仅保留给历史模板/旧安装位渲染兼容 |
+| `{{REVIEW_MODEL}}` | **历史兼容占位**（subagent 多 Agent 模式已不再使用）：模型与推理档经模板指示 + 宿主 spawn 能力落实（`reviewModel`/`codingModel` 与 `reviewReasoningEffort`/`codingReasoningEffort` 由模板运行时读取，模型未配置回退当前会话模型，推理档空白不传），模板不含模型或推理档渲染占位符；`{{REVIEW_MODEL}}` 处理仅保留给历史模板/旧安装位渲染兼容 |
 
 其余旧占位符（`{{REVIEWER_MODEL}}`/`{{IMPLEMENTER_MODEL}}`/`{{LITE_MODE_FLAG}}` 等，双宿主时代的后端路由/条件块语义）已随本次裁剪移除。
 

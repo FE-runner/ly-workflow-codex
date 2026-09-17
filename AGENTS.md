@@ -48,7 +48,7 @@ src/utils/
   installer.ts               安装主流程：模板复制 + 变量注入 + verify + 卸载清单
   installer-data.ts          14 个命令注册（init/git/opsx/review/release 五类，order 0-42）
   installer-template.ts      模板渲染：{{REVIEW_MODEL}} 旧位兼容（历史模板/旧安装位）、
-                              codingModel 模型指示透传（reviewModelB 已弃用不读取）、{{LITE_MODE_FLAG}} 恒空、条件块折叠
+                              codingModel 模型指示透传、{{LITE_MODE_FLAG}} 恒空、条件块折叠
   codex-provider.ts          采集 ~/.codex/config.toml 的 [model_providers.*]（init 向导数据源）
   preflight.ts               入口处 openspec 依赖检查：openspec CLI + openspec-* skills
                              （~/.agents/skills/ 或项目 .agents/skills/，openspec init 产物）
@@ -100,7 +100,6 @@ codingExecutor = "main"    # 实施执行者：main（主 agent 直接实施，�
 reviewModel = "..."        # 审查 subagent 模型；仅在 reviewExecutor = "subagent" 时生效，未配置回退当前会话模型
 codingModel = "..."        # coding subagent 的模型名（可选）；未配置 = 回退当前会话模型
 reviewReasoningEffort = "..."   # 审查 agent A 推理档（可选）；非空时随 reviewModel spawn 传入，空白不传
-reviewReasoningEffortB = "..."  # 【弃用】双审查时代的 agent B 推理档——不再读取；存量值保留
 codingReasoningEffort = "..."   # coding subagent 推理档（可选）；非空时随 codingModel spawn 传入，空白不传
 spawnableModels = [...]    # 本机实测可 spawn 的模型清单（可选，仅提示参考）；未配置/空白回退内置默认，不作候选或校验来源
 ```
@@ -123,7 +122,7 @@ spawnableModels = [...]    # 本机实测可 spawn 的模型清单（可选，�
 1. **`propose` 是编排入口，`apply`/`archive` 各带自动 commit，`explore` 是纯薄壳**：`propose.md` 包含创建方案前的隔离方式三选一询问（隔离 worktree【不在 worktree 内才问，从当前分支 HEAD 用 `git worktree add` 切出，切后同会话 cd 进 worktree 续跑——会话不断链，cd 校验失败即停，续接命令降级为异常兜底】/ 本项目切新分支【`git checkout -b`，无 baseline/无 cd/无兜底】/ 留在当前分支）、全自动/手动询问、commit 前的方案自审（四项检查 + 逐项结论清单，机械断链直接修、业务判断类 AskUserQuestion 问用户）、每步 commit（`propose: <change-name>`）、全自动流水线（review-plan → apply → review-code）。`apply.md` 由 coding subagent 实施 + 主会话统一提交，`archive.md` 委托 opsx 技能后 commit，`explore.md` 只做参数转发 + 一句转向提示。
 2. **审查走单审查 subagent（非 fork）而非 wrapper/API/`codex exec` 子会话**：无 ly-wrapper、无 Go 二进制、无 Web UI、无 exec 契约维护面。非 fork spawn（宿主 V1 `fork_context` 默认 false / V2 `fork_turns: none`）不携带对话历史，token 成本约为双审 fork 模型的 1/4~1/6；软上下文经 change 目录 `context.md` 显式到达（可审计、随 commit 留痕），主会话逐条裁决（不认可须附可核验依据）+ 驳回硬线双口径补偿裁决质量；执行约定内联进模板，不随 codex CLI 版本漂移。
 3. **实施走 coding subagent 而非本会话自实施**：不存在 routing 概念与外部实施后端；coding subagent 非 fork spawn、只实施 change 范围、可指定模型、经 context.md 获取软上下文，改动回传主会话，由主会话确认后回写 context.md 并统一提交（提交权收归主会话）。
-4. **配置单宿主于 `~/.codex/lyx/config.toml`**：installedHosts 仅保留为兼容旧配置读取的字段（恒 `['codex']`）；`codexHost.reviewModel`/`codingModel` 及对应 `reviewReasoningEffort`/`codingReasoningEffort` 由模板运行时读取并落实（模型未配置回退当前会话模型，推理档空白不传；init/update/menu 重写时保留原值，手工维护入口为 `[codexHost]` 且向导不采集推理档）；`reviewModelB`/`reviewReasoningEffortB` 为弃用字段——不读取使用，但 init/update/menu 重写路径保留存量原值不删，doctor 输出弃用提示。
+4. **配置单宿主于 `~/.codex/lyx/config.toml`**：installedHosts 仅保留为兼容旧配置读取的字段（恒 `['codex']`）；`codexHost.reviewModel`/`codingModel` 及对应 `reviewReasoningEffort`/`codingReasoningEffort` 由模板运行时读取并落实（模型未配置回退当前会话模型，推理档空白不传；init/update/menu 重写时保留原值，手工维护入口为 `[codexHost]` 且向导不采集推理档）；执行者字段 `reviewExecutor`/`codingExecutor` 决定审查与实施主体（未配置等价 `main`），模型与推理档字段仅在对应执行者为 `subagent` 时生效。
 5. **双宿主遗产（claude 宿主、wrapper、Web UI、routing.*）已随拆分移除**：模板/文档/spec 只描述 codex 单宿主行为；与上游 ly-workflow 的关系（v0.2.0 起安装位改为 `~/.agents/skills/lyx-*/`，与 ly-workflow 的 `~/.codex/prompts/ly-*.md` 不再冲突；旧安装位残留由 init/uninstall 自动清理；迁移路径）见 [README.md](./README.md)。
 
 ## 相关文件

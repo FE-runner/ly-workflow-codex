@@ -185,9 +185,9 @@ describe('template variable completeness', () => {
 
   it('rendered review/apply templates contain subagent orchestration, no exec residue', () => {
     const cases: Array<[string, string, string[], string[]]> = [
-      ['review-plan.md', 'subagent', ['reviewReasoningEffort', 'reviewReasoningEffortB'], ['codingReasoningEffort']],
-      ['review-code.md', 'subagent', ['reviewReasoningEffort', 'reviewReasoningEffortB'], ['codingReasoningEffort']],
-      ['apply.md', 'coding subagent', ['codingReasoningEffort'], ['reviewReasoningEffort', 'reviewReasoningEffortB']],
+      ['review-plan.md', 'subagent', ['reviewReasoningEffort'], ['codingReasoningEffort']],
+      ['review-code.md', 'subagent', ['reviewReasoningEffort'], ['codingReasoningEffort']],
+      ['apply.md', 'coding subagent', ['codingReasoningEffort'], ['reviewReasoningEffort']],
     ]
     for (const [file, marker, reasoningFields, forbiddenFields] of cases) {
       const content = readFileSync(join(TEMPLATES_DIR, file), 'utf-8')

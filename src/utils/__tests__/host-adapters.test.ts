@@ -72,8 +72,9 @@ describe('codex template set', () => {
       expect(content).toContain('context.md')
       expect(content).toContain('可核验依据')
       expect(content).toContain('驳回硬线')
-      // reviewModelB 仅以弃用声明形式出现（单审查执行模型不读取使用）
-      expect(content).toContain('reviewModelB')
+      // 弃用字段已随 switchable-executor-flow 移除：模板不应再提及
+      expect(content).not.toContain('reviewModelB')
+      expect(content).not.toContain('reviewReasoningEffortB')
       expect(content).not.toContain('codingModel') // review 模板不引用实施模型
       expect(content).toMatch(/~\/\.codex\/lyx\/prompts\/codex\/(plan-reviewer|reviewer)\.md/)
       // 不再走 codex exec 独立子会话
@@ -227,7 +228,7 @@ describe('installWorkflows — codex host', () => {
     // 渲染产物：单审查 subagent（非 fork）编排指示；REVIEW_MODEL 未配置也无 -m/exec 残留；无 wrapper 残留
     const reviewPlan = readFileSync(join(codexSkillsDir, 'lyx-review-plan', 'SKILL.md'), 'utf-8')
     expect(reviewPlan).toContain('单审查 subagent')
-    expect(reviewPlan).toContain('reviewModelB')
+    expect(reviewPlan).not.toContain('reviewModelB')
     expect(reviewPlan).toContain('/.codex/lyx/prompts/codex/plan-reviewer.md')
     expect(reviewPlan).not.toContain('codex exec')
     expect(reviewPlan).not.toContain('CODEAGENT_EOF')

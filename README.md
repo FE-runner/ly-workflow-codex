@@ -34,7 +34,7 @@ npx ly-workflow-codex init   # 全量初始化（生成 AGENTS.md + openspec ini
 | `@lyx-publish` | npm 包发布四场景（bmc 私域 Nexus / GitHub Packages / npmjs + GitHub Release / CI 自动发布），前置检查→版本号推导→构建→发布→验证 |
 | `@lyx-commit` `@lyx-rollback` `@lyx-clean-branches` `@lyx-worktree` | Git 工具（worktree 只留 `add`/`list`/`remove`/`prune`/`migrate`，`switch` 已移除——隔离切换统一由 `@lyx-propose` 触发） |
 
-审查-修复循环细节（增量传递、第 2 轮起重新 spawn 审查 subagent、终止条件、提交时机）内联在各 skill 模板（`@lyx-review-plan` / `@lyx-review-code`）；[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED，仅作历史参考。
+审查-修复循环细节（执行者分支、subagent 路径的 `send_input` 复用与增量传递、终止条件、提交时机）内联在各 skill 模板（`@lyx-review-plan` / `@lyx-review-code`）；[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED，仅作历史参考。
 
 ## 典型工作流
 
@@ -52,7 +52,7 @@ npx ly-workflow-codex init   # 全量初始化（生成 AGENTS.md + openspec ini
 - **codex 单 Agent 编排**：当前 Codex 会话完成探索 → 方案 → 自审 → 实施 → 修复的全部编排；无 wrapper、无 Web UI、无 routing/implementer 后端选择
 - **审查关卡 = 执行者可切换**：`reviewExecutor = "main"`（默认）= 主 agent 直接自审，不 spawn、无逐条裁决与驳回硬线，最多 2 轮；`reviewExecutor = "subagent"` = 每关 spawn 1 个审查 subagent（非 fork、只携带 TASK + 只审 change 范围），软上下文经 `context.md` 到达，每条 Critical 由主会话逐条裁决（不认可须附可核验依据），驳回硬线（同一 Critical 复现再驳回 / 连续 2 轮全驳回）即停转人工；subagent 路径第 2 轮起默认 `send_input` 复用同一子代理，复用失败才重新 spawn
 - **apply = 执行者可切换**：`codingExecutor = "main"`（默认）= 主 agent 直接实施；`codingExecutor = "subagent"` = spawn coding subagent（非 fork + 只实施 change 范围 + 经 context.md 获取软上下文）。两条路径均由主会话统一提交 `apply: <change-name>`
-- **agent 模型与推理档需额外配置（不做清单强校验）**：review-plan / review-code / apply 三模板按"模板指示 + 宿主能力"落实模型与推理档——模型 = 对应配置字段，未配置或空白 → 继承当前会话模型；推理档 = `reviewReasoningEffort`/`reviewReasoningEffortB`/`codingReasoningEffort`，仅在非空时随对应 spawn 传入 `reasoning_effort`，空白不传，取值不做枚举强校验；能否 spawn 由运行环境实际能力决定，以宿主 spawn 报错为准（报错含 `Unknown model ... Available models: ...` 时如实展示并提示改用可用模型）；读取配置失败 → "配置状态未知"提示运行 `lycx doctor`；宿主无 subagent 能力或初始 spawn 失败 → 按环境级不可用回退。`lycx doctor` 含"Codex 子代理模型配置"提示检查项（模型留空 OK / 已配置 OK；三个推理档仅展示；`spawnableModels` 格式非法输出 WARN），并附验证某模型是否可 spawn 的示例 prompt
+- **agent 模型与推理档需额外配置（不做清单强校验）**：review-plan / review-code / apply 三模板按"模板指示 + 宿主能力"落实模型与推理档——模型 = 对应配置字段，未配置或空白 → 继承当前会话模型；推理档 = `reviewReasoningEffort`/`codingReasoningEffort`，仅在非空时随对应 spawn 传入 `reasoning_effort`，空白不传，取值不做枚举强校验；能否 spawn 由运行环境实际能力决定，以宿主 spawn 报错为准（报错含 `Unknown model ... Available models: ...` 时如实展示并提示改用可用模型）；读取配置失败 → "配置状态未知"提示运行 `lycx doctor`；宿主无 subagent 能力或初始 spawn 失败 → 按环境级不可用回退。`lycx doctor` 含"Codex 子代理模型配置"提示检查项（模型留空 OK / 已配置 OK；两个推理档仅展示；`spawnableModels` 格式非法输出 WARN），并附验证某模型是否可 spawn 的示例 prompt
 - **发布**：打 tag `v*.*.*` push 触发 GitHub Actions 自动发 npm 包；无独立二进制构建步骤
 - **生命周期**：直接委托 OpenSpec 原生 skills（`@openspec-explore` / `@openspec-propose` / `@openspec-apply-change` / `@openspec-archive-change`），安装器只负责 preflight（openspec CLI + openspec-* skills 检测）与安装
 
