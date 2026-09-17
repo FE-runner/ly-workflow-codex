@@ -85,7 +85,7 @@
 
 ### Requirement: 方案审查分级输出发现
 
-`/ly:review-plan` 必须（SHALL）读取目标 change 的 `proposal.md`/`design.md`/`tasks.md`（存在的部分即可, 缺失容错跳过）以及该 change 目录下 `specs/**/*.md` 的全部 delta spec 文件（若存在；不存在则容错跳过, 不报错）的路径, spawn 一个非 fork 审查 subagent 执行审查, 并将发现分为 Critical、Warning、Info 三个严重度层级。审查执行方式由「审查关卡以单审查 subagent（非 fork）执行」定义：模型按 `codexHost.reviewModel` 配置、未配置或空白时继承当前会话模型, 推理档 `reviewReasoningEffort` 非空时随 spawn 传入；`reviewModelB`/`reviewReasoningEffortB` 不再被本命令读取使用；命令 SHALL NOT 使用 `codex exec`、`-m`、`session_id` 或 `resume`。审查 subagent 的任务 SHALL 先指示读取 ROLE_FILE `~/.ly/prompts/codex/plan-reviewer.md`（角色词内容不重写）, 再给出路径清单与该 change 目录下 `context.md` 的路径引用。**首轮**只传该 change 目录路径和 `proposal.md`/`design.md`/`tasks.md`/全部 delta spec 文件路径清单, 不预先读取并拼贴文件全文；若某份 delta spec 显式引用了基线 spec 中未被本次修改的既有 Requirement, 命令必须（SHALL）额外把对应基线 spec 路径纳入清单, 并在 TASK 中说明该路径仅作审查上下文、不属于修复对象。审查必须（SHALL）聚焦方案文档本身的逻辑缺陷：遗漏边界、范围不清晰、`proposal.md`/`design.md`/`tasks.md`/对应 spec 互相矛盾或脱节、风险点交代不清、spec 的 Requirement/Scenario 未覆盖 proposal 的 What Changes。SHALL NOT 将"代码库尚未实现某方案条目"或"`tasks.md` 中某任务未勾选"作为 Critical 依据。若存在 Critical, 命令必须（SHALL）进入审查-修复循环。
+`/ly:review-plan` 必须（SHALL）读取目标 change 的 `proposal.md`/`design.md`/`tasks.md`（存在的部分即可, 缺失容错跳过）以及该 change 目录下 `specs/**/*.md` 的全部 delta spec 文件（若存在；不存在则容错跳过, 不报错）的路径, spawn 一个非 fork 审查 subagent 执行审查, 并将发现分为 Critical、Warning、Info 三个严重度层级。审查执行方式由「审查关卡以单审查 subagent（非 fork）执行」定义：模型按 `codexHost.reviewModel` 配置、未配置或空白时继承当前会话模型, 推理档 `reviewReasoningEffort` 非空时随 spawn 传入；`reviewModelB`/`reviewReasoningEffortB` 不再被本命令读取使用；命令 SHALL NOT 使用 `codex exec`、`-m`、`session_id` 或 `resume`。审查 subagent 的任务 SHALL 先指示读取 ROLE_FILE `~/.codex/lyx/prompts/codex/plan-reviewer.md`（角色词内容不重写）, 再给出路径清单与该 change 目录下 `context.md` 的路径引用。**首轮**只传该 change 目录路径和 `proposal.md`/`design.md`/`tasks.md`/全部 delta spec 文件路径清单, 不预先读取并拼贴文件全文；若某份 delta spec 显式引用了基线 spec 中未被本次修改的既有 Requirement, 命令必须（SHALL）额外把对应基线 spec 路径纳入清单, 并在 TASK 中说明该路径仅作审查上下文、不属于修复对象。审查必须（SHALL）聚焦方案文档本身的逻辑缺陷：遗漏边界、范围不清晰、`proposal.md`/`design.md`/`tasks.md`/对应 spec 互相矛盾或脱节、风险点交代不清、spec 的 Requirement/Scenario 未覆盖 proposal 的 What Changes。SHALL NOT 将"代码库尚未实现某方案条目"或"`tasks.md` 中某任务未勾选"作为 Critical 依据。若存在 Critical, 命令必须（SHALL）进入审查-修复循环。
 
 "spec 未覆盖 What Changes"检查必须（SHALL）区分两种"该 change 没有 delta spec 文件"的情形：（a）`proposal.md` 的 Capabilities 段落未声明任何 New/Modified Capability（纯重构/工具/文档类变更, 通常配合 `skip_specs: true`）——此时没有 delta spec 属正常, SHALL NOT 报 Critical；（b）`proposal.md` 声明了至少一个 New/Modified Capability, 但该 change 目录下完全没有任何 delta spec 文件——此时命令必须（SHALL）报告 Critical, 指出"proposal 声明了 capability 变更但没有任何 delta spec 覆盖"；若 `skip_specs: true` 同时存在, 额外指出这是 `skip_specs` 使用不当。
 
@@ -163,7 +163,7 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 
 **软上下文载体**：非 fork 意味着主会话讨论中的软上下文（关键决策、取舍、已知边界）不再随 fork 自动到达审查 agent；TASK SHALL 指示审查 subagent 读取该 change 目录下的 `context.md`（见 `review-context-artifact` 能力）获取软上下文，SHALL NOT 在 TASK 中整段复制其内容。
 
-**范围点名与角色词**：审查任务 SHALL 点名审查范围（review-plan 为"只审 change 产物：proposal/design/specs/tasks"——该点名范围本身是显式枚举的文件集合，不包含 `context.md`；review-code 为"只审最近一次相关 commit 对应 diff（`apply:` commit，未有 `apply:` 时退化为 `propose:` commit）及未跟踪清单"——`context.md` 可能因 apply 阶段回写而实际出现在该 diff 范围内，此时 SHALL NOT 因其出现在 diff 中而将其当作可挑错的审查对象或修复对象）。两个命令共同遵守：`context.md` 始终只是背景引用来源（见「软上下文载体」），SHALL NOT 被当作可挑错的审查对象或修复对象；SHALL NOT 超出点名范围作业；SHALL 继续引用对应 ROLE_FILE（`~/.ly/prompts/codex/plan-reviewer.md` / `reviewer.md`），角色词内容不重写。
+**范围点名与角色词**：审查任务 SHALL 点名审查范围（review-plan 为"只审 change 产物：proposal/design/specs/tasks"——该点名范围本身是显式枚举的文件集合，不包含 `context.md`；review-code 为"只审最近一次相关 commit 对应 diff（`apply:` commit，未有 `apply:` 时退化为 `propose:` commit）及未跟踪清单"——`context.md` 可能因 apply 阶段回写而实际出现在该 diff 范围内，此时 SHALL NOT 因其出现在 diff 中而将其当作可挑错的审查对象或修复对象）。两个命令共同遵守：`context.md` 始终只是背景引用来源（见「软上下文载体」），SHALL NOT 被当作可挑错的审查对象或修复对象；SHALL NOT 超出点名范围作业；SHALL 继续引用对应 ROLE_FILE（`~/.codex/lyx/prompts/codex/plan-reviewer.md` / `reviewer.md`），角色词内容不重写。
 
 **模型与推理档**：SHALL 经"模板指示 + 宿主 spawn 能力"落实——审查 subagent 用 `codexHost.reviewModel` + 非空 `reviewReasoningEffort`；模型未配置或空白时继承当前会话模型，推理档 trim 后为空时不传 `reasoning_effort`。`reviewModelB`/`reviewReasoningEffortB` SHALL NOT 被审查流程读取使用（字段降级为弃用，见 `subagent-agent-config`）。SHALL NOT 依赖任何 shell 层模型或推理档参数，SHALL NOT 内置"模型名 → 推理档"的硬编码映射。审查 subagent 具备自主执行 shell 命令与读取文件的能力；TASK SHALL 只传基线引用或路径清单，SHALL NOT 由当前会话预先读取并拼贴审查内容全文。
 
@@ -223,7 +223,7 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 - **THEN** 命令回退为当前会话直接执行审查并如实报告"已回退, 原因：subagent 不可用", SHALL NOT 视为流程失败中断整体编排
 
 #### Scenario: 模板运行前读取配置失败
-- **WHEN** 审查 subagent spawn 前读取 `~/.ly/config.toml` 失败（缺文件或解析错误）
+- **WHEN** 审查 subagent spawn 前读取 `~/.codex/lyx/config.toml` 失败（缺文件或解析错误）
 - **THEN** 命令明确提示"无法读取配置, 请运行 `lycx doctor` 检查", 按"配置状态未知"处理, SHALL NOT 按"未配置"静默继承回退
 
 ### Requirement: 审查-修复循环与终止条件（review-code / review-plan 共用）

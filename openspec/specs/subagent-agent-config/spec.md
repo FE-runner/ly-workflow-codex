@@ -6,12 +6,12 @@
 ## Requirements
 
 ### Requirement: codexHost 提供 codingModel 与 reviewModelB 可选模型字段
-`~/.ly/config.toml` 的 `[codexHost]` 节 SHALL 提供 `codingModel` 与 `reviewModelB` 两个可选字段（与既有 `reviewModel` 并列，均非必填）。`codingModel` SHALL 作为 coding subagent 的模型指定，未配置或配置为空白时 SHALL 回退当前会话模型（subagent 继承发起会话模型），SHALL NOT 阻断安装或审查流程。
+`~/.codex/lyx/config.toml` 的 `[codexHost]` 节 SHALL 提供 `codingModel` 与 `reviewModelB` 两个可选字段（与既有 `reviewModel` 并列，均非必填）。`codingModel` SHALL 作为 coding subagent 的模型指定，未配置或配置为空白时 SHALL 回退当前会话模型（subagent 继承发起会话模型），SHALL NOT 阻断安装或审查流程。
 
 **`reviewModelB` 自 single-reviewer-exec-model 起降级为弃用字段**：字段与类型定义 SHALL 继续保留（`src/types/index.ts` 类型保留并标注弃用），存量配置值 SHALL NOT 被任何重写配置的路径删除或改写，但审查流程 SHALL NOT 读取使用——审查 subagent 只按 `reviewModel` 指定模型（见 `ly-review-gates` 的「审查关卡以单审查 subagent（非 fork）执行」）。`lycx doctor` 对该字段输出弃用提示（见「doctor 校验子代理模型配置」）。
 
 #### Scenario: 仅配置 reviewModel，未配置新字段
-- **WHEN** 用户 `~/.ly/config.toml` 仅配置 `codexHost.reviewModel`，未配置 `codingModel`
+- **WHEN** 用户 `~/.codex/lyx/config.toml` 仅配置 `codexHost.reviewModel`，未配置 `codingModel`
 - **THEN** coding subagent 回退使用当前会话模型，审查 subagent 使用 reviewModel，流程不受影响
 
 #### Scenario: 存量 reviewModelB 保留但不生效
@@ -23,7 +23,7 @@
 - **THEN** 审查 subagent 用 A、coding subagent 用 C；`reviewModelB = B` 被忽略（弃用字段，不读取）
 
 ### Requirement: codexHost 提供三个可选推理档字段（与模型字段一一对应）
-`~/.ly/config.toml` 的 `[codexHost]` 节 SHALL 提供 `reviewReasoningEffort`、`reviewReasoningEffortB`、`codingReasoningEffort` 三个可选推理档字段，分别与 `reviewModel`（审查 subagent）、`reviewModelB`（弃用，见下）、`codingModel`（coding subagent）一一对应，均非必填。字段值 SHALL 为非空字符串（trim 后使用）；未配置、空白或清洗后为空 SHALL 等价于"未配置"，语义 = 不传推理档参数（保持宿主/模型默认档）。取值本身 SHALL NOT 做枚举白名单强校验——合法档位随模型与宿主能力漂移，判定以宿主/上游实际报错为准并如实展示。`src/types/index.ts` 的类型定义 SHALL 同步保留这三个可选字段。
+`~/.codex/lyx/config.toml` 的 `[codexHost]` 节 SHALL 提供 `reviewReasoningEffort`、`reviewReasoningEffortB`、`codingReasoningEffort` 三个可选推理档字段，分别与 `reviewModel`（审查 subagent）、`reviewModelB`（弃用，见下）、`codingModel`（coding subagent）一一对应，均非必填。字段值 SHALL 为非空字符串（trim 后使用）；未配置、空白或清洗后为空 SHALL 等价于"未配置"，语义 = 不传推理档参数（保持宿主/模型默认档）。取值本身 SHALL NOT 做枚举白名单强校验——合法档位随模型与宿主能力漂移，判定以宿主/上游实际报错为准并如实展示。`src/types/index.ts` 的类型定义 SHALL 同步保留这三个可选字段。
 
 **`reviewReasoningEffortB` 自 single-reviewer-exec-model 起降级为弃用字段**：审查流程 SHALL NOT 读取使用（单审查 subagent 只配对 `reviewReasoningEffort`），字段保留、存量值 SHALL NOT 被任何重写配置路径删除或改写。交互 init、非交互模式（`--skip-prompt`）、`lycx update` 与菜单单字段编辑等所有重写 `[codexHost]` 的路径 SHALL 保留既有三字段原值，SHALL NOT 因重装或编辑而丢弃。
 
@@ -45,17 +45,17 @@
 
 #### Scenario: update 重装保留已配置的推理档
 - **WHEN** 用户已配置三个推理档字段后运行 `lycx update`（即 `init --force --skip-prompt`）
-- **THEN** 重装后 `~/.ly/config.toml` 仍保留三个推理档字段原值（含弃用的 `reviewReasoningEffortB`），SHALL NOT 被重置
+- **THEN** 重装后 `~/.codex/lyx/config.toml` 仍保留三个推理档字段原值（含弃用的 `reviewReasoningEffortB`），SHALL NOT 被重置
 
 #### Scenario: menu 单字段编辑不丢推理档
 - **WHEN** 用户通过 `lycx` 菜单"修改审查模型"仅编辑 `reviewModel`，而三个推理档字段已有配置
 - **THEN** 写回后三个推理档字段原值保留，SHALL NOT 被清除
 
 ### Requirement: codexHost.spawnableModels 声明宿主可 spawn 模型清单（提示参考，不作校验来源）
-`~/.ly/config.toml` 的 `[codexHost]` 节 SHALL 提供可选 `spawnableModels` 字符串数组字段：提示参考用，声明当前宿主显式 spawn 子代理可用的模型清单（用户可按实测维护）。该字段未配置、空白或清洗后为空时，提示口径回退使用内置默认常量 `SPAWNABLE_MODELS_DEFAULT`（`gpt-6-astra`、`gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5`）。清洗规则 SHALL 为：仅保留非空字符串、逐项 trim、去重；清洗后空数组等价未配置。字段显式存在但整体格式非法（如非数组字面量）时，`lycx doctor` 对该形态输出 WARN 提示（区别于完全未配置的静默通过）。**spawnableModels SHALL NOT 作为模型字段候选或校验来源**——模型二连候选与 doctor 判定均不依赖该清单；SHALL NOT 以 provider `/models` 拉取结果或 `~/.codex/models.json` 注册集合作为候选/校验来源（实测二者均不等于 spawn 可用列表）。agent 模型能否 spawn 由环境实际能力决定，运行期以宿主 spawn 报错为准。
+`~/.codex/lyx/config.toml` 的 `[codexHost]` 节 SHALL 提供可选 `spawnableModels` 字符串数组字段：提示参考用，声明当前宿主显式 spawn 子代理可用的模型清单（用户可按实测维护）。该字段未配置、空白或清洗后为空时，提示口径回退使用内置默认常量 `SPAWNABLE_MODELS_DEFAULT`（`gpt-6-astra`、`gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5`）。清洗规则 SHALL 为：仅保留非空字符串、逐项 trim、去重；清洗后空数组等价未配置。字段显式存在但整体格式非法（如非数组字面量）时，`lycx doctor` 对该形态输出 WARN 提示（区别于完全未配置的静默通过）。**spawnableModels SHALL NOT 作为模型字段候选或校验来源**——模型二连候选与 doctor 判定均不依赖该清单；SHALL NOT 以 provider `/models` 拉取结果或 `~/.codex/models.json` 注册集合作为候选/校验来源（实测二者均不等于 spawn 可用列表）。agent 模型能否 spawn 由环境实际能力决定，运行期以宿主 spawn 报错为准。
 
 #### Scenario: 未配置 spawnableModels
-- **WHEN** 用户 `~/.ly/config.toml` 的 `[codexHost]` 未配置 `spawnableModels`
+- **WHEN** 用户 `~/.codex/lyx/config.toml` 的 `[codexHost]` 未配置 `spawnableModels`
 - **THEN** 不影响模型二连候选与 doctor 判定；提示口径回退内置默认五模型，流程不受影响
 
 #### Scenario: 用户按实测维护 spawnableModels
@@ -68,7 +68,7 @@
 
 
 ### Requirement: 模型经"模板指示 + 宿主能力"落实，subagent 不可用时回退
-模型指定 SHALL 以模板内明确的模型指示落实（模板写明各 subagent 的模型取哪个配置字段、未配置用当前会话模型），由运行环境的宿主 spawn 能力执行；模板 SHALL NOT 依赖任何 shell 层模型参数。**未配置（留空）**时 SHALL 回退为继承当前会话模型，SHALL NOT 阻断安装或审查流程。**agent 模型需额外配置**：配置的模型能否 spawn 由运行环境实际能力决定，SHALL NOT 依赖任何硬编码清单或 `/models` 结果预判；运行期判定以宿主 spawn 报错为准。spawn 失败报错原文含 `Unknown model` / `Available models: ...` 时 SHALL 如实展示，提示"该模型当前不支持 spawn，请改用报错中 Available models 列表内的模型"。运行环境无 subagent 能力或初始 spawn 失败 SHALL 按回退口径回退当前会话直接执行，并输出**显式状态标记** `[回退] subagent 不可用: <原始报错>` 作为回退事实的唯一宣告——回退 SHALL NOT 以"已回退，原因：subagent 不可用"以外的自然语言描述代替，SHALL NOT 在回退后以"审查/实施已完成"之类结论冒充真实执行；该回退 SHALL NOT 视为流程失败。模板运行时读取 `~/.ly/config.toml` 失败（缺文件/解析错误）SHALL 视为"配置状态未知"：明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承回退。
+模型指定 SHALL 以模板内明确的模型指示落实（模板写明各 subagent 的模型取哪个配置字段、未配置用当前会话模型），由运行环境的宿主 spawn 能力执行；模板 SHALL NOT 依赖任何 shell 层模型参数。**未配置（留空）**时 SHALL 回退为继承当前会话模型，SHALL NOT 阻断安装或审查流程。**agent 模型需额外配置**：配置的模型能否 spawn 由运行环境实际能力决定，SHALL NOT 依赖任何硬编码清单或 `/models` 结果预判；运行期判定以宿主 spawn 报错为准。spawn 失败报错原文含 `Unknown model` / `Available models: ...` 时 SHALL 如实展示，提示"该模型当前不支持 spawn，请改用报错中 Available models 列表内的模型"。运行环境无 subagent 能力或初始 spawn 失败 SHALL 按回退口径回退当前会话直接执行，并输出**显式状态标记** `[回退] subagent 不可用: <原始报错>` 作为回退事实的唯一宣告——回退 SHALL NOT 以"已回退，原因：subagent 不可用"以外的自然语言描述代替，SHALL NOT 在回退后以"审查/实施已完成"之类结论冒充真实执行；该回退 SHALL NOT 视为流程失败。模板运行时读取 `~/.codex/lyx/config.toml` 失败（缺文件/解析错误）SHALL 视为"配置状态未知"：明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承回退。
 
 **spawn 方式 SHALL 为非 fork**：审查 subagent 与 coding subagent 均以非 fork 方式 spawn——子代理只携带 spawn 消息（TASK），SHALL NOT 携带父线程对话历史（宿主 V1 语义为 `fork_context: false` 默认值；V2 语义为 `fork_turns: none`）。仅当宿主不支持完全非 fork 而仅支持"最近 N 轮"fork 模式时，SHALL 取最小 N（或 0）近似非 fork 并如实报告；SHALL NOT 使用全量 fork（`fork_turns: all`）。软上下文经 change 目录下 `context.md` 到达子代理（见 `review-context-artifact`），SHALL NOT 以恢复 fork 作为替代。
 
@@ -87,7 +87,7 @@
 - **THEN** 作为审查 subagent 的模型指定 spawn，是否可用由宿主实际报错判定，SHALL NOT 因不在清单而被预判"配置无效"
 
 #### Scenario: 模板运行时无法读取配置
-- **WHEN** 审查/实施子代理 spawn 前读取 `~/.ly/config.toml` 失败（缺文件或解析错误）
+- **WHEN** 审查/实施子代理 spawn 前读取 `~/.codex/lyx/config.toml` 失败（缺文件或解析错误）
 - **THEN** 明确提示"无法读取配置，请运行 `lycx doctor` 检查"，按"配置状态未知"处理，SHALL NOT 按"未配置"静默继承回退
 
 #### Scenario: 配置了推理档时随 spawn 传入
@@ -110,7 +110,7 @@
 
 **采集数量变更（自本 change 起）**：本 Requirement 标题中"模型三连/三个模型字段"为历史措辞——`reviewModelB` 弃用后向导实际采集**两个**模型字段（`reviewModel` + `codingModel`），语义以正文为准。
 
-`lycx init` 向导 SHALL 在交互模式采集 `codexHost` 的两个模型字段：`reviewModel`（审查 subagent）、`codingModel`（coding 实施）。**`reviewModelB` 不再采集**（自 single-reviewer-exec-model 起弃用，存量值按保留规则原样写回）。交互流程 SHALL 为"语言 → 选定 API 提供方 → **Codex 现状检测展示** → 模型二连 → 配置摘要"，SHALL NOT 包含"工作流模式"与"选择 Agent"等单选项步骤。**现状检测 SHALL 为纯静态读取**：展示 `~/.codex/config.toml` 顶层 `model`（主会话模型，即"默认继承"的实际值）、`[model_providers.*]` 条目、`~/.codex/models.json` 注册集合规模；读取失败或缺文件时 SHALL 如实标注"未检测到"，SHALL NOT 阻断流程。现状检测展示块 SHALL 附带 `reasoning_effort` 参数坑提示（如部分第三方模型默认推理档不被上游接受、需在该模型对应的推理档字段显式填 `low`；提示 SHALL 指明该通道为 `[codexHost]` 的推理档字段、**本向导 SHALL NOT 交互采集推理档**、维护方式与 `spawnableModels` 一致 = 手改 `~/.ly/config.toml`）与"agent 模型需额外配置、附示例验证 prompt"提示。**模型二连候选 SHALL = 默认继承当前会话模型（留空） + 自定义输入 + 既有值（若有）**，逐字段 list 选择；候选 SHALL NOT 包含任何内置/维护清单字面量，SHALL NOT 以选定 provider 的 `/models` 拉取结果为候选。**自由输入入口 SHALL 保留**：候选末项"自定义输入模型…"，选择后输入任意模型名（不做清单限制），经 trim 后作为该字段配置值，空白视为取消。每个字段默认值语义：既有值非空 → 候选附加该项并默认该项，SHALL NOT 静默丢弃或替换；无既有值或空白 → 默认"留空"。交互 init、非交互模式（`--skip-prompt`）与 menu 单字段编辑等所有重写 `[codexHost]` 的路径 SHALL 保留既有 `reviewModelB`/`codingModel`、`spawnableModels` 与三个推理档字段（`reviewReasoningEffort`/`reviewReasoningEffortB`/`codingReasoningEffort`），SHALL NOT 因重装或编辑而丢弃。menu 的审查模型编辑 SHALL 使用同一候选语义。
+`lycx init` 向导 SHALL 在交互模式采集 `codexHost` 的两个模型字段：`reviewModel`（审查 subagent）、`codingModel`（coding 实施）。**`reviewModelB` 不再采集**（自 single-reviewer-exec-model 起弃用，存量值按保留规则原样写回）。交互流程 SHALL 为"语言 → 选定 API 提供方 → **Codex 现状检测展示** → 模型二连 → 配置摘要"，SHALL NOT 包含"工作流模式"与"选择 Agent"等单选项步骤。**现状检测 SHALL 为纯静态读取**：展示 `~/.codex/config.toml` 顶层 `model`（主会话模型，即"默认继承"的实际值）、`[model_providers.*]` 条目、`~/.codex/models.json` 注册集合规模；读取失败或缺文件时 SHALL 如实标注"未检测到"，SHALL NOT 阻断流程。现状检测展示块 SHALL 附带 `reasoning_effort` 参数坑提示（如部分第三方模型默认推理档不被上游接受、需在该模型对应的推理档字段显式填 `low`；提示 SHALL 指明该通道为 `[codexHost]` 的推理档字段、**本向导 SHALL NOT 交互采集推理档**、维护方式与 `spawnableModels` 一致 = 手改 `~/.codex/lyx/config.toml`）与"agent 模型需额外配置、附示例验证 prompt"提示。**模型二连候选 SHALL = 默认继承当前会话模型（留空） + 自定义输入 + 既有值（若有）**，逐字段 list 选择；候选 SHALL NOT 包含任何内置/维护清单字面量，SHALL NOT 以选定 provider 的 `/models` 拉取结果为候选。**自由输入入口 SHALL 保留**：候选末项"自定义输入模型…"，选择后输入任意模型名（不做清单限制），经 trim 后作为该字段配置值，空白视为取消。每个字段默认值语义：既有值非空 → 候选附加该项并默认该项，SHALL NOT 静默丢弃或替换；无既有值或空白 → 默认"留空"。交互 init、非交互模式（`--skip-prompt`）与 menu 单字段编辑等所有重写 `[codexHost]` 的路径 SHALL 保留既有 `reviewModelB`/`codingModel`、`spawnableModels` 与三个推理档字段（`reviewReasoningEffort`/`reviewReasoningEffortB`/`codingReasoningEffort`），SHALL NOT 因重装或编辑而丢弃。menu 的审查模型编辑 SHALL 使用同一候选语义。
 
 #### Scenario: 全新安装，三字段均选择"不设置"
 - **WHEN** 用户全新运行 `lycx init`，模型二连均选择"不设置（默认继承当前会话模型，留空）"（标题"三字段"为历史措辞，实际采集两字段）
@@ -118,7 +118,7 @@
 
 #### Scenario: update 重装保留已配置的 B/coding 字段
 - **WHEN** 用户已配置 `reviewModelB`/`codingModel` 后运行 `lycx update`（即 `init --force --skip-prompt`）
-- **THEN** 重装后 `~/.ly/config.toml` 仍保留 `reviewModelB`（弃用字段，保留不采集）/`codingModel` 原值，`spawnableModels` 与三个推理档字段同规则保留，SHALL NOT 被重置
+- **THEN** 重装后 `~/.codex/lyx/config.toml` 仍保留 `reviewModelB`（弃用字段，保留不采集）/`codingModel` 原值，`spawnableModels` 与三个推理档字段同规则保留，SHALL NOT 被重置
 
 #### Scenario: 自定义输入配置模型（含清单外模型名）
 - **WHEN** 用户在模型二连选择"自定义输入"，输入 `glm-5.3-flash`（不在任何内置/维护清单内）
@@ -126,7 +126,7 @@
 
 #### Scenario: update 重装保留已配置的模型字段
 - **WHEN** 用户已配置 `reviewModel`/`codingModel` 后运行 `lycx update`
-- **THEN** 重装后 `~/.ly/config.toml` 仍保留两字段原值，`reviewModelB`/`spawnableModels` 与三个推理档字段同规则保留，SHALL NOT 被重置
+- **THEN** 重装后 `~/.codex/lyx/config.toml` 仍保留两字段原值，`reviewModelB`/`spawnableModels` 与三个推理档字段同规则保留，SHALL NOT 被重置
 
 #### Scenario: menu 单字段编辑不丢其余字段
 - **WHEN** 用户通过 `lycx` 菜单"修改审查模型"仅编辑 `reviewModel`，而 `reviewModelB`/`codingModel`/`spawnableModels`/三个推理档字段已有配置
@@ -150,7 +150,7 @@
 
 #### Scenario: 现状检测附推理参数坑提示
 - **WHEN** init 现状检测展示块渲染（交互模式模型二连前）
-- **THEN** 展示块附带 `reasoning_effort` 参数坑提示（指明对应推理档字段为维护入口、向导不交互采集该参数、手改 `~/.ly/config.toml`）与"agent 模型需额外配置、附示例验证 prompt"提示，既有检测项照常展示
+- **THEN** 展示块附带 `reasoning_effort` 参数坑提示（指明对应推理档字段为维护入口、向导不交互采集该参数、手改 `~/.codex/lyx/config.toml`）与"agent 模型需额外配置、附示例验证 prompt"提示，既有检测项照常展示
 
 ### Requirement: doctor 校验子代理模型配置（提示型）
 `lycx doctor` SHALL 提供"Codex 子代理模型配置"检查项：读取 `codexHost.reviewModel`/`reviewModelB`/`codingModel`，只做提示不做清单强校验——`reviewModel`/`codingModel` 留空 = 通过（回退当前会话模型）；非空 = 通过（已配置，提示"agent 模型需额外配置"：能否 spawn 由环境实际能力决定）。**`reviewModelB` SHALL 标注为弃用字段**：无论留空还是非空，检查项 SHALL 提示"该字段已弃用（单审查执行模型不再使用），存量值已保留，可自行从配置中移除或继续保留（不影响运行）"；非空时额外展示其存量值。
