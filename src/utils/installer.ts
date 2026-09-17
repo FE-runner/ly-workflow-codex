@@ -1,6 +1,5 @@
 import type { InstallResult } from '../types'
 import type { HostAdapter, HostAdapterContext } from './host-adapters'
-import { execFileSync } from 'node:child_process'
 import fs from 'fs-extra'
 import { basename, join } from 'pathe'
 import { getLyDir, LY_PROMPTS_DIR } from './config'
@@ -282,7 +281,7 @@ async function hasLiveWorktree(dir: string): Promise<boolean> {
     entries = await fs.readdir(dir)
   }
   catch {
-    return false
+    return true
   }
   for (const entry of entries) {
     const full = join(dir, entry)
@@ -290,12 +289,47 @@ async function hasLiveWorktree(dir: string): Promise<boolean> {
       const stat = await fs.stat(full)
       if (!stat.isDirectory())
         continue
+      // 判定 full 是否为存活的 git worktree 根目录，不调用 git 子进程判断：git 对"确实不是仓库"
+      // 与"权限拒绝导致无法确认"可能返回相似的非零退出码/错误文案，无法可靠区分；纯文件系统
+      // 操作能更干净地把"路径确实不存在"与"权限异常"区分开。
+      const gitPath = join(full, '.git')
+      let gitStat: { isDirectory: () => boolean } | undefined
       try {
-        execFileSync('git', ['-C', full, 'rev-parse', '--git-dir'], { stdio: 'ignore' })
-        return true
+        gitStat = await fs.stat(gitPath)
       }
-      catch {
-        // full 本身不是有效 git 目录，继续检测其子目录
+      catch (error: any) {
+        if (error?.code !== 'ENOENT')
+          throw error
+        // .git 确实不存在（ENOENT）→ full 不是 git 目录，继续检测其子目录
+      }
+      if (gitStat) {
+        if (gitStat.isDirectory()) {
+          // .git 是目录：完整仓库，视为存活
+          return true
+        }
+        // worktree 下 .git 通常是文件，内容形如 "gitdir: <主仓库>/.git/worktrees/<name>"——
+        // 读取并校验该目标路径是否仍存在，用于识别"主仓库已被删除"的孤儿 worktree（不算存活，
+        // 允许被清理），避免把失效的残留目录永久保留下去。
+        let content: string
+        try {
+          content = await fs.readFile(gitPath, 'utf-8')
+        }
+        catch (error: any) {
+          if (error?.code !== 'ENOENT')
+            throw error
+          content = ''
+        }
+        const match = content.match(/^gitdir:\s*(.+)$/m)
+        if (match) {
+          const targetExists = await fs.pathExists(match[1].trim())
+          if (targetExists)
+            return true
+          // gitdir 指向的目标不存在 → 孤儿 worktree，不算存活，继续检测更深层子目录
+        }
+        else {
+          // .git 文件内容不符合预期格式，无法确认其状态 —— 保守判定为存活，不冒险清理
+          return true
+        }
       }
       if (await hasLiveWorktree(full))
         return true
@@ -411,6 +445,7 @@ export async function uninstallWorkflows(
     }
     catch (error) {
       result.errors.push(`Failed to remove codex prompts directory: ${error}`)
+      result.success = false
     }
   }
 
@@ -427,6 +462,7 @@ export async function uninstallWorkflows(
   catch (error) {
     liveWorktree = true
     result.errors.push(`Worktree liveness check failed, conservatively kept worktrees/: ${error}`)
+    result.success = false
   }
 
   if (liveWorktree) {
@@ -437,8 +473,9 @@ export async function uninstallWorkflows(
     }
     catch (error) {
       result.errors.push(`Failed to remove config.toml: ${error}`)
+      result.success = false
     }
-    console.warn('[lycx] 检测到 ~/.codex/lyx/worktrees/ 下存在未清理的实际 git worktree，已保留该目录；请先运行 `lycx worktree remove` 清理后再手动删除 ~/.codex/lyx/')
+    console.warn('[lycx] 检测到 ~/.codex/lyx/worktrees/ 下存在未清理的实际 git worktree，已保留该目录；请先运行 `git worktree remove <path>` 清理后再手动删除 ~/.codex/lyx/')
   }
   else {
     try {
@@ -446,6 +483,7 @@ export async function uninstallWorkflows(
     }
     catch (error) {
       result.errors.push(`Failed to remove ~/.codex/lyx/: ${error}`)
+      result.success = false
     }
   }
 

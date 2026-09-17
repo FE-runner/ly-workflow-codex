@@ -146,7 +146,7 @@ export async function setupCommands(cli: CAC): Promise<void> {
         if (result.removedPrompts)
           console.log(ansis.gray('  Prompts (~/.codex/lyx/prompts/codex/): removed'))
         if (result.worktreesKept)
-          console.log(ansis.gray('  Worktrees (~/.codex/lyx/worktrees/): kept (live git worktree detected — run `lycx worktree remove` first)'))
+          console.log(ansis.gray('  Worktrees (~/.codex/lyx/worktrees/): kept (live git worktree detected — run `git worktree remove <path>` first)'))
       }
       else {
         console.error(ansis.red('✗ Uninstall failed'))

@@ -18,10 +18,10 @@
 
 ### Requirement: worktrees/ 子目录按存活 worktree 递归检测分别处理
 
-`lycx uninstall` SHALL 在删除 `~/.codex/lyx/` 之前，递归检测 `~/.codex/lyx/worktrees/` 目录树下是否存在任何有效的 git worktree（worktree 实际路径可能是多层的，形如 `worktrees/<项目名>/<开发分支名>`，且 `<开发分支名>` 本身可能含 `/`；判定 SHALL 递归到目录树的叶子层，SHALL NOT 只检测第一层子目录——`<项目名>` 这层容器目录本身不是 git 仓库，仅检测第一层会把它误判为"非存活"）。对目录树中每个候选目录，SHALL 通过在该目录（或其内部任一目录）下执行 `git rev-parse --git-dir` 判断是否命中有效 git worktree（命令成功即视为该 worktree 存活）；判定不要求命令必须在"无子目录的最深层目录"执行——一个 worktree 根目录内部本身可能还有子目录/文件，只要在其目录树内任一处命中即可。
+`lycx uninstall` SHALL 在删除 `~/.codex/lyx/` 之前，递归检测 `~/.codex/lyx/worktrees/` 目录树下是否存在任何有效的 git worktree（worktree 实际路径可能是多层的，形如 `worktrees/<项目名>/<开发分支名>`，且 `<开发分支名>` 本身可能含 `/`；判定 SHALL 递归到目录树的叶子层，SHALL NOT 只检测第一层子目录——`<项目名>` 这层容器目录本身不是 git 仓库，仅检测第一层会把它误判为"非存活"）。对目录树中每个候选目录，SHALL 用纯文件系统探测判断是否为存活 git worktree（不调用 `git` 子进程，避免把"权限拒绝"误判为"不是仓库"）：候选目录下存在 `.git` 且为目录（完整仓库）→ 存活；`.git` 为文件（linked worktree，内容形如 `gitdir: <主仓库>/.git/worktrees/<name>`）→ 校验 `gitdir:` 指向的目标路径是否仍存在，存在则存活、不存在则孤儿（可清理）；`.git` 内容无法解析或探测结果异常 → 保守判定为存活。判定 SHALL NOT 要求命中"无子目录的最深层目录"——一个 worktree 根目录内部本身可能还有子目录/文件，只要在其目录树内任一处命中即可。
 
 - 整棵 `worktrees/` 目录树下**不存在**任何有效 git worktree（含目录为空或不存在）→ SHALL 将 `worktrees/` 随 `config.toml`、`prompts/` 一并删除，即整个 `~/.codex/lyx/` 被删除。
-- 整棵 `worktrees/` 目录树下**存在至少一个**有效 git worktree → SHALL 警告并跳过删除 `worktrees/`（config.toml 与 prompts/ 仍照常删除），提示用户先运行 `lycx worktree remove <name>` 清理后再自行删除 `~/.codex/lyx/`。
+- 整棵 `worktrees/` 目录树下**存在至少一个**有效 git worktree → SHALL 警告并跳过删除 `worktrees/`（config.toml 与 prompts/ 仍照常删除），提示用户先运行 `git worktree remove <path>` 清理后再自行删除 `~/.codex/lyx/`。
 - 检测过程中发生异常（权限不足、目录读取失败等）→ SHALL 保守按"存在有效 worktree"处理（跳过删除该路径下的 worktrees/），SHALL NOT 冒险误删；异常信息 SHALL 在汇总中如实报告。
 
 #### Scenario: worktrees/ 为空或不存在，整体清理
@@ -29,15 +29,15 @@
 - **THEN** `~/.codex/lyx/` 整个目录（含 config.toml、prompts/、worktrees/）被删除
 
 #### Scenario: worktrees/ 下存在一个单层有效 worktree
-- **WHEN** `~/.codex/lyx/worktrees/my-project/fix-login` 是一个有效的 git worktree（`git rev-parse --git-dir` 成功），用户运行 `lycx uninstall`
-- **THEN** `config.toml` 与 `prompts/` 被删除，`worktrees/` 整体保留，命令警告"检测到未清理的 worktree，请先运行 `lycx worktree remove` 清理"
+- **WHEN** `~/.codex/lyx/worktrees/my-project/fix-login` 是一个有效的 git worktree（`.git` 文件中的 `gitdir:` 目标存在），用户运行 `lycx uninstall`
+- **THEN** `config.toml` 与 `prompts/` 被删除，`worktrees/` 整体保留，命令警告"检测到未清理的 worktree，请先运行 `git worktree remove` 清理"
 
 #### Scenario: worktrees/ 下存在多层路径的有效 worktree
 - **WHEN** `~/.codex/lyx/worktrees/my-project/feature/login` 是一个有效的 git worktree（开发分支名含 `/`），用户运行 `lycx uninstall`
 - **THEN** 递归检测到该叶子层的有效 worktree，`worktrees/` 整体保留并警告；SHALL NOT 因第一层 `my-project` 目录本身不是 git 仓库而误判为可删除
 
 #### Scenario: worktrees/ 下曾有 worktree 但已失效
-- **WHEN** `~/.codex/lyx/worktrees/my-project/old-branch` 目录仍存在，但其关联的主仓库已被删除、`git rev-parse --git-dir` 在该目录下执行失败，用户运行 `lycx uninstall`
+- **WHEN** `~/.codex/lyx/worktrees/my-project/old-branch` 目录仍存在，但其关联的主仓库已被删除、`.git` 文件中的 `gitdir:` 目标路径已不存在，用户运行 `lycx uninstall`
 - **THEN** 该目录不被判定为有效 worktree；若整棵 `worktrees/` 目录树下无其他有效 worktree，`~/.codex/lyx/` 整体被删除
 
 #### Scenario: 检测异常时保守保留

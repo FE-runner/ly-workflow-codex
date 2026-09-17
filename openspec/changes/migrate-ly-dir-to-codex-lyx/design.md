@@ -34,8 +34,8 @@
 
 - `~/.codex/lyx/config.toml`、`~/.codex/lyx/prompts/`：目录私有化后不存在"可能是别的工具的数据"顾虑，回归普通卸载语义——直接删除，不再警告保留。
 - `~/.codex/lyx/worktrees/`：这个子目录可能包含**实际的 git worktree**（工作目录 + 未提交改动）。裸 `rm -rf` 一个仍被主仓库 `.git/worktrees/` 元数据引用的 worktree 目录会留下孤儿引用（`git worktree list` 报错、后续 `git worktree add` 用同名分支可能冲突）。因此：
-  - **递归**遍历 `worktrees/` 下的目录树（不能只检测第一层子目录）：worktree 实际路径形如 `worktrees/<项目名>/<开发分支名>`，`<项目名>` 本身只是个容器目录（不是 git 仓库），且 `<开发分支名>` 可能含 `/`（如 `feature/login`），此时叶子路径是 `worktrees/<项目名>/feature/login`——只检测第一层会把容器目录 `<项目名>` 误判为"非存活 worktree"，进而错误清理掉实际存活在更深层的 worktree。递归策略：对目录树中每个候选目录，SHALL 在该目录（或其内部任一目录）下执行 `git rev-parse --git-dir` 判断——成功即视为该 worktree 存活；只要整棵树下存在至少一个有效 worktree，就判定"存在存活 worktree"（一个 worktree 根目录内部本身可能还有子目录/文件，判定不要求该命令必须在"无子目录的最深层目录"执行，只要求命中即可，降低实现对目录结构假设的依赖）。
-  - 存在有效 worktree → 警告并跳过删除 `worktrees/` 整个子树，提示用户先用 `lycx worktree remove <name>` 清理。
+  - **递归**遍历 `worktrees/` 下的目录树（不能只检测第一层子目录）：worktree 实际路径形如 `worktrees/<项目名>/<开发分支名>`，`<项目名>` 本身只是个容器目录（不是 git 仓库），且 `<开发分支名>` 可能含 `/`（如 `feature/login`），此时叶子路径是 `worktrees/<项目名>/feature/login`——只检测第一层会把容器目录 `<项目名>` 误判为"非存活 worktree"，进而错误清理掉实际存活在更深层的 worktree。递归策略：对目录树中每个候选目录，用**纯文件系统探测**判断是否为存活 git worktree（不调用 `git` 子进程——git 对"确实不是仓库"与"权限拒绝导致无法确认"可能返回相似的非零结果，无法可靠区分；`fs.stat` 只需父目录遍历权限、不必读 `.git` 内容，能更干净地区分"路径不存在"与"权限异常"）：候选目录下存在 `.git` 且为**目录**（完整仓库）→ 存活；`.git` 为**文件**（linked worktree，内容形如 `gitdir: <主仓库>/.git/worktrees/<name>`）→ 读取并校验 `gitdir:` 指向的目标路径是否仍存在，存在则存活、不存在则视为孤儿（可清理）；`.git` 文件内容不符合预期格式或其他探测量结果异常 → 保守判定为存活（不冒险误删）。只要整棵树下存在至少一个存活 worktree，就判定"存在存活 worktree"（判定不要求命中"无子目录的最深层目录"，只要求命中即可）。
+  - 存在有效 worktree → 警告并跳过删除 `worktrees/` 整个子树，提示用户先用 `git worktree remove <path>` 清理。
   - `worktrees/` 为空、不存在、或递归遍历后已无任何有效 worktree → 随 `config.toml`/`prompts/` 一并删除整个 `~/.codex/lyx/` 目录。
   - 判断失败（权限问题、目录读取异常等）时保守起见按"存在有效 worktree"处理（跳过删除并警告），不冒险误删。
 - **返回结果字段调整**：`UninstallResult` 接口原有的 `configTomlKept` 字段（语义"config.toml 已保守保留"）随本次改动移除——`config.toml` 现在无条件删除，继续沿用该字段名会与实际行为名实不符（字段名说"config 保留"，实际是"worktree 保留"，误导下游消费点如 `cli-setup.ts`/`menu.ts` 的提示文案）。新增 `worktreesKept: boolean` 字段专门表达"因存在存活 worktree 而保留了 `worktrees/` 子目录"，`cli-setup.ts`、`menu.ts`、对应 i18n key 均同步改用新字段/新文案。

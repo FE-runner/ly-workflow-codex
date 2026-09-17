@@ -12,6 +12,6 @@ export const AGENTS_SKILLS_DIR = join(homedir(), '.agents', 'skills')
 export const LY_DIR = join(homedir(), '.codex', 'lyx')
 /** ly 配置文件（~/.codex/lyx/config.toml） */
 export const CONFIG_FILE = join(LY_DIR, 'config.toml')
-/** 共享角色词目录（~/.codex/lyx/prompts） */
+/** 角色词目录（~/.codex/lyx/prompts） */
 export const PROMPTS_DIR = join(LY_DIR, 'prompts')
 export const ISSUES_URL = 'https://github.com/FE-runner/ly-workflow-codex/issues'

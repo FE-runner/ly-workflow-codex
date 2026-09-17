@@ -97,7 +97,7 @@ export function getCodexSkillsDir(): string {
   return AGENTS_SKILLS_DIR
 }
 
-/** codex 版审查命令模板依赖的共享角色词（ROLE_FILE 绝对路径目标） */
+/** codex 版审查命令模板依赖的角色词（ROLE_FILE 绝对路径目标） */
 const CODEX_ROLE_FILE_TARGETS = ['reviewer.md', 'plan-reviewer.md']
 
 export const codexAdapter: HostAdapter = {
@@ -132,12 +132,12 @@ export const codexAdapter: HostAdapter = {
   },
 
   verify: async (ctx) => {
-    // codex 版模板 ROLE_FILE 以绝对路径指向中立位置（不建软链）——
-    // 共享角色词缺失时审查命令无法工作，报安装错误
+    // codex 版模板 ROLE_FILE 以绝对路径指向私有位置（不建软链）——
+    // 角色词缺失时审查命令无法工作，报安装错误
     for (const file of CODEX_ROLE_FILE_TARGETS) {
       const target = join(ctx.promptsDir, 'codex', file)
       if (!(await fs.pathExists(target))) {
-        ctx.result.errors.push(`codex ROLE_FILE target missing: ${target} (shared prompts not installed)`)
+        ctx.result.errors.push(`codex ROLE_FILE target missing: ${target} (role prompts not installed)`)
         ctx.result.success = false
       }
     }
@@ -153,7 +153,7 @@ export const ADAPTERS: Record<'codex', HostAdapter> = {
   codex: codexAdapter,
 }
 
-/** 默认共享角色词目录（供 uninstall/迁移等调用方取默认值；测试可注入覆盖） */
+/** 默认角色词目录（供 uninstall/迁移等调用方取默认值；测试可注入覆盖） */
 export function defaultLyPromptsDir(): string {
   return LY_PROMPTS_DIR
 }
