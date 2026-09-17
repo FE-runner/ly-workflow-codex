@@ -21,7 +21,7 @@ argument-hint: '<需求描述>'
 
   ```
   "本次开发的隔离方式？"
-    ○ 隔离 worktree（从当前分支切出，目录 ~/.codex/lyx/worktrees/<项目名>/<开发分支名>，目录+分支双隔离）
+    ○ 隔离 worktree（从当前分支切出，目录 ~/.ly/worktrees/<项目名>/<开发分支名>，目录+分支双隔离）
     ○ 本项目切新分支（留在当前目录，git checkout -b <开发分支名>，仅分支隔离，零环境成本）
     ○ 留在当前分支（不隔离，propose/apply 提交直接落在当前分支上）
   ```
@@ -31,17 +31,17 @@ argument-hint: '<需求描述>'
     2. 询问/确认本次开发的开发分支名 `<开发分支名>`（可含 `/`，如 `feature/xxx`）。
     3. 执行（从**当前分支 HEAD** 切出，不是默认分支、不做分支拓扑校验）：
        ```
-       git worktree add -b <开发分支名> ~/.codex/lyx/worktrees/<项目名>/<开发分支名> <当前分支HEAD>
+       git worktree add -b <开发分支名> ~/.ly/worktrees/<项目名>/<开发分支名> <当前分支HEAD>
        ```
        （`<项目名>` 以 `git rev-parse --git-common-dir` 反推主仓库目录名；多级分支名按 `/` 展开路径，仍保持无来源前缀的单层语义。）
     4. 自动复制环境文件（`.env` 等，复用 `@lyx-worktree add` 规则），跑一次项目 baseline 验证。
     5. **baseline 失败** → 报告失败摘要并询问用户"仍继续 / 放弃"：**仍继续** → 同会话 cd 进 worktree 继续编排（失败摘要作为已知风险带入后续流程，按本步 6/7 执行）；**放弃** → 保留已创建的 worktree 与分支（不自动清理，需要时用 `@lyx-worktree remove` 显式删除），打印携带失败摘要的兜底续接命令（同 6 的格式），会话结束，change 尚未生成。
     6. 打印**兜底续接命令**（绝对路径 + shell 安全转义）——正常路径不使用，仅当本会话意外死亡（崩溃、终端关闭等）时，用于在新 worktree 中恢复：
        ```
-       cd ~/.codex/lyx/worktrees/<项目名>/<开发分支名> && codex "继续 在隔离 worktree 中 @lyx-propose <同一需求>"
+       cd ~/.ly/worktrees/<项目名>/<开发分支名> && codex "继续 在隔离 worktree 中 @lyx-propose <同一需求>"
        ```
     7. **同一会话续跑（不结束会话）**——当前会话直接 `cd` 进新 worktree 并继续本编排（worktree 先于 change 创建的时序不变，change 尚未生成）：
-       1. 以绝对路径 `cd "$HOME/.codex/lyx/worktrees/<项目名>/<开发分支名>"` 切换工作目录。
+       1. 以绝对路径 `cd "$HOME/.ly/worktrees/<项目名>/<开发分支名>"` 切换工作目录。
        2. **立即校验**当前工作目录确为该 worktree：`pwd` 与 worktree 绝对路径比对，或 `git rev-parse --show-toplevel` 归一化后等于该 worktree 绝对路径（SHALL NOT 仅以 `git rev-parse --git-dir` 成功作为判据——它在任意 git 仓库内都会成功，无法证明位于该 worktree）。**cd 失败或校验不通过 → 停止编排、报告原因，不执行后续任何 git/openspec/文件操作（不静默失败后继续）**。
        3. 校验通过后提示"已进入隔离 worktree `<路径>`，本会话继续"，继续步骤 2。
        4. **cwd 纪律**：自校验通过之时起，本次编排所有 Git 操作、openspec 命令与文件读写以 worktree 为工作目录（文件操作用 worktree 绝对路径），不回到主仓库路径执行本次 change 的任何产物操作。

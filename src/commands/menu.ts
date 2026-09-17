@@ -454,11 +454,6 @@ async function uninstall(): Promise<void> {
       console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedPrompts')}`))
     }
 
-    if (result.worktreesKept) {
-      console.log()
-      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.worktreesKept')}`))
-    }
-
     if (isGlobalInstall) {
       console.log()
       console.log(ansis.yellow.bold(`  🔸 ${i18n.t('menu:uninstall.lastStep')}`))

@@ -1,6 +1,6 @@
 ---
 name: lyx-worktree
-description: '管理 Git Worktree：在 ~/.codex/lyx/worktrees/项目名/ 目录创建，支持 IDE 集成和内容迁移'
+description: '管理 Git Worktree：在 ~/.ly/worktrees/项目名/ 目录创建，支持 IDE 集成和内容迁移'
 argument-hint: '<add|list|remove|prune|migrate>'
 ---
 
@@ -46,7 +46,7 @@ argument-hint: '<add|list|remove|prune|migrate>'
 默认（用户目录下，跨项目集中管理，IDE 集成友好）：
 
 ```
-~/.codex/lyx/worktrees/            # worktree 管理目录（用户目录下）
+~/.ly/worktrees/            # worktree 管理目录（用户目录下）
 └── your-project/
     ├── feature-ui/         # 功能分支
     ├── hotfix/             # 修复分支
@@ -81,7 +81,7 @@ your-project/
 2. **确定目录**（优先级从高到低）：
    - 用户本次显式指定路径 → 直接用
    - 传 `--local` → 用项目内 `.worktrees/`（不再靠"目录已存在"自动判断，避免误触发）
-   - 默认 `~/.codex/lyx/worktrees/项目名/<path>`（用户目录下，见上方目录结构）
+   - 默认 `~/.ly/worktrees/项目名/<path>`（用户目录下，见上方目录结构）
 3. **`--local` 时必须校验已忽略**：`git check-ignore -q .worktrees`。未忽略则先写入 `.gitignore` 并提交，再继续创建——防止 worktree 内容被误提交进仓库。
 4. 创建 worktree（`git worktree add <path> -b <branch>`）
 5. 自动复制环境文件（`.env` 等）
@@ -128,7 +128,7 @@ your-project/
 ## 输出示例
 
 ```
-✅ Worktree created at ~/.codex/lyx/worktrees/项目名/feature-ui
+✅ Worktree created at ~/.ly/worktrees/项目名/feature-ui
 ✅ 已复制 .env
 ✅ 已复制 .env.local
 📋 已从 .gitignore 复制 2 个环境文件
@@ -153,7 +153,7 @@ your-project/
 - Worktree 共享 `.git` 目录，节省磁盘空间
 - 迁移仅限未提交改动，已提交内容用 `git cherry-pick`
 - 支持 Windows、macOS、Linux
-- 默认用户目录 `~/.codex/lyx/worktrees/` 下创建，不需要 `--local` 时不碰 `.gitignore`
+- 默认用户目录 `~/.ly/worktrees/` 下创建，不需要 `--local` 时不碰 `.gitignore`
 - `--local` 且 `.worktrees/` 未被忽略时会先写 `.gitignore` 并提交，再继续创建
 - 创建后会跑一次项目 setup + baseline 测试，确认新 worktree 干净可用
-- 隔离 worktree 的创建/切换统一由 `@lyx-propose` 在**创建方案前**通过 `git worktree add`（从当前分支 HEAD 切出，目录 `~/.codex/lyx/worktrees/<项目名>/<开发分支名>`）触发；worktree 目录/分支锁定为开发分支名，不随 change 名重命名；孤儿 worktree（关联 worktree 已删除/重命名）需人工 `remove`/`prune`
+- 隔离 worktree 的创建/切换统一由 `@lyx-propose` 在**创建方案前**通过 `git worktree add`（从当前分支 HEAD 切出，目录 `~/.ly/worktrees/<项目名>/<开发分支名>`）触发；worktree 目录/分支锁定为开发分支名，不随 change 名重命名；孤儿 worktree（关联 worktree 已删除/重命名）需人工 `remove`/`prune`

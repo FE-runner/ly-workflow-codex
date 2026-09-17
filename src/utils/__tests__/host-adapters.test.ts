@@ -266,9 +266,8 @@ describe('installWorkflows — codex host', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// E. 卸载（codex 单宿主：删 ly-*.md + ~/.codex/lyx/prompts/codex/ 子目录；
-//     ~/.codex/lyx/ 私有目录 —— config.toml 与 prompts/ 无条件删除，
-//     worktrees/ 下存在存活 git worktree 时整体保留并警告，否则随其余内容一并清理）
+// E. 卸载（codex 单宿主：删 ly-*.md + ~/.codex/lyx/ 私有目录；
+//     config.toml 与 prompts/ 无条件删除；共享的 ~/.ly/worktrees/ 不碰）
 // ─────────────────────────────────────────────────────────────
 describe('uninstallWorkflows — codex single host', () => {
   const base = mkdtempSync(join(tmpdir(), 'ly-test-uninstall-'))
@@ -276,8 +275,7 @@ describe('uninstallWorkflows — codex single host', () => {
   const lyPromptsDir = join(base, 'ly-prompts')
   const codexDir = join(base, 'codex')
   const cleanupDirs = { codexDir: join(base, '.codex'), homeDir: base }
-  const lyDir = join(base, 'lyx')
-  const mainRepo = join(base, 'main-repo')
+  const lyDir = join(base, 'lyx') // 模拟 ~/.codex/lyx
 
   async function seed(): Promise<void> {
     await fs.ensureDir(join(codexSkillsDir, 'lyx-commit'))
@@ -285,9 +283,7 @@ describe('uninstallWorkflows — codex single host', () => {
     await fs.writeFile(join(codexSkillsDir, 'user-prompt.md'), '# user own prompt\n')
     await fs.ensureDir(join(lyPromptsDir, 'codex'))
     await fs.writeFile(join(lyPromptsDir, 'codex', 'reviewer.md'), '# reviewer\n')
-    // 真实的 git worktree（不是普通目录）——按新契约，只有真正的 git worktree 才会被判定为存活
-    initMainRepo(mainRepo)
-    addWorktree(mainRepo, join(lyDir, 'worktrees', 'proj-x'), 'wt-single')
+    await fs.ensureDir(lyDir)
     await fs.writeFile(join(lyDir, 'config.toml'), 'general = { version = "1.0.0" }\n')
   }
 
@@ -295,7 +291,7 @@ describe('uninstallWorkflows — codex single host', () => {
     await fs.remove(base)
   })
 
-  it('removes package-owned artifacts + config.toml, keeps a live worktree, does not touch user prompts', async () => {
+  it('removes package-owned artifacts + private config dir, does not touch user prompts', async () => {
     await seed()
     const result = await uninstallWorkflows(codexDir, {
       lyPromptsDir,
@@ -312,12 +308,8 @@ describe('uninstallWorkflows — codex single host', () => {
     expect(result.removedPrompts).toBe(true)
     expect(fs.existsSync(join(lyPromptsDir, 'codex'))).toBe(false)
     expect(fs.existsSync(lyPromptsDir)).toBe(true)
-    // 存在真实存活的 git worktree → worktrees/ 整体保留
-    expect(result.worktreesKept).toBe(true)
-    expect(fs.existsSync(join(lyDir, 'worktrees', 'proj-x'))).toBe(true)
-    execFileSync('git', ['-C', join(lyDir, 'worktrees', 'proj-x'), 'rev-parse', '--git-dir'])
-    // config.toml 无条件删除（不再"共享配置保留"）
-    expect(fs.existsSync(join(lyDir, 'config.toml'))).toBe(false)
+    // 私有目录（config.toml）无条件删除
+    expect(fs.existsSync(lyDir)).toBe(false)
   })
 
   it('succeeds on empty dirs', async () => {
@@ -331,80 +323,24 @@ describe('uninstallWorkflows — codex single host', () => {
     expect(result.errors).toEqual([])
   })
 
-  it('deletes the entire config dir when worktrees/ does not exist', async () => {
-    const dir = join(base, 'case-no-worktrees')
-    const thisLyDir = join(dir, 'lyx')
-    await fs.ensureDir(thisLyDir)
-    await fs.writeFile(join(thisLyDir, 'config.toml'), 'general = { version = "1.0.0" }\n')
-    const result = await uninstallWorkflows(join(dir, 'codex'), {
-      lyPromptsDir: join(dir, 'ly-prompts'),
-      codexSkillsDir: join(dir, 'codex-skills'),
-      lyDir: thisLyDir,
+  it('does not touch the shared ~/.ly/worktrees/ directory', async () => {
+    // 共享 worktree 目录在 lyDir 之外（模拟老包与本包共用的 ~/.ly/worktrees/）
+    const sharedWorktreesDir = join(base, 'shared-ly', 'worktrees')
+    const mainRepo = join(base, 'shared-main-repo')
+    initMainRepo(mainRepo)
+    addWorktree(mainRepo, join(sharedWorktreesDir, 'proj-shared'), 'wt-shared')
+    await seed()
+    const result = await uninstallWorkflows(codexDir, {
+      lyPromptsDir,
+      codexSkillsDir,
+      lyDir,
       legacyCleanupDirs: cleanupDirs,
     })
     expect(result.success).toBe(true)
-    expect(result.worktreesKept).toBe(false)
-    expect(fs.existsSync(thisLyDir)).toBe(false)
-  })
-
-  it('deletes the entire config dir when worktrees/ only contains non-git content', async () => {
-    const dir = join(base, 'case-non-git-worktrees')
-    const thisLyDir = join(dir, 'lyx')
-    await fs.ensureDir(join(thisLyDir, 'worktrees', 'proj-x'))
-    await fs.writeFile(join(thisLyDir, 'worktrees', 'proj-x', 'real-file.txt'), 'not a git worktree\n')
-    await fs.writeFile(join(thisLyDir, 'config.toml'), 'general = { version = "1.0.0" }\n')
-    const result = await uninstallWorkflows(join(dir, 'codex'), {
-      lyPromptsDir: join(dir, 'ly-prompts'),
-      codexSkillsDir: join(dir, 'codex-skills'),
-      lyDir: thisLyDir,
-      legacyCleanupDirs: cleanupDirs,
-    })
-    expect(result.success).toBe(true)
-    expect(result.worktreesKept).toBe(false)
-    expect(fs.existsSync(thisLyDir)).toBe(false)
-  })
-
-  it('keeps worktrees/ when a live worktree is nested under a multi-segment branch path', async () => {
-    const dir = join(base, 'case-nested-worktree')
-    const thisLyDir = join(dir, 'lyx')
-    const thisMainRepo = join(dir, 'main-repo')
-    initMainRepo(thisMainRepo)
-    // 开发分支名含 /，worktree 实际路径是多层的：worktrees/<项目名>/feature/login
-    addWorktree(thisMainRepo, join(thisLyDir, 'worktrees', 'proj-y', 'feature', 'login'), 'feature/login')
-    await fs.ensureDir(thisLyDir)
-    await fs.writeFile(join(thisLyDir, 'config.toml'), 'general = { version = "1.0.0" }\n')
-    const result = await uninstallWorkflows(join(dir, 'codex'), {
-      lyPromptsDir: join(dir, 'ly-prompts'),
-      codexSkillsDir: join(dir, 'codex-skills'),
-      lyDir: thisLyDir,
-      legacyCleanupDirs: cleanupDirs,
-    })
-    expect(result.success).toBe(true)
-    // 只检测第一层（proj-y 容器目录本身不是 git 仓库）不会误判——递归检测应命中更深层的存活 worktree
-    expect(result.worktreesKept).toBe(true)
-    expect(fs.existsSync(join(thisLyDir, 'worktrees', 'proj-y', 'feature', 'login'))).toBe(true)
-    expect(fs.existsSync(join(thisLyDir, 'config.toml'))).toBe(false)
-  })
-
-  it('cleans up an orphaned worktree whose main repo is gone (gitdir target missing)', async () => {
-    const dir = join(base, 'case-orphan-worktree')
-    const thisLyDir = join(dir, 'lyx')
-    const thisMainRepo = join(dir, 'main-repo')
-    initMainRepo(thisMainRepo)
-    const wtPath = join(thisLyDir, 'worktrees', 'proj-z')
-    addWorktree(thisMainRepo, wtPath, 'wt-orphan')
-    await fs.writeFile(join(thisLyDir, 'config.toml'), 'general = { version = "1.0.0" }\n')
-    // 删除主仓库，使 worktree 的 .git 文件里的 gitdir 目标失效（孤儿 worktree）
-    await fs.remove(thisMainRepo)
-    const result = await uninstallWorkflows(join(dir, 'codex'), {
-      lyPromptsDir: join(dir, 'ly-prompts'),
-      codexSkillsDir: join(dir, 'codex-skills'),
-      lyDir: thisLyDir,
-      legacyCleanupDirs: cleanupDirs,
-    })
-    expect(result.success).toBe(true)
-    // 孤儿 worktree 的 gitdir 目标已不存在 → 不算存活，整个配置目录应被清理
-    expect(result.worktreesKept).toBe(false)
-    expect(fs.existsSync(thisLyDir)).toBe(false)
+    // 私有目录删了
+    expect(fs.existsSync(lyDir)).toBe(false)
+    // 共享 worktree 目录原样保留（不删除、不移动、不改动）
+    expect(fs.existsSync(join(sharedWorktreesDir, 'proj-shared'))).toBe(true)
+    execFileSync('git', ['-C', join(sharedWorktreesDir, 'proj-shared'), 'rev-parse', '--git-dir'])
   })
 })
