@@ -30,9 +30,9 @@ lycx uninstall               # 卸载
 |------|-----------|
 | `@lyx-init` | 生成项目 AGENTS.md + `lycx openspec ensure`（共享 CLI/skills/root 修复）+ 自动 commit |
 | `@lyx-explore` | 委托 `@openspec-explore skill`（纯薄壳） |
-| `@lyx-propose` | 编排入口：隔离三选一 → 全自动/手动 → `@openspec-propose skill` → 方案自审 → context.md 产出 → commit `propose:`；全自动 = review-plan → apply → review-code 流水线 |
+| `@lyx-propose` | 编排入口：隔离三选一 → 全自动/手动 → `@openspec-propose skill` → 记录 isolation metadata → 方案自审 → context.md 产出 → commit `propose:`；全自动 = review-plan → apply → review-code 流水线 |
 | `@lyx-apply` | 按 `codingExecutor` 实施（`main` = 主 agent 直接实施；`subagent` = spawn coding subagent，非 fork，经 context.md 获取软上下文）读 tasks.md 逐任务实施 + 验证 + 勾 checkbox，主会话确认后回写 context.md 并 commit `apply:` |
-| `@lyx-archive` | 委托 `@openspec-archive-change skill` + 自动 commit |
+| `@lyx-archive` | 委托 `@openspec-archive-change skill` + 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
 | `@lyx-review-plan` | 按 `reviewExecutor` 审方案（`main` = 主 agent 直接自审，最多 2 轮；`subagent` = 单审查 subagent + 主会话逐条裁决 + 驳回硬线），清零统一提交 |
 | `@lyx-review-code` | 按 `reviewExecutor` 审代码（同上），Critical/Warning/Info 分级 |
 | `@lyx-release` | GitFlow 四场景发版 + SemVer 推导 + 上线合并二选一 |

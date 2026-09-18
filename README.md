@@ -25,9 +25,9 @@ npx ly-workflow-codex init --init-openspec  # 显式初始化当前项目 OpenSp
 |------|------|
 | `@lyx-init` | 生成项目 AGENTS.md + 初始化 OpenSpec 目录结构 + 自动 commit |
 | `@lyx-explore` | 想清楚再动手（委托 `@openspec-explore skill`），收敛到方案时提示转 `@lyx-propose` |
-| `@lyx-propose` | 创建方案前问一次隔离方式（三选一：隔离 worktree【从当前分支 HEAD 切出、同会话 cd 续跑，续接命令为异常兜底】/ 本项目切新分支【仅分支隔离，脏改动三选处置】/ 留在当前分支）+ 问"全自动/手动" → 委托 `@openspec-propose skill` → 方案自审（四项检查 + 逐项结论清单；机械断链直接修、业务判断类问用户）→ commit `propose: <change>`；全自动 = review-plan → apply → review-code 流水线，手动 = 逐步确认 |
+| `@lyx-propose` | 创建方案前问一次隔离方式（三选一：隔离 worktree【从当前分支 HEAD 切出、同会话 cd 续跑，续接命令为异常兜底】/ 本项目切新分支【仅分支隔离，脏改动三选处置】/ 留在当前分支）+ 问"全自动/手动" → 委托 `@openspec-propose skill` → 记录 sourceBranch/developmentBranch/worktreePath metadata → 方案自审（四项检查 + 逐项结论清单；机械断链直接修、业务判断类问用户）→ commit `propose: <change>`；全自动 = review-plan → apply → review-code 流水线，手动 = 逐步确认 |
 | `@lyx-apply` | **按 `codingExecutor` 实施**：`main`（默认）= 主 agent 直接读 tasks.md 逐任务实施 + 验证 + 勾 checkbox；`subagent` = spawn coding subagent（非 fork，经 context.md 获取软上下文 + 只实施 change 范围，模型按 `codingModel`）。两条路径均由主会话确认后回写 context.md 并统一 commit `apply: <change>`；subagent 路径环境级不可用回退主 agent，业务失败转人工 |
-| `@lyx-archive` | 归档完成的 change（委托 `@openspec-archive-change skill`）+ 自动 commit |
+| `@lyx-archive` | 归档完成的 change（委托 `@openspec-archive-change skill`）+ 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
 | `@lyx-review-plan` | 审方案：按 `reviewExecutor` 决定主体——`main`（默认）= 主 agent 直接自审，无逐条裁决 / 驳回硬线，最多 2 轮；`subagent` = 单审查 subagent（角色词 `plan-reviewer.md`，非 fork + context.md 路径引用，模型按 `reviewModel`）分级审查 + 主会话逐条裁决，循环直到 Critical 清零或触发终止条件（全局轮数上限 5，清零优先）。清零统一提交修复 |
 | `@lyx-review-code` | 审代码：同上（角色词 `reviewer.md`），Critical/Warning/Info 分级 |
 | `@lyx-release` | GitFlow 四场景发版（feature/release/hotfix/dev-offline），SemVer 自动推导版本号；上线合并二选一（远端 PR 默认 / 本地直接合并）+ 主分支名检测（master/main） |

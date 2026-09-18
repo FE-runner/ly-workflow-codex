@@ -36,3 +36,11 @@
 - 重点检查 archive commit 失败或无提交时是否不会触发清理。
 - 重点检查旧 change 缺 metadata 时是否完全没有默认猜测 main/master 的行为。
 - 重点检查失败路径是否都保留现场，尤其 merge 冲突与 worktree 删除失败。
+
+## 实施决策
+
+- propose 模板用 `SOURCE_BRANCH` / `ISOLATION_SOURCE_BRANCH` / `DEVELOPMENT_BRANCH` / `WORKTREE_PATH` 变量区分捕获阶段；change 名确认后在步骤 5.6 写入 `.openspec.yaml` 的 `lyx:` metadata。
+- 已在 worktree 内发起 propose 时记录当前 worktree 与当前分支，`sourceBranch` 写 `null`；detached HEAD 直接停止。
+- archive 模板新增“归档后分支收尾”小节，先读 metadata，再校验 branch/worktree 状态，最后按用户确认执行本地 merge 与清理。
+- worktree 模式收尾从 `sourceBranch` 所在 worktree 执行，避免在开发 linked worktree 中 checkout 已被占用的目标分支。
+- 文档同步到 README、CLAUDE、templates/CLAUDE；host-adapters 测试新增 isolation cleanup 断言。

@@ -166,6 +166,32 @@ describe('codex template set', () => {
     }
   })
 
+  it('propose and archive templates include isolation cleanup metadata flow', () => {
+    const propose = readFileSync(join(SKILLS_TEMPLATES_DIR, 'propose.md'), 'utf-8')
+    expect(propose).toContain('ISOLATION_SOURCE_BRANCH')
+    expect(propose).toContain('DEVELOPMENT_BRANCH')
+    expect(propose).toContain('WORKTREE_PATH')
+    expect(propose).toContain('lyx:')
+    expect(propose).toContain('sourceBranch')
+    expect(propose).toContain('developmentBranch')
+    expect(propose).toContain('worktreePath')
+    expect(propose).toContain('detached HEAD')
+
+    const archive = readFileSync(join(SKILLS_TEMPLATES_DIR, 'archive.md'), 'utf-8')
+    expect(archive).toContain('归档后分支收尾')
+    expect(archive).toContain('sourceBranch')
+    expect(archive).toContain('developmentBranch')
+    expect(archive).toContain('worktreePath')
+    expect(archive).toContain('git merge --no-ff')
+    expect(archive).toContain('git worktree remove')
+    expect(archive).toContain('git branch -d')
+    expect(archive).toContain('SHALL NOT 自动 `git push`')
+    expect(archive).toContain('sourceBranch` 为 `null`')
+
+    const worktree = readFileSync(join(SKILLS_TEMPLATES_DIR, 'worktree.md'), 'utf-8')
+    expect(worktree).toContain('手动 `@lyx-worktree add` 不强制记录该 metadata')
+  })
+
   it('no codex template contains wrapper/lite/routing residue', () => {
     for (const file of readdirSync(SKILLS_TEMPLATES_DIR).filter(f => f.endsWith('.md'))) {
       const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')

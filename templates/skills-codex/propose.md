@@ -14,9 +14,11 @@ argument-hint: '<需求描述>'
 
 ### 1. 是否已在 worktree 内 + 隔离方式询问（创建方案前，全局只问一次）
 
-先检测当前是否已处于某个 worktree 内：比较 `git rev-parse --git-dir` 与 `--git-common-dir`（路径先 realpath 归一化再比较），并排除子模块误判（`git rev-parse --show-superproject-working-tree`）。
+先读取当前分支：`SOURCE_BRANCH="$(git branch --show-current)"`。若为空（detached HEAD），**停止编排**，要求用户切到命名分支后再运行。
 
-- **已在 worktree 内** → 跳过隔离方式询问，直接进入步骤 2。
+再检测当前是否已处于某个 worktree 内：比较 `git rev-parse --git-dir` 与 `--git-common-dir`（路径先 realpath 归一化再比较），并排除子模块误判（`git rev-parse --show-superproject-working-tree`）。
+
+- **已在 worktree 内** → 跳过隔离方式询问，捕获 `ISOLATION=worktree`、`DEVELOPMENT_BRANCH="$SOURCE_BRANCH"`、`WORKTREE_PATH="$(git rev-parse --show-toplevel)"`、`ISOLATION_SOURCE_BRANCH=null`，直接进入步骤 2。
 - **不在任何 worktree 内** → 直接向用户提问一次（三选一；已在某个开发分支上时照常询问，不因当前分支非默认分支而跳过）：
 
   ```
@@ -27,27 +29,28 @@ argument-hint: '<需求描述>'
   ```
 
   - **隔离 worktree**：
-    1. 先检查当前工作区未提交改动（`git status --porcelain`）：存在未提交草稿时提示"当前工作区的未提交改动将留在原 worktree、不会带入新 worktree"，待用户确认后再切换。
-    2. 询问/确认本次开发的开发分支名 `<开发分支名>`（可含 `/`，如 `feature/xxx`）。
-    3. 执行（从**当前分支 HEAD** 切出，不是默认分支、不做分支拓扑校验）：
+    1. 捕获 `ISOLATION=worktree`、`ISOLATION_SOURCE_BRANCH="$SOURCE_BRANCH"`，并设置 `WORKTREE_PATH=~/.ly/worktrees/<项目名>/<开发分支名>`。
+    2. 先检查当前工作区未提交改动（`git status --porcelain`）：存在未提交草稿时提示"当前工作区的未提交改动将留在原 worktree、不会带入新 worktree"，待用户确认后再切换。
+    3. 询问/确认本次开发的开发分支名 `<开发分支名>`（可含 `/`，如 `feature/xxx`），捕获 `DEVELOPMENT_BRANCH=<开发分支名>`。
+    4. 执行（从**当前分支 HEAD** 切出，不是默认分支、不做分支拓扑校验）：
        ```
        git worktree add -b <开发分支名> ~/.ly/worktrees/<项目名>/<开发分支名> <当前分支HEAD>
        ```
        （`<项目名>` 以 `git rev-parse --git-common-dir` 反推主仓库目录名；多级分支名按 `/` 展开路径，仍保持无来源前缀的单层语义。）
-    4. 自动复制环境文件（`.env` 等，复用 `@lyx-worktree add` 规则），跑一次项目 baseline 验证。
-    5. **baseline 失败** → 报告失败摘要并询问用户"仍继续 / 放弃"：**仍继续** → 同会话 cd 进 worktree 继续编排（失败摘要作为已知风险带入后续流程，按本步 6/7 执行）；**放弃** → 保留已创建的 worktree 与分支（不自动清理，需要时用 `@lyx-worktree remove` 显式删除），打印携带失败摘要的兜底续接命令（同 6 的格式），会话结束，change 尚未生成。
-    6. 打印**兜底续接命令**（绝对路径 + shell 安全转义）——正常路径不使用，仅当本会话意外死亡（崩溃、终端关闭等）时，用于在新 worktree 中恢复：
+    5. 自动复制环境文件（`.env` 等，复用 `@lyx-worktree add` 规则），跑一次项目 baseline 验证。
+    6. **baseline 失败** → 报告失败摘要并询问用户"仍继续 / 放弃"：**仍继续** → 同会话 cd 进 worktree 继续编排（失败摘要作为已知风险带入后续流程，按本步 7/8 执行）；**放弃** → 保留已创建的 worktree 与分支（不自动清理，需要时用 `@lyx-worktree remove` 显式删除），打印携带失败摘要的兜底续接命令（同 7 的格式），会话结束，change 尚未生成。
+    7. 打印**兜底续接命令**（绝对路径 + shell 安全转义）——正常路径不使用，仅当本会话意外死亡（崩溃、终端关闭等）时，用于在新 worktree 中恢复：
        ```
        cd ~/.ly/worktrees/<项目名>/<开发分支名> && codex "继续 在隔离 worktree 中 @lyx-propose <同一需求>"
        ```
-    7. **同一会话续跑（不结束会话）**——当前会话直接 `cd` 进新 worktree 并继续本编排（worktree 先于 change 创建的时序不变，change 尚未生成）：
+    8. **同一会话续跑（不结束会话）**——当前会话直接 `cd` 进新 worktree 并继续本编排（worktree 先于 change 创建的时序不变，change 尚未生成）：
        1. 以绝对路径 `cd "$HOME/.ly/worktrees/<项目名>/<开发分支名>"` 切换工作目录。
        2. **立即校验**当前工作目录确为该 worktree：`pwd` 与 worktree 绝对路径比对，或 `git rev-parse --show-toplevel` 归一化后等于该 worktree 绝对路径（SHALL NOT 仅以 `git rev-parse --git-dir` 成功作为判据——它在任意 git 仓库内都会成功，无法证明位于该 worktree）。**cd 失败或校验不通过 → 停止编排、报告原因，不执行后续任何 git/openspec/文件操作（不静默失败后继续）**。
        3. 校验通过后提示"已进入隔离 worktree `<路径>`，本会话继续"，继续步骤 2。
        4. **cwd 纪律**：自校验通过之时起，本次编排所有 Git 操作、openspec 命令与文件读写以 worktree 为工作目录（文件操作用 worktree 绝对路径），不回到主仓库路径执行本次 change 的任何产物操作。
        5. worktree 目录/分支锁定为 `<开发分支名>`，后续不因 change 名不同而对 worktree/分支重命名。
   - **本项目切新分支**：
-    1. 询问/确认开发分支名 `<开发分支名>`（规则与 worktree 路径一致：可含 `/`，如 `feature/xxx`）。
+    1. 捕获 `ISOLATION=branch`、`ISOLATION_SOURCE_BRANCH="$SOURCE_BRANCH"`；询问/确认开发分支名 `<开发分支名>`（规则与 worktree 路径一致：可含 `/`，如 `feature/xxx`），捕获 `DEVELOPMENT_BRANCH=<开发分支名>`。
     2. 检查当前工作区未提交改动（`git status --porcelain`）：非空时用一次三选一询问处置方式，各选项文案如实说明后果：
        - **提交（WIP commit）**：用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取 message 文件路径并写入完整 message（首行 `chore(wip): 切分支前暂存工作区改动`，正文按 `@lyx-commit` 规范写动机/改动/影响），执行 `git add -A && git commit -F "$MSG_FILE"` 后再切分支——新分支从含 WIP commit 的 HEAD 切出，改动固化为新分支上的提交，review-code 审查对象不受污染；
        - **Stash**：`git stash push -u` → 切分支 → `git stash pop`——如实说明"pop 回来后改动仍在工作区，stash 仅提供日志留底"；
@@ -56,7 +59,7 @@ argument-hint: '<需求描述>'
        三种选择均直接执行（风险已写入文案，不二次确认）；处置动作失败（提交失败、stash 失败等）→ **如实报错停止编排，不自动兜底**。
     3. 执行 `git checkout -b <开发分支名>`（从当前 HEAD 建新分支并切换）。本路径**不运行 baseline 验证**（同一工作目录、同一 env、同一 node_modules，baseline 验证的"全新 worktree 可用性"前提不成立）、**不切换会话工作目录**、**不打印兜底续接命令**（无目录切换即无会话断链风险）。分支名已存在或非法导致 `git checkout -b` 失败时，**如实报错停止编排转人工**（不自动改名、不自动 stash），change 尚未生成。
     4. 进入步骤 2，后续编排（opsx:propose → 自审 → commit → 流水线）在当前工作目录原位继续。
-  - **留在当前分支**：不创建 worktree、不切换分支，直接进入步骤 2。若 `git status --porcelain` 非空，触发与"本项目切新分支"相同的脏改动三选一处置询问（其中 Stash 选项因无切换动作**不自动 pop**——改动收进 stash 由用户日后 `git stash pop` 自取，执行时如实说明；WIP commit 选项将改动提交到当前分支，message 沿用同一文案）。
+  - **留在当前分支**：捕获 `ISOLATION=none`、`ISOLATION_SOURCE_BRANCH="$SOURCE_BRANCH"`、`DEVELOPMENT_BRANCH=null`；不创建 worktree、不切换分支，直接进入步骤 2。若 `git status --porcelain` 非空，触发与"本项目切新分支"相同的脏改动三选一处置询问（其中 Stash 选项因无切换动作**不自动 pop**——改动收进 stash 由用户日后 `git stash pop` 自取，执行时如实说明；WIP commit 选项将改动提交到当前分支，message 沿用同一文案）。
 
 ### 2. 询问全自动/手动（创建方案前，全局只问一次）
 
@@ -105,6 +108,20 @@ argument-hint: '<需求描述>'
 1. **收录内容**（只记文档之外的讨论结论）：关键决策与理由、已否决的备选方案及否决理由、范围边界（明确做什么/不做什么）、已知坑与注意事项。与 proposal/design/tasks/delta spec 重复的内容以一句话引用指路，SHALL NOT 整段摘抄。
 2. **内容边界自检（产出质量关卡）**：产出时完成一次自检——(a) 无与 artifact 重复的整段内容；(b) 每条决策/否决理由可溯源到本 change 讨论或基线 artifact 对应条目；(c) 行数 ≤ 100 行（它是每次 subagent spawn 的固定读取成本）。自检不通过 → 修订后重检，SHALL NOT 带病产出。
 3. **无实质内容时**：仍产出仅含标题与一行说明的最小骨架文件，SHALL NOT 省略文件——审查/实施 subagent 的 TASK 引用固定路径，文件缺失会造成断链。
+
+### 5.6 写入 isolation metadata（commit 前）
+
+在确定真实 change 名之后、步骤 6 commit 之前，把步骤 1 捕获的隔离信息写入 `openspec/changes/<change-name>/.openspec.yaml` 的 `lyx:` 命名空间：
+
+```yaml
+lyx:
+  isolation: worktree | branch | none
+  sourceBranch: <ISOLATION_SOURCE_BRANCH 或 null>
+  developmentBranch: <DEVELOPMENT_BRANCH 或 null>
+  worktreePath: <WORKTREE_PATH；仅 worktree 模式>
+```
+
+`isolation: none` 时 `sourceBranch` 仍记录当前分支，`developmentBranch` / `worktreePath` 为 `null`。`sourceBranch` 缺失时写 `null`，不得猜测。该 metadata 属于 propose 提交单元，随步骤 6 的 `git add -- openspec/changes/<change-name>/` 一起提交。
 
 ### 6. 暂存并立即 commit（每步 commit）
 

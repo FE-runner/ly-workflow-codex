@@ -157,3 +157,4 @@ your-project/
 - `--local` 且 `.worktrees/` 未被忽略时会先写 `.gitignore` 并提交，再继续创建
 - 创建后会跑一次项目 setup + baseline 测试，确认新 worktree 干净可用
 - 隔离 worktree 的创建/切换统一由 `@lyx-propose` 在**创建方案前**通过 `git worktree add`（从当前分支 HEAD 切出，目录 `~/.ly/worktrees/<项目名>/<开发分支名>`）触发；worktree 目录/分支锁定为开发分支名，不随 change 名重命名；孤儿 worktree（关联 worktree 已删除/重命名）需人工 `remove`/`prune`
+- `@lyx-propose` 创建 worktree 或新分支时负责捕获 isolation metadata（sourceBranch / developmentBranch / worktreePath），并在 change 名确认后写入 `.openspec.yaml`；手动 `@lyx-worktree add` 不强制记录该 metadata
