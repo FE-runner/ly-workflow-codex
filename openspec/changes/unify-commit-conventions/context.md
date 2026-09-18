@@ -33,3 +33,9 @@
 
 - 自审发现并修复 4 处机械断链：init 适用边界未明确、`ly-propose-flow` 两个遗漏的 MODIFIED Requirement（手动路径措辞、apply 实施 message 措辞）、主 spec Purpose 段同步任务缺失。
 - 无待用户决策的开放问题。
+
+## 实施阶段记录
+
+- spike 1.1 实测：`git log --grep="^Change-Stage: X$" --grep="^Change-Name: N$" --all-match` 的多行锚定可靠（命中 target SHA；`Change-Name` 不匹配时返回空）。无需启用 `interpret-trailers --parse` 兜底，spec 中的兜底路径保留为后备。
+- spike 1.3 实测：`git commit --only` 有两个使用陷阱——(a) `-m` 必须放在 `--` 之前，否则会被当成 pathspec 解析；(b) 目标范围含未跟踪新文件时必须先 `git add`，否则报 `pathspec ... did not match any file(s) known to git`。两处模板已按"先 add、`-m` 在 `--` 前"的顺序写。
+- 实施范围外发现：`src/utils/__tests__/host-adapters.test.ts` 有两处断言检查 apply 模板含旧 `git commit -m "apply: <change-name>"`，随模板改动必然失败；已一并改为 `Change-Stage: apply` 与 `Change-Name: <change-name>` 断言（tasks 未预先覆盖该文件，属模板改动的直接依赖修复）。

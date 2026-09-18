@@ -1,6 +1,6 @@
 ---
 name: lyx-apply
-description: '按 [codexHost] codingExecutor 决定实施主体：main（默认）= 主 agent 直接实施；subagent = spawn coding subagent（非 fork spawn，只携带 TASK；经 change 目录 context.md 获取软上下文 + 只实施 change 范围）。两条路径均逐任务实施+验证+勾选，主会话确认后回写 context.md 并统一提交 apply: <change-name>；失败原样呈报转人工（不重试不兜底）'
+description: '按 [codexHost] codingExecutor 决定实施主体：main（默认）= 主 agent 直接实施；subagent = spawn coding subagent（非 fork spawn，只携带 TASK；经 change 目录 context.md 获取软上下文 + 只实施 change 范围）。两条路径均逐任务实施+验证+勾选，主会话确认后回写 context.md 并按共用隔离协议统一提交 apply 阶段 commit（CC 前缀 + Change-Stage: apply trailer）；失败原样呈报转人工（不重试不兜底）'
 argument-hint: '[<change-name>]'
 ---
 
@@ -13,7 +13,7 @@ argument-hint: '[<change-name>]'
 - **`"main"`（默认）**：主 agent SHALL 在当前会话直接实施——读取该 change 的 `tasks.md` 逐任务实施 + 验证 + 勾选；SHALL NOT spawn 子代理、SHALL NOT 读取 `codingModel` / `codingReasoningEffort`、SHALL NOT 产生 `[回退]` 标记。
 - **`"subagent"`**：主会话 spawn 一个 coding subagent，**非 fork spawn**（只携带 TASK，软上下文经该 change 目录下的 `context.md` 到达）并在任务中点名"只实施 change 范围"；模型按 `codingModel`、非空推理档按 `codingReasoningEffort` 传入。coding subagent 读取 tasks.md 逐任务实施 + 验证 + 勾选后，将改动与结果**回传主会话，不自行 commit**。
 
-两条路径共同遵守：主会话确认后回写 `context.md`（实施决策）并统一提交 `apply: <change-name>`，作为 `@lyx-review-code` 的审查对象。失败区分两阶段：**环境级不可用**（仅 `subagent` 路径可能发生——宿主无 subagent 能力、初始 spawn 失败）按回退口径回退主 agent 直接实施，输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为业务失败；**实施中/验证失败** SHALL 原样呈报转人工，不自动重试、不自动兜底。隔离 worktree 的询问/新建统一收敛到 `@lyx-propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
+两条路径共同遵守：主会话确认后回写 `context.md`（实施决策）并按共用 index 隔离协议统一提交 apply 阶段 commit（message 为 CC 前缀 + `Change-Stage: apply` + `Change-Name: <change-name>` trailer），作为 `@lyx-review-code` 的审查对象。失败区分两阶段：**环境级不可用**（仅 `subagent` 路径可能发生——宿主无 subagent 能力、初始 spawn 失败）按回退口径回退主 agent 直接实施，输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为业务失败；**实施中/验证失败** SHALL 原样呈报转人工，不自动重试、不自动兜底。隔离 worktree 的询问/新建统一收敛到 `@lyx-propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
 
 ## 步骤
 
@@ -60,8 +60,14 @@ argument-hint: '[<change-name>]'
 
 1. 主会话收到回传的改动与结果后确认（subagent 路径以 coding subagent 回传清单为对照；**环境级不可用回退的自实施路径无 subagent 回传清单，以主会话自己记录的实施改动文件清单——逐项列出并展示给用户——充当回传清单，快照与核对规则一致**）。确认前先识别 **partial apply**：残留判据限定为"改动路径落在本次实施目标文件集合内"——若步骤 2 快照中已存在的 dirty 路径 ∩ 本次实施目标文件集合（tasks.md 指向的 `templates/`、`src/` 等路径）≠ ∅，或该 change 目录下 tasks.md 已出现勾选但对应改动未提交，SHALL 判定 partial apply 并停止转人工（与本次实施无关的既存改动明确不算残留，交由快照差集与重叠规则处理）。随后确认时再执行一次 `git status --porcelain`，与步骤 2 spawn 前记录的快照**比对**：比对只针对快照之后新增/变化的路径——既存改动（快照中已存在的路径且状态未变）不参与比对、不纳入本次提交范围（保持"预存改动未被提交"口径，`git add` 范围仅限本次实际改动的文件，并在报告中说明"预存改动未被提交"）。仅当**快照之后出现回传清单之外的改动**、或**回传清单中的文件实际未变动**时才判定不一致：不一致 SHALL 停止并逐项列出差异路径报告，不执行 commit、不照单全收，转人工确认。**快照前已 dirty 的路径出现在回传清单**（与本次改动重叠，无法机械区分同一文件内既存与本轮的 hunk）→ SHALL 停止转人工，不得猜测性提交，报告中 SHALL 回指 propose 步骤 1 的既存改动处置选择，说明该路径下既存改动与实施目标文件重叠会使 apply 停止。
 2. 确认一致后，**回写 context.md（实施软上下文）**：把实施阶段新产生的关键决策（实现取舍、对方案的偏差及理由、发现的坑）更新进 `openspec/changes/<change-name>/context.md`——增量追加或修订，SHALL NOT 重写或删除 propose 阶段已沉淀的内容（确已过时的条目标注"已过时"保留痕迹）；实施无新增软上下文时保持原样不强行凑写。`context.md` 缺失（历史 change）时跳过回写并在报告中注明。**回写了 context.md 时 SHALL 把它并入"本次待提交文件清单"**（清单 = coding subagent 回传清单 ∪ 回写后的 `context.md`；自实施路径同理——主会话记录的实施改动清单 ∪ `context.md`），后续暂存与提交校验均以更新后的清单为准。
-3. 确认一致后提交，提交前 SHALL 显式隔离 index：**步骤 2 快照中已存在 staged 内容时**，用 `git commit --only -- <本次待提交文件清单>` 仅提交该清单（SHALL NOT 用全量 `git commit` 吞并 index 既存 staged 内容），或先 unstage 非本次文件、提交后恢复原暂存状态；无法安全隔离时 SHALL 停止转人工。快照中无 staged 内容时正常 `git add` 本次待提交文件清单中的全部文件后立即 `git commit -m "apply: <change-name>"`。提交后 SHALL 以 `git show --name-only` 校验该 `apply:` commit 的文件集合严格等于本次待提交清单（含回写的 `context.md`，如适用），不相等 SHALL 如实报告并修复，不得带着多余文件进入 `apply:` commit。
-4. `apply: <change-name>` commit 即 `@lyx-review-code` 的审查对象。
+3. 确认一致后提交，按共用 index 隔离协议执行（目标范围为本次待提交文件清单）：
+   - 先 `git add -- <本次待提交文件清单>`（不用 `git add -A`）。
+   - **步骤 2 快照中已存在 staged 内容时**：用 `git commit --only -m "<message>" -- <本次待提交文件清单>` 仅提交该清单（**`-m` 必须放在 `--` 之前**；清单含未跟踪新文件时**必须先 `git add`**，否则 `--only` 报 `pathspec ... did not match any file(s) known to git`；SHALL NOT 用全量 `git commit` 吞并 index 既存 staged 内容），或先 unstage 非本次文件、提交后恢复原暂存状态；范围外文件保留原暂存状态。
+   - 同一文件内既存 staged hunk 与本次 hunk 混合、无法机械分离时 → 无法安全隔离，SHALL 停止转人工，不猜测性提交。
+   - 快照中无 staged 内容时：直接 `git commit`。
+   - message 采用 Conventional Commits 前缀 + trailer 结构：`<cc-type>(<scope>): <subject>`（type 由主会话按本次实际改动判断，如 `feat` / `fix` / `refactor`；SHALL NOT 固定为某个 type），末尾带 `Change-Stage: apply` 与 `Change-Name: <change-name>` trailer。
+   - 提交后 SHALL 以 `git show --name-only` 校验该 apply 阶段 commit 的文件集合严格等于本次待提交清单（含回写的 `context.md`，如适用），不相等 SHALL 如实报告并修复，不得带着多余文件进入 apply 阶段 commit。
+4. apply 阶段 commit 即 `@lyx-review-code` 的审查对象（定位见 `@lyx-review-code` 的 trailer 优先规约）。
 5. 无可提交内容（如 tasks 本身无产出、或改动已在审查循环中被提交）则跳过，不创建空 commit。
 6. 若 `git commit` 失败，如实报告 Git 返回的原始错误，不重试不兜底。
 
@@ -70,5 +76,5 @@ argument-hint: '[<change-name>]'
 **实施中/验证失败**（coding subagent 报告任务未完成或验证失败）：主会话原样呈报失败详情转人工，不自动重试、不切回自实施、不 commit、不自动兜底。列出 tasks.md 中仍未勾选的条目，停止执行；改动可能已部分落地在工作区，保留原状，由用户决定后续处理。失败呈报的末尾 SHALL 附**下一步可用命令指引**，供用户在"断在明确节点、人工自行触发下一步"口径下续接，例如：
 
 - 可用 `@lyx-apply <change-name>` 重跑实施（处理完失败原因后）；
-- `@lyx-review-code <change-name>` 暂缓（尚无完整的 `apply:` commit 作为审查对象）；
+- `@lyx-review-code <change-name>` 暂缓（尚无完整的 apply 阶段 commit 作为审查对象）；
 - 已部分落地的改动保留在工作区未提交，可先 `git diff` / `git status` 查看。

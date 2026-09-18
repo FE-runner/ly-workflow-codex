@@ -26,7 +26,10 @@ argument-hint: '[<change-name>]'
 
 ```bash
 git add -- openspec/
-git commit -m "archive: <change-name>"
+git commit -m "chore(openspec): 归档 <change-name>" -m "Change-Stage: archive
+Change-Name: <change-name>"
 ```
+
+message 采用 Conventional Commits 前缀 + trailer 结构：CC 前缀固定 `chore(openspec)`，末尾带 `Change-Stage: archive` 与 `Change-Name: <change-name>` trailer（`-m` 分两段传入时，git 会在两段之间插入空行，trailer 块因此位于 message 末尾）。
 
 若无可提交内容或 `git commit` 失败，跳过提交，如实报告原始错误，不视为归档失败。

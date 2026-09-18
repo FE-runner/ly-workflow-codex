@@ -1,6 +1,6 @@
 ## Purpose
 
-提供五个统一前缀的 `/ly:*` 命令：`explore` 是纯委托（不附加自定义编排逻辑）；`init`/`archive` 各自在 OpenSpec 原生 `init`/`archive` 能力前后串接文件生成与自动提交（`apply` 由当前会话本人实施 tasks，实施完成后立即提交 `apply: <change-name>`——无隔离检测、无外部委托，隔离 worktree 由 `/ly:propose` 创建方案前决定）；`propose` 是收尾编排的入口——委托 `opsx:propose` 生成方案之外，还负责创建方案前的隔离方式三选一询问、全自动/手动询问、方案自审、每步 commit（`propose: <change-name>`）与全自动流水线（review-plan → apply → review-code）。
+提供五个统一前缀的 `/ly:*` 命令：`explore` 是纯委托（不附加自定义编排逻辑）；`init`/`archive` 各自在 OpenSpec 原生 `init`/`archive` 能力前后串接文件生成与自动提交（`apply` 由当前会话本人实施 tasks，实施完成后立即提交 apply 阶段 commit（CC 前缀 + `Change-Stage: apply` trailer）——无隔离检测、无外部委托，隔离 worktree 由 `/ly:propose` 创建方案前决定）；`propose` 是收尾编排的入口——委托 `opsx:propose` 生成方案之外，还负责创建方案前的隔离方式三选一询问、全自动/手动询问、方案自审、每步 commit（CC 前缀 + `Change-Stage`/`Change-Name` trailer）与全自动流水线（review-plan → apply → review-code）。
 
 ## Requirements
 

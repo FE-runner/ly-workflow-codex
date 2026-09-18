@@ -103,8 +103,8 @@ describe('codex template set', () => {
     // 环境级不可用回退 vs 业务失败转人工
     expect(content).toContain('环境级不可用')
     expect(content).toContain('转人工')
-    // 实施产物由主会话统一提交；无 exec 残留
-    expect(content).toContain('git commit -m "apply: <change-name>"')
+    // 实施产物由主会话统一提交（CC 前缀 + Change-Stage trailer）；无 exec 残留
+    expect(content).toContain('Change-Stage: apply')
     expect(content).not.toContain('codex exec')
     expect(content).not.toContain('CODEAGENT_EOF')
     expect(content).not.toContain('codex exec resume')
@@ -113,7 +113,7 @@ describe('codex template set', () => {
     expect(content).not.toMatch(/OVERALL:\s*(PASS|FAIL)/)
     expect(content).not.toContain('LY:IF')
     expect(content).not.toContain('routing.implementer')
-    expect(content).toContain('git commit -m "apply: <change-name>"')
+    expect(content).toContain('Change-Name: <change-name>')
   })
 
   it('no codex template contains wrapper/lite/routing residue', () => {

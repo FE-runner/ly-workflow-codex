@@ -38,7 +38,7 @@ argument-hint: '[<change-name>] [--no-commit]'
 ls -d openspec/changes/*/ 2>/dev/null | grep -v '/archive/'
 ```
 
-审查对象是目标 change 的 `propose:` commit（编排方 `@lyx-propose` 在生成方案后立即提交，提交信息 `propose: <change-name>`）。审查基线 SHALL 用 `git log --grep="^propose: <change-name>"` 取 HEAD 侧最近一期匹配 commit，审查范围 = 该 commit 差异（`git show <commit>`）+ 当前 `git diff HEAD` + 未跟踪文件清单（`??`）——修复在审查-修复循环内未提交时不丢失。不存在 `propose:` commit（零 commit 仓库、或尚未生成方案提交）时，退化为 `git diff HEAD` + 未跟踪清单组合。审查期间新产生的修复改动（循环内每轮修复未提交）始终计入审查范围，不在中途产生新 commit（提交只发生在正常清零后的统一提交，见步骤 5）。
+审查对象是目标 change 的 propose 阶段 commit（编排方 `@lyx-propose` 在生成方案后立即提交，message 带 `Change-Stage: propose` 与 `Change-Name: <change-name>` trailer）。审查基线 SHALL 按 trailer 优先定位：`git log --grep="^Change-Stage: propose$" --grep="^Change-Name: <change-name>$" --all-match -1 --format=%H` 取 HEAD 侧最近一期匹配 commit；未命中时回退旧前缀 `git log --grep="^propose: <change-name>"` 并在报告中打印 DEPRECATED 兼容通道提示。审查范围 = 该 commit 差异（`git show <commit>`）+ 当前 `git diff HEAD` + 未跟踪文件清单（`??`）——修复在审查-修复循环内未提交时不丢失。两条通道都找不到 propose 阶段 commit（零 commit 仓库、或尚未生成方案提交）时，退化为 `git diff HEAD` + 未跟踪清单组合。审查期间新产生的修复改动（循环内每轮修复未提交）始终计入审查范围，不在中途产生新 commit（提交只发生在正常清零后的统一提交，见步骤 5）。
 
 **基线锚定**：首轮确定审查基线 commit 后 SHALL 固定该 SHA 作为本次命令执行的基线锚点，后续轮次的审查范围一律以 `git show <固定SHA>` + `git diff <固定SHA>` + 未跟踪清单计算，SHALL NOT 在循环期间重新执行 `git log --grep` 或重算 HEAD 作基线（除非基线 commit 因异常被回滚/丢失，此时才重新定位并如实报告）。循环期间发生任何中途提交（无论手滑或外部因素）SHALL 如实报告，并仍以固定基线重新计算 `git diff <固定SHA>` 说明该中途 commit 是否落在审查范围内（核对不等于替换基线），但不以此自动进入终止条件。
 
@@ -148,7 +148,7 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 
 **正常清零结束：**
 
-先执行统一提交：先 `git add` 该 change 目录下的 `proposal.md`/`design.md`/`tasks.md` 及全部 delta spec 文件（审查目标全部文件——编排方（`@lyx-propose`）已暂存的产物与循环期间修复的改动一并暂存；若产物此前已在暂存区则保持，修复改动由本次 `git add` 覆盖进 index），再执行一次统一 commit（仅暂存并提交这些文件，不做范围外的 `git add`），提交信息形如 `fix: review-plan feedback (经 N 轮修复) - <change-name>`。**不存在"循环开始前已脏文件的隔离跳过"**——该 change 目录下的 artifact 与 delta spec 是合法审查对象，产物与修复是同一个待提交单元，全部一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若统一提交本身执行失败，在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
+先执行统一提交：先 `git add` 该 change 目录下的 `proposal.md`/`design.md`/`tasks.md` 及全部 delta spec 文件（审查目标全部文件——编排方（`@lyx-propose`）已暂存的产物与循环期间修复的改动一并暂存；若产物此前已在暂存区则保持，修复改动由本次 `git add` 覆盖进 index），再执行一次统一 commit（仅暂存并提交这些文件，不做范围外的 `git add`），提交信息采用 Conventional Commits 前缀 + trailer 结构：CC 前缀形如 `fix(<scope>): review-plan 反馈修复（N 轮）`，末尾带 `Change-Stage: review-plan-fix` 与 `Change-Name: <change-name>` trailer。**不存在"循环开始前已脏文件的隔离跳过"**——该 change 目录下的 artifact 与 delta spec 是合法审查对象，产物与修复是同一个待提交单元，全部一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若统一提交本身执行失败，在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
 
 ```
 📋 方案审查：<change-name>

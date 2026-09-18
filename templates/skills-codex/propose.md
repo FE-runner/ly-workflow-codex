@@ -1,6 +1,6 @@
 ---
 name: lyx-propose
-description: '按 opsx:propose 编排流程生成方案；创建方案前先问隔离方式（worktree / 本项目切新分支 / 留在当前分支）与全自动/手动（各只一次）；产物生成后 commit 前执行方案自审（闭环+全面性），自审修复随 propose: commit 一次落库；全自动 = 自动流水线到审完代码，手动 = 逐步确认'
+description: '按 opsx:propose 编排流程生成方案；创建方案前先问隔离方式（worktree / 本项目切新分支 / 留在当前分支）与全自动/手动（各只一次）；产物生成后 commit 前执行方案自审（闭环+全面性），自审修复随 propose 阶段 commit（CC 前缀 + Change-Stage: propose trailer）一次落库；全自动 = 自动流水线到审完代码，手动 = 逐步确认'
 argument-hint: '<需求描述>'
 ---
 
@@ -8,7 +8,7 @@ argument-hint: '<需求描述>'
 
 > 调用方式：`@lyx-propose` mention 后跟随的自然语言即参数（如 `@lyx-propose` 带需求描述/选项）；无参数时直接 `@lyx-propose`。
 
-收尾编排入口。创建方案前先问两件事（各只一次）：本次开发的隔离方式（隔离 worktree / 本项目切新分支 / 留在当前分支，不在 worktree 内才问）、本次走全自动还是手动。产物生成后、commit 前由方案提出者执行一次方案自审（逻辑闭环 + 业务全面性，见步骤 5）与 context.md 软上下文产出（见步骤 5.5），自审修复与 context.md 随 `propose: <change-name>` commit 一次干净落库；全自动路径在同一会话内自动跑 review-plan → apply → review-code 直到审完代码，手动路径逐步确认。
+收尾编排入口。创建方案前先问两件事（各只一次）：本次开发的隔离方式（隔离 worktree / 本项目切新分支 / 留在当前分支，不在 worktree 内才问）、本次走全自动还是手动。产物生成后、commit 前由方案提出者执行一次方案自审（逻辑闭环 + 业务全面性，见步骤 5）与 context.md 软上下文产出（见步骤 5.5），自审修复与 context.md 随 propose 阶段 commit（message 带 `Change-Stage: propose` 与 `Change-Name` trailer）一次干净落库；全自动路径在同一会话内自动跑 review-plan → apply → review-code 直到审完代码，手动路径逐步确认。
 
 ## 步骤
 
@@ -110,16 +110,23 @@ argument-hint: '<需求描述>'
 
 自审完成（含其修复）与 context.md 产出后执行。自审产生的 artifact 修复与 context.md 属于本次待提交内容——产物、自审修复与 context.md 是同一个待提交单元，随这次 commit 一次干净落库，不产生"commit + 未提交自审修复"的混合状态。
 
-1. 检查整个 Git index（`git diff --cached --name-only`）：若存在该 change 目录之外的已暂存内容，**停止**，报告"检测到该 change 目录外的已暂存内容，请先处理（unstage 或另行提交）后重试"，不执行 `git add` 也不 commit。
-2. index 干净后：`git add -- openspec/changes/<change-name>/`（该目录含 `.openspec.yaml` 元数据、proposal/design/tasks、context.md 与全部 delta spec，集群暂存，不用 `git add -A`）。
-3. **立即 commit**：
+1. `git add -- openspec/changes/<change-name>/`（该目录含 `.openspec.yaml` 元数据、proposal/design/tasks、context.md 与全部 delta spec，集群暂存，不用 `git add -A`）。
+2. **按共用 index 隔离协议提交**——目标范围为 `openspec/changes/<change-name>/` 目录，协议分支：
+   - index 中无该目录外的已暂存内容 → 直接 commit（见第 3 步命令）。
+   - index 中存在该目录外的已暂存内容、且与目标范围无文件重叠 → 用 `git commit --only -m "<message>" -- openspec/changes/<change-name>/` 隔离提交（**`-m` 必须放在 `--` 之前**；目标范围含未跟踪新文件时**必须先 `git add`**，否则 `--only` 报 `pathspec ... did not match any file(s) known to git`），或先 unstage 非目标文件、提交后恢复原暂存状态；范围外文件保留原暂存状态。
+   - 同一文件内既存 staged hunk 与本次 hunk 混合、无法机械分离时 → **停止转人工**，如实报告，不猜测性提交。
+3. **立即 commit**，message 采用 Conventional Commits 前缀 + trailer 结构：
    ```
-   git commit -m "propose: <change-name>"
-   ```
-4. 用 `git show --name-only --format=` 校验这次 commit 的实际文件集合严格属于 `openspec/changes/<change-name>/` 目录（含 `.openspec.yaml` 与 `context.md`）。
-5. 若该目录下无可提交内容、`git commit` 失败，或校验发现文件集合超出该目录范围，**停止后续自动化步骤**，报告具体原因。
+   docs(openspec): <subject>
 
-`propose: <change-name>` commit（含自审修复）即 `@lyx-review-plan` 的审查对象（见 `@lyx-review-plan` 的审查范围判定：`git log --grep="^propose: <change-name>"` 取 HEAD 侧最近一期，`git show <commit>` + `git diff HEAD` + 未跟踪清单）。
+   Change-Stage: propose
+   Change-Name: <change-name>
+   ```
+   （subject 用一句人话概括本次方案；`Change-Stage` 固定 `propose`。）
+4. 用 `git show --name-only --format=` 校验这次 commit 的实际文件集合严格等于目标范围（该目录全部应提交文件，含 `.openspec.yaml` 与 `context.md`）——不许超出、不许漏项。
+5. 若该目录下无可提交内容、`git commit` 失败，或校验发现文件集合与目标范围不相等，**停止后续自动化步骤**，报告具体原因。
+
+该 propose 阶段 commit（含自审修复）即 `@lyx-review-plan` 的审查对象（见 `@lyx-review-plan` 的审查范围判定：按 trailer 定位 `Change-Stage: propose` + `Change-Name: <change-name>`，`git show <commit>` + `git diff HEAD` + 未跟踪清单；trailer 未命中时回退旧前缀 `^propose: <change-name>` 并打印 DEPRECATED 兼容通道提示）。
 
 ### 7. 按第 2 步选择分支
 
@@ -132,27 +139,27 @@ argument-hint: '<需求描述>'
 
 **执行者语义（自 switchable-executor-flow 起）**：流水线每一步的主体按配置决定，不由本模板写死——review-plan / review-code 按 `[codexHost] reviewExecutor`（`main` = 主 agent 直接审查，默认；`subagent` = spawn 审查 subagent），apply 按 `[codexHost] codingExecutor`（`main` = 主 agent 直接实施，默认；`subagent` = spawn coding subagent）。**慢验证（测试 / 类型检查 / 构建）SHALL NOT 在流水线内的审查循环执行**——统一由 `@lyx-archive` 的归档前完整验证关卡执行一次。
 
-1. 自动执行 `@lyx-review-plan <change-name>` 编排流程（完整指示见 `@lyx-review-plan skill 的指示`，按其指示逐轮执行审查-修复循环；审查对象为 `propose:` commit，清零时由循环统一提交修复）。
+1. 自动执行 `@lyx-review-plan <change-name>` 编排流程（完整指示见 `@lyx-review-plan skill 的指示`，按其指示逐轮执行审查-修复循环；审查对象为 propose 阶段 commit（带 `Change-Stage: propose` trailer），清零时由循环统一提交修复）。
    - Critical 清零 → 进入下一步。
    - 其余任一种终止（熔断、驳回硬线、无法安全修复、验证失败、审查调用失败、达到轮数上限）→ **停止流水线**，复用该循环已产出的终止报告（不重新生成或重复一份）报告终止原因，结束，不执行后续步骤。
 2. **节点前置校验（进入 apply 前）**：进入 apply 之前 SHALL 校验 review-plan 是否以"正常清零"收尾——判据为**本会话记录的 review-plan 循环终止类型 == 正常清零**且无未决人工介入项（不依赖清零报告文件等会话外 artifact）。校验 SHALL 在该节点显式打印一行校验结论（含依据：终止类型、是否无未决项）；校验不过（终止类型为熔断/驳回硬线/无法安全修复/验证失败/审查调用失败/轮数上限，或存在未决项）SHALL 停在该节点，复用 review-plan 已产出的终止报告说明阻断原因，SHALL NOT 硬闯 apply。
-3. 自动执行 `@lyx-apply <change-name>` 编排流程（完整指示见 `@lyx-apply skill 的指示`；实施主体按 `codingExecutor` 决定，实施完成后由主会话确认、回写 `context.md`（实施决策）并统一提交 `apply: <change-name>`）。
-4. **节点前置校验（进入 review-code 前）**：apply 实施完成并提交时 SHALL 以 `git rev-parse HEAD` 记录本次 apply 提交后的 HEAD SHA；进入 review-code 之前 SHALL 用 `git log --grep="^apply: <change-name>" -1 --format=%H` 取最近一期 `apply: <change-name>` commit 的 SHA，并校验其等于本次记录（**历史存在旧 `apply:` commit 不得绕过本次校验**）。校验 SHALL 在该节点显式打印一行校验结论（含依据：本次记录的 SHA、最近一期 `apply:` commit SHA、是否相等）。校验不过（SHA 不等、commit 缺失或实施阶段未正常收尾）SHALL 停在该节点如实报告实施收尾失败详情，SHALL NOT 以旧 commit 作为本次审查对象进入 review-code。
-5. 自动执行 `@lyx-review-code <change-name>` 编排流程（完整指示见 `@lyx-review-code skill 的指示`；审查主体按 `reviewExecutor` 决定；审查对象为 `apply:` commit，清零时由循环统一提交修复）。
+3. 自动执行 `@lyx-apply <change-name>` 编排流程（完整指示见 `@lyx-apply skill 的指示`；实施主体按 `codingExecutor` 决定，实施完成后由主会话确认、回写 `context.md`（实施决策）并统一提交 apply 阶段 commit——message 为 CC 前缀（type 由主会话按实际改动判断）+ `Change-Stage: apply` + `Change-Name: <change-name>` trailer）。
+4. **节点前置校验（进入 review-code 前）**：apply 实施完成并提交时 SHALL 以 `git rev-parse HEAD` 记录本次 apply 提交后的 HEAD SHA；进入 review-code 之前 SHALL 按 trailer 优先定位最近一期 apply 阶段 commit 的 SHA（`git log --grep="^Change-Stage: apply$" --grep="^Change-Name: <change-name>$" --all-match -1 --format=%H`；未命中时回退旧前缀 `git log --grep="^apply: <change-name>" -1 --format=%H` 并打印 DEPRECATED 兼容通道提示），并校验其等于本次记录（**历史存在旧 apply commit 不得绕过本次校验**）。校验 SHALL 在该节点显式打印一行校验结论（含依据：本次记录的 SHA、最近一期 apply 阶段 commit SHA、是否相等）。校验不过（SHA 不等、commit 缺失或实施阶段未正常收尾）SHALL 停在该节点如实报告实施收尾失败详情，SHALL NOT 以旧 commit 作为本次审查对象进入 review-code。
+5. 自动执行 `@lyx-review-code <change-name>` 编排流程（完整指示见 `@lyx-review-code skill 的指示`；审查主体按 `reviewExecutor` 决定；审查对象为 apply 阶段 commit（带 `Change-Stage: apply` trailer），清零时由循环统一提交修复）。
    - Critical 清零 → 流水线结束，提示可手动 `@lyx-archive` 归档。
    - 其余任一种终止 → **停止流水线**，复用该循环已产出的终止报告报告终止原因，结束。
 6. 流水线执行过程中任一环节 `git commit` 失败：如实报告 Git 原始错误，停止流水线。
 
 ### 9. 手动：逐步确认
 
-1. `propose: <change-name>` commit 完成后，询问：
+1. propose 阶段 commit（带 `Change-Stage: propose` trailer）完成后，询问：
    ```
    "要不要现在跑一次 review-plan 审查循环？"
    ```
-   询问时 SHALL 附带当前状态摘要：当前阶段（`propose: <change-name>` commit 已完成）与下一步（选"是"将调用 `@lyx-review-plan <change-name>`，审查对象为该 commit），保证选"是"后的续接无歧义。
+   询问时 SHALL 附带当前状态摘要：当前阶段（propose 阶段 commit 已完成）与下一步（选"是"将调用 `@lyx-review-plan <change-name>`，审查对象为该 commit），保证选"是"后的续接无歧义。
    - **否** → 编排结束。方案已 commit；日后由用户自行 `@lyx-apply` 实施、`@lyx-review-code` 审查。
    - **是** → 继续步骤 2。
-2. 执行 `@lyx-review-plan <change-name>` 编排流程（审查由**单审查 subagent**（非 fork）执行；审查对象为 `propose:` commit，清零时由循环统一提交修复）。
+2. 执行 `@lyx-review-plan <change-name>` 编排流程（审查由**单审查 subagent**（非 fork）执行；审查对象为 propose 阶段 commit，清零时由循环统一提交修复）。
 3. 循环终止（无论何种原因）后编排结束，**不再询问隔离方式、不再询问提交、不自动衔接 apply**——日后的实施与代码审查由用户另行 `@lyx-apply`、`@lyx-review-code` 触发。
 
 ---

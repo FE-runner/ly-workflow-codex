@@ -26,25 +26,28 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 ### 1. 判定审查范围（仅首轮执行一次，后续轮次复用）
 
-按目标 change 的最近一期 `apply:` commit 作为审查基线（编排方 `@lyx-apply` 在实施完成后立即提交，提交信息 `apply: <change-name>`）：
+按目标 change 的最近一期 apply 阶段 commit 作为审查基线（编排方 `@lyx-apply` 在实施完成后立即提交，message 带 `Change-Stage: apply` 与 `Change-Name: <change-name>` trailer）：
 
 1. 解析目标 change（优先级同 `@lyx-apply`：`参数` 显式 change 名 → `openspec/changes/` 下唯一未归档 change → 询问用户）。
-2. `git log --grep="^apply: <change-name>"` 取 HEAD 侧最近一期匹配 commit：
-   - **存在** → 审查范围 = 该 `apply:` commit 差异（`git show <commit>`）+ 当前 `git diff HEAD`（循环修复）+ `git status --porcelain` 过滤 `??` 得到的未跟踪文件路径清单。工作区/暂存区干净时**仍按该 commit 审查**，不报"无变更可审查"。
-   - **不存在**（该 change 尚无 apply commit）→ 检查最近一次相关 `propose: <change-name>` commit（`git log --grep="^propose: <change-name>" -1`）：存在 → 审查范围 = 该 `propose:` commit 差异 + 当前 `git diff HEAD` + `??` 未跟踪路径清单（工作区/暂存区干净时仍按该 commit 审查）。仍不存在（零 commit 仓库或该 change 尚无任何相关 commit）→ 退化为"有未提交变更"组合：`git diff HEAD`（覆盖已暂存+未暂存）+ `??` 未跟踪清单；仓库零 commit（`git rev-parse HEAD` 失败）→ 三条固定命令组合：`git diff --cached` + `git diff` + `??` 未跟踪路径清单。无未提交变更且也无相关 commit → 报告"无变更可审查"，直接结束。
+2. 按 trailer 优先定位 apply 阶段 commit：`git log --grep="^Change-Stage: apply$" --grep="^Change-Name: <change-name>$" --all-match -1 --format='%H'`：
+   - **存在** → 审查范围 = 该 apply 阶段 commit 差异（`git show <commit>`）+ 当前 `git diff HEAD`（循环修复）+ `git status --porcelain` 过滤 `??` 得到的未跟踪文件路径清单。工作区/暂存区干净时**仍按该 commit 审查**，不报"无变更可审查"。
+   - **不存在** → 回退旧前缀 `git log --grep="^apply: <change-name>" -1 --format='%H'`；命中时按该 commit 审查，并在报告中打印 DEPRECATED 兼容通道提示。
+   - **两条通道都未命中**（该 change 尚无 apply 阶段 commit）→ 按同一规约检查最近一次 propose 阶段 commit（trailer 优先 `Change-Stage: propose`，未命中回退 `^propose: <change-name>`）：存在 → 审查范围 = 该 propose 阶段 commit 差异 + 当前 `git diff HEAD` + `??` 未跟踪路径清单（工作区/暂存区干净时仍按该 commit 审查）。仍不存在（零 commit 仓库或该 change 尚无任何相关 commit）→ 退化为"有未提交变更"组合：`git diff HEAD`（覆盖已暂存+未暂存）+ `??` 未跟踪清单；仓库零 commit（`git rev-parse HEAD` 失败）→ 三条固定命令组合：`git diff --cached` + `git diff` + `??` 未跟踪路径清单。无未提交变更且也无相关 commit → 报告"无变更可审查"，直接结束。
 
 **无论哪种情况**，额外用 `git status --porcelain` 抓取 `??` 开头的未跟踪文件路径——避免新建但未 `git add` 的文件被漏审。
 
 ```bash
+git log --grep="^Change-Stage: apply$" --grep="^Change-Name: <change-name>$" --all-match -1 --format='%H' 2>/dev/null
 git log --grep="^apply: <change-name>" -1 --format='%H' 2>/dev/null
+git log --grep="^Change-Stage: propose$" --grep="^Change-Name: <change-name>$" --all-match -1 --format='%H' 2>/dev/null
 git log --grep="^propose: <change-name>" -1 --format='%H' 2>/dev/null
 git rev-parse HEAD >/dev/null 2>&1 && echo has_head || echo no_head
 git status --porcelain | grep '^??'
 ```
 
-**首轮确定的审查范围（`git log --grep` 定位 commit / `git diff HEAD` / 零 commit 三条命令组合）必须记录下来，供首轮 TASK 使用**，不重新执行本步骤的分支选择逻辑。判定审查范围本身（选哪条分支、取哪个 commit）由当前会话完成，不下放给审查 subagent。
+**首轮确定的审查范围（trailer/旧前缀定位 commit / `git diff HEAD` / 零 commit 三条命令组合）必须记录下来，供首轮 TASK 使用**，不重新执行本步骤的分支选择逻辑。判定审查范围本身（选哪条分支、取哪个 commit）由当前会话完成，不下放给审查 subagent。
 
-**基线锚定**：首轮确定基线 commit 后 SHALL 固定该 SHA 作为本次命令执行的审查基线锚点，后续轮次的工作区/暂存区差异一律以 `git diff <固定SHA>` 计算，SHALL NOT 在循环期间重新执行 `git log --grep` 或重算 HEAD 作基线（除非基线 commit 因异常被回滚/丢失，此时才重新定位并如实报告）。循环期间发生任何中途提交（无论手滑或外部因素）SHALL 如实报告，并仍以固定基线重新计算 `git diff <固定SHA>` 说明该中途 commit 是否落在审查范围内（核对不等于替换基线），但不以此自动进入终止条件。
+**基线锚定**：首轮确定基线 commit 后 SHALL 固定该 SHA 作为本次命令执行的审查基线锚点，后续轮次的工作区/暂存区差异一律以 `git diff <固定SHA>` 计算，SHALL NOT 在循环期间重新执行 trailer/旧前缀定位或重算 HEAD 作基线（除非基线 commit 因异常被回滚/丢失，此时才重新定位并如实报告）。循环期间发生任何中途提交（无论手滑或外部因素）SHALL 如实报告，并仍以固定基线重新计算 `git diff <固定SHA>` 说明该中途 commit 是否落在审查范围内（核对不等于替换基线），但不以此自动进入终止条件。
 
 ### 2. spawn 单审查 subagent（首轮）
 
@@ -142,7 +145,7 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证统一�
 
 **正常清零结束：**
 
-先执行统一提交：先 `git add` 审查范围内的全部文件（审查范围首轮判定的 `git diff HEAD` 圈定的文件 —— 原始改动与循环期间修复的改动一并暂存；未跟踪的新建文件，扫描 `??` 清单得到的路径同样 `git add`，直到审查目标内不再有未暂存的改动），再对审查目标执行一次统一 commit（不做审查范围外的 `git add`），提交信息形如 `fix: review-code (经 N 轮修复)`。审查对象本身就是"当前未提交的变更"，原始改动与循环产生的修复是同一个待提交单元，不做隔离，一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若这次统一提交本身执行失败（Git hook 拒绝、身份未配置、锁文件冲突等），在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
+先执行统一提交：先 `git add` 审查范围内的全部文件（审查范围首轮判定的 `git diff HEAD` 圈定的文件 —— 原始改动与循环期间修复的改动一并暂存；未跟踪的新建文件，扫描 `??` 清单得到的路径同样 `git add`，直到审查目标内不再有未暂存的改动），再对审查目标执行一次统一 commit（不做审查范围外的 `git add`），提交信息采用 Conventional Commits 前缀 + trailer 结构：CC 前缀形如 `fix(<scope>): review-code 反馈修复（N 轮）`，末尾带 `Change-Stage: review-code-fix` 与 `Change-Name: <change-name>` trailer。审查目标为审查范围圈定的全部文件（有 apply 阶段 commit 时为该 commit 差异叠加循环修复；退化场景下才是未提交变更），原始内容与循环产生的修复是同一个待提交单元，不做隔离，一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若这次统一提交本身执行失败（Git hook 拒绝、身份未配置、锁文件冲突等），在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
 
 ```
 📋 代码审查报告
