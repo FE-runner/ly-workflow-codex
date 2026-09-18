@@ -10,9 +10,16 @@ import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
 import type { ExecutorKind } from '../types'
-import { getConfigPath, readLyConfig, sanitizeCodexHostExtras, sanitizeExecutor, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import { getConfigPath, mergeCodexHostConfig, readLyConfig, sanitizeExecutor, sanitizeReasoningEffort, sanitizeReviewModel, writeLyConfig } from '../utils/config'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows, uninstallWorkflows } from '../utils/installer'
-import { buildModelFieldChoices, MODEL_CHOICE_CUSTOM, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
+import {
+  buildModelFieldChoices,
+  buildReasoningEffortChoices,
+  MODEL_CHOICE_CUSTOM,
+  MODEL_CHOICE_UNSET,
+  REASONING_CHOICE_CUSTOM,
+  REASONING_CHOICE_UNSET,
+} from '../utils/model-candidates'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
 import { init } from './init'
 import { update } from './update'
@@ -296,6 +303,7 @@ async function configReviewModel(): Promise<void> {
   const config = await readLyConfig()
   const currentReviewModel = sanitizeReviewModel(config?.codexHost?.reviewModel)
   const currentExecutor = sanitizeExecutor(config?.codexHost?.reviewExecutor)
+  const currentReviewReasoningEffort = sanitizeReasoningEffort(config?.codexHost?.reviewReasoningEffort)
   // 候选/默认语义与 init 模型三连共用（buildModelFieldChoices）：
   // 留空（继承当前会话模型）+ 自定义输入 + 既有值；agent 模型需额外配置
 
@@ -318,6 +326,7 @@ async function configReviewModel(): Promise<void> {
 
   // 执行者为 main 时模型字段不生效：跳过采集，保留既有值
   let next: string | undefined = currentReviewModel
+  let nextReasoningEffort: string | undefined = currentReviewReasoningEffort
   if (nextExecutor === 'subagent') {
     console.log(ansis.gray(`  ${i18n.t('init:host.reviewModelHint')}`))
     const { choices, defaultChoice } = buildModelFieldChoices({
@@ -343,9 +352,37 @@ async function configReviewModel(): Promise<void> {
     else {
       next = model === MODEL_CHOICE_UNSET ? undefined : sanitizeReviewModel(model)
     }
+
+    const reasoningChoices = buildReasoningEffortChoices({ current: currentReviewReasoningEffort })
+    const { pick: reasoningPick } = await inquirer.prompt([{
+      type: 'list',
+      name: 'pick',
+      message: i18n.t('init:reasoning.reviewLabel'),
+      choices: reasoningChoices.choices,
+      default: reasoningChoices.defaultChoice,
+      pageSize: 15,
+    }])
+    if (reasoningPick === REASONING_CHOICE_UNSET) {
+      nextReasoningEffort = undefined
+    }
+    else if (reasoningPick === REASONING_CHOICE_CUSTOM) {
+      const { custom } = await inquirer.prompt([{
+        type: 'input',
+        name: 'custom',
+        message: i18n.t('init:reasoning.customPrompt'),
+      }])
+      nextReasoningEffort = custom?.trim() || undefined
+    }
+    else {
+      nextReasoningEffort = typeof reasoningPick === 'string' ? reasoningPick.trim() : undefined
+    }
   }
 
-  if (next === currentReviewModel && nextExecutor === (currentExecutor ?? 'main')) {
+  if (
+    next === currentReviewModel
+    && nextExecutor === (currentExecutor ?? 'main')
+    && nextReasoningEffort === currentReviewReasoningEffort
+  ) {
     console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))
     return
   }
@@ -355,23 +392,22 @@ async function configReviewModel(): Promise<void> {
     console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized`)
     return
   }
-  // 写回保留既有 codingExecutor / codingModel / spawnableModels / 两个推理档
-  const existingExtras = sanitizeCodexHostExtras(fresh.codexHost)
-  if (nextExecutor || next || Object.keys(existingExtras).length > 0) {
-    fresh.codexHost = {
-      ...existingExtras,
-      reviewExecutor: nextExecutor,
-      ...(next ? { reviewModel: next } : {}),
-    }
-  }
-  else {
-    fresh.codexHost = undefined
-  }
+  // 写回保留既有 codingExecutor / codingModel / codingReasoningEffort / spawnableModels；
+  // review 推理档按本次选择写入或清除。
+  fresh.codexHost = mergeCodexHostConfig(fresh.codexHost, {
+    reviewExecutor: nextExecutor,
+    reviewModel: next,
+    reviewReasoningEffort: nextReasoningEffort,
+  })
   await writeLyConfig(fresh)
 
   console.log()
   console.log(ansis.green(`  ✓ ${i18n.t('init:model.routingUpdated')}`))
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelCodex'))} ${next || i18n.t('init:host.reviewModelUnset')}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewReasoningEffort'))} ${
+    nextReasoningEffort
+      ? ansis.green(i18n.t('init:summary.reasoningConfigured', { value: nextReasoningEffort }))
+      : ansis.gray(i18n.t('init:summary.reasoningUnset'))}`)
 
   // 改配置后重装命令模板（codex 单宿主：模型经"模板指示 + 宿主 spawn 能力"落实，无 -m 参数；
   // 重装用于刷新模板正文与内置默认清单占位）

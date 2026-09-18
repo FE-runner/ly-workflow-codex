@@ -7,6 +7,15 @@ export const MODEL_CHOICE_UNSET = '\u0000lyx:unset'
 /** 模型字段 list 的"自定义输入"哨兵值（NUL 前缀保证绝不与任何模型 id 冲突） */
 export const MODEL_CHOICE_CUSTOM = '\u0000lyx:custom'
 
+/** 推理档 list 的"不覆盖"哨兵值（NUL 前缀保证绝不与任何档位冲突） */
+export const REASONING_CHOICE_UNSET = '\u0000lyx:reasoning-unset'
+
+/** 推理档 list 的"自定义输入"哨兵值（NUL 前缀保证绝不与任何档位冲突） */
+export const REASONING_CHOICE_CUSTOM = '\u0000lyx:reasoning-custom'
+
+/** 常见推理档建议（仅提示，不构成枚举白名单） */
+export const REASONING_EFFORT_SUGGESTIONS = ['minimal', 'low', 'medium', 'high', 'max'] as const
+
 export interface ModelFieldChoice {
   name: string
   value: string
@@ -36,6 +45,32 @@ export function buildModelFieldChoices(input: { current?: string }): ModelFieldC
   let defaultChoice = MODEL_CHOICE_UNSET
   if (hasCurrent) {
     choices.push({ name: currentClean!, value: currentClean! })
+    defaultChoice = currentClean!
+  }
+  return { choices, defaultChoice }
+}
+
+/**
+ * 推理档候选构造（init 与 menu 共用）：
+ * 候选 = [不覆盖（继承模型/宿主默认）] + 常见档位建议 + [自定义输入] + [既有值（若有）]；
+ * 既有值非空 → 附该项并默认，即使不在建议清单内也不丢弃；无既有值 → 默认"不覆盖"。
+ * 建议清单只作提示，取值仍不做枚举强校验。
+ */
+export function buildReasoningEffortChoices(input: { current?: string }): ModelFieldChoices {
+  const { current } = input
+  const currentClean = current?.trim()
+  const hasCurrent = currentClean !== undefined && currentClean !== ''
+  const suggestionValues = new Set<string>(REASONING_EFFORT_SUGGESTIONS)
+
+  const choices: ModelFieldChoice[] = [
+    { name: ansis.gray(i18n.t('init:reasoning.unsetChoice')), value: REASONING_CHOICE_UNSET },
+    ...REASONING_EFFORT_SUGGESTIONS.map(value => ({ name: value, value })),
+    { name: ansis.cyan(i18n.t('init:reasoning.customChoice')), value: REASONING_CHOICE_CUSTOM },
+  ]
+  let defaultChoice = REASONING_CHOICE_UNSET
+  if (hasCurrent) {
+    if (!suggestionValues.has(currentClean!))
+      choices.push({ name: currentClean!, value: currentClean! })
     defaultChoice = currentClean!
   }
   return { choices, defaultChoice }

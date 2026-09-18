@@ -1,6 +1,14 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { initI18n } from '../../i18n'
-import { buildModelFieldChoices, MODEL_CHOICE_CUSTOM, MODEL_CHOICE_UNSET } from '../model-candidates'
+import {
+  buildModelFieldChoices,
+  buildReasoningEffortChoices,
+  MODEL_CHOICE_CUSTOM,
+  MODEL_CHOICE_UNSET,
+  REASONING_CHOICE_CUSTOM,
+  REASONING_CHOICE_UNSET,
+  REASONING_EFFORT_SUGGESTIONS,
+} from '../model-candidates'
 
 beforeAll(async () => {
   await initI18n('zh-CN')
@@ -30,5 +38,49 @@ describe('buildModelFieldChoices (codex-model-config)', () => {
     const { choices, defaultChoice } = buildModelFieldChoices({ current: '   ' })
     expect(choices.map(c => c.value)).toEqual([MODEL_CHOICE_UNSET, MODEL_CHOICE_CUSTOM])
     expect(defaultChoice).toBe(MODEL_CHOICE_UNSET)
+  })
+})
+
+// configure-subagent-reasoning-effort：推理档候选（不覆盖 + 建议档位 + 自定义 + 既有值），不做枚举强校验。
+describe('buildReasoningEffortChoices (configure-subagent-reasoning-effort)', () => {
+  it('no current value → candidates = unset + suggestions + custom-input, default = unset', () => {
+    const { choices, defaultChoice } = buildReasoningEffortChoices({ current: undefined })
+    expect(choices.map(c => c.value)).toEqual([
+      REASONING_CHOICE_UNSET,
+      ...REASONING_EFFORT_SUGGESTIONS,
+      REASONING_CHOICE_CUSTOM,
+    ])
+    expect(defaultChoice).toBe(REASONING_CHOICE_UNSET)
+  })
+
+  it('current suggestion value becomes default without duplicate candidate', () => {
+    const { choices, defaultChoice } = buildReasoningEffortChoices({ current: ' low ' })
+    expect(choices.map(c => c.value)).toEqual([
+      REASONING_CHOICE_UNSET,
+      ...REASONING_EFFORT_SUGGESTIONS,
+      REASONING_CHOICE_CUSTOM,
+    ])
+    expect(defaultChoice).toBe('low')
+  })
+
+  it('custom current value is appended as candidate and defaulted as-is', () => {
+    const { choices, defaultChoice } = buildReasoningEffortChoices({ current: 'custom-tier' })
+    expect(choices.map(c => c.value)).toEqual([
+      REASONING_CHOICE_UNSET,
+      ...REASONING_EFFORT_SUGGESTIONS,
+      REASONING_CHOICE_CUSTOM,
+      'custom-tier',
+    ])
+    expect(defaultChoice).toBe('custom-tier')
+  })
+
+  it('blank current value is treated as unset', () => {
+    const { choices, defaultChoice } = buildReasoningEffortChoices({ current: '   ' })
+    expect(choices.map(c => c.value)).toEqual([
+      REASONING_CHOICE_UNSET,
+      ...REASONING_EFFORT_SUGGESTIONS,
+      REASONING_CHOICE_CUSTOM,
+    ])
+    expect(defaultChoice).toBe(REASONING_CHOICE_UNSET)
   })
 })

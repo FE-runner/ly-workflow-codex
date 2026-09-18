@@ -27,3 +27,11 @@
 - 既有自定义档位（如 `custom-tier`）必须保留为候选并默认选中，不能因不在建议清单被替换。
 - doctor 判定逻辑不因取值变化；只改展示文案与测试断言。
 - 文档中"向导不采集推理档 / 维护方式 = 手改配置"的旧描述需要全部清掉，避免与 spec 冲突。
+
+## 实施记录
+
+- 新增 `mergeCodexHostConfig`：用 `hasOwnProperty` 区分"override 中显式 undefined（清除）"与"override 中未提供该 key（保留既有）"，init 传全量 key、menu 只传 review 三个 key。
+- 推理档候选复用 `ModelFieldChoices` 结构，建议档位 `minimal` / `low` / `medium` / `high` / `max` 只作提示，既有自定义值仍追加为候选并默认。
+- 菜单 `configReviewModel` 的"配置未修改"早退判定已纳入 `reviewReasoningEffort`，只清空推理档也会写回。
+- doctor 仅改 i18n 文案为"未覆盖 / 已覆盖"，判定对象与既有测试结构未变。
+- 验证已通过：`pnpm typecheck`、`pnpm test`（202 tests）、`pnpm build`。

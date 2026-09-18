@@ -218,6 +218,49 @@ export function sanitizeCodexHostExtras(codexHost: LyConfig['codexHost']): Codex
   }
 }
 
+/** init/menu 写回 codexHost 时的字段覆盖集合；key 存在即视为权威值，undefined 表示清除该字段 */
+export interface CodexHostOverride {
+  reviewExecutor?: ExecutorKind
+  codingExecutor?: ExecutorKind
+  reviewModel?: string
+  codingModel?: string
+  reviewReasoningEffort?: string
+  codingReasoningEffort?: string
+}
+
+/**
+ * 合并既有 codexHost 与本次采集结果：
+ * - override 中存在的 key 为权威值，undefined 表示省略/清除该字段；
+ * - override 中不存在的 key 保留既有值（供 menu 只编辑 review 字段时保留 coding）；
+ * - spawnableModels 始终按既有原形态透传，不做清洗或丢弃。
+ */
+export function mergeCodexHostConfig(
+  existing: LyConfig['codexHost'],
+  override: CodexHostOverride = {},
+): LyConfig['codexHost'] {
+  const has = (key: keyof CodexHostOverride): boolean =>
+    Object.prototype.hasOwnProperty.call(override, key)
+
+  const reviewExecutor = sanitizeExecutor(has('reviewExecutor') ? override.reviewExecutor : existing?.reviewExecutor)
+  const codingExecutor = sanitizeExecutor(has('codingExecutor') ? override.codingExecutor : existing?.codingExecutor)
+  const reviewModel = sanitizeReviewModel(has('reviewModel') ? override.reviewModel : existing?.reviewModel)
+  const codingModel = sanitizeModelField(has('codingModel') ? override.codingModel : existing?.codingModel)
+  const reviewReasoningEffort = sanitizeReasoningEffort(has('reviewReasoningEffort') ? override.reviewReasoningEffort : existing?.reviewReasoningEffort)
+  const codingReasoningEffort = sanitizeReasoningEffort(has('codingReasoningEffort') ? override.codingReasoningEffort : existing?.codingReasoningEffort)
+
+  const merged: NonNullable<LyConfig['codexHost']> = {
+    ...(reviewExecutor ? { reviewExecutor } : {}),
+    ...(codingExecutor ? { codingExecutor } : {}),
+    ...(reviewModel ? { reviewModel } : {}),
+    ...(codingModel ? { codingModel } : {}),
+    ...(reviewReasoningEffort ? { reviewReasoningEffort } : {}),
+    ...(codingReasoningEffort ? { codingReasoningEffort } : {}),
+    ...(existing?.spawnableModels !== undefined ? { spawnableModels: existing.spawnableModels } : {}),
+  }
+
+  return Object.keys(merged).length > 0 ? merged : undefined
+}
+
 /** spawnableModels 清洗结果的形态判定（doctor 与 init 共用，避免两处口径漂移） */
 export type SpawnableModelsState = 'unset' | 'ok' | 'empty' | 'invalid'
 

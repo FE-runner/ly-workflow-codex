@@ -46,7 +46,7 @@ lycx uninstall               # 卸载
 - 软上下文 = **change 目录 `context.md`**：propose 产出（内容边界自检：无整段重复、决策可溯源、≤100 行）→ apply 维护（实施决策回写，只增不删）→ review-plan / review-code / coding subagent 消费（TASK 只传路径）
 - **驳回硬线**（终止条件）：（a）同一 Critical 复现且再被驳回；（b）连续 2 轮对当轮全部 Critical 均不认可——命中即停转人工
 - 实施 = **按 `codingExecutor` 切换**：`main`（默认）= 主 agent 直接实施；`subagent` = spawn coding subagent（非 fork，只实施 change 范围 + context.md），模型 = `codexHost.codingModel`。两条路径均由主会话统一提交 `apply: <change-name>`；subagent 路径环境级不可用回退主 agent，业务失败原样呈报转人工
-- 模型与推理档：仅在对应执行者为 `subagent` 时生效（审查 = `reviewModel` + 非空 `reviewReasoningEffort`；实施 = `codingModel` + 非空 `codingReasoningEffort`）；执行者为 `main` 时字段不生效并由 doctor 输出 WARN；模型未配置或空白回退当前会话模型，推理档空白不传、不做枚举强校验；能否 spawn 由宿主实际报错判定（报错含 `Unknown model` / `Available models: ...` 时如实展示）；读取配置失败 → "配置状态未知"提示运行 `lycx doctor`；宿主无 subagent 能力或 spawn 失败 → 环境级不可用回退
+- 模型与推理档：仅在对应执行者为 `subagent` 时生效（审查 = `reviewModel` + 非空 `reviewReasoningEffort`；实施 = `codingModel` + 非空 `codingReasoningEffort`）；执行者为 `main` 时字段不生效并由 doctor 输出 WARN；模型未配置或空白回退当前会话模型，推理档空白不传、不做枚举强校验；交互 init / 菜单可选择不覆盖（清除字段）或覆盖指定档位，非交互 update 保留原值；能否 spawn 由宿主实际报错判定（报错含 `Unknown model` / `Available models: ...` 时如实展示）；读取配置失败 → "配置状态未知"提示运行 `lycx doctor`；宿主无 subagent 能力或 spawn 失败 → 环境级不可用回退
 - 角色词绝对路径 `~/.codex/lyx/prompts/codex/{reviewer,plan-reviewer}.md` 为行为契约（角色词内容不重写）
 - 完整执行约定（spawn 协议、主会话裁决与驳回硬线、修复循环、终止条件、提交时机）内联在各 skill 模板；[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED（历史参考）
 

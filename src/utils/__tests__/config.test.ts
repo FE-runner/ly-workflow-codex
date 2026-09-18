@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultConfig, readLyConfig, sanitizeCodexHostExtras, sanitizeInstalledHosts, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
+import { createDefaultConfig, mergeCodexHostConfig, readLyConfig, sanitizeCodexHostExtras, sanitizeInstalledHosts, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
 
 // 模块顶层常量（CONFIG_FILE / LY_DIR 等）在 import 时基于 homedir() 求值，
 // 因此 hoisted 阶段就创建固定临时 home，再 mock homedir() 指向它——
@@ -338,6 +338,61 @@ describe('sanitizeCodexHostExtras', () => {
       ...extras,
       reviewModel: 'glm-5.3-flash',
     })
+  })
+})
+
+describe('mergeCodexHostConfig (configure-subagent-reasoning-effort)', () => {
+  it('explicit undefined override clears the field while preserving unrelated extras', () => {
+    const merged = mergeCodexHostConfig({
+      reviewExecutor: 'subagent',
+      reviewModel: 'glm-5.3-flash',
+      reviewReasoningEffort: 'low',
+      codingModel: 'deepseek-v4.1-flash',
+      codingReasoningEffort: 'max',
+      spawnableModels: ['glm-5.3-flash'],
+    }, {
+      reviewReasoningEffort: undefined,
+    })
+
+    expect(merged).toEqual({
+      reviewExecutor: 'subagent',
+      reviewModel: 'glm-5.3-flash',
+      codingModel: 'deepseek-v4.1-flash',
+      codingReasoningEffort: 'max',
+      spawnableModels: ['glm-5.3-flash'],
+    })
+  })
+
+  it('override value replaces the existing reasoning effort', () => {
+    const merged = mergeCodexHostConfig(
+      { reviewReasoningEffort: 'low' },
+      { reviewReasoningEffort: ' high ' },
+    )
+    expect(merged?.reviewReasoningEffort).toBe('high')
+  })
+
+  it('omitted override keys preserve existing fields (menu review-only edit)', () => {
+    const merged = mergeCodexHostConfig({
+      reviewModel: 'old',
+      reviewReasoningEffort: 'low',
+      codingExecutor: 'subagent',
+      codingModel: 'deepseek-v4.1-flash',
+      codingReasoningEffort: 'max',
+    }, {
+      reviewModel: 'new',
+      reviewReasoningEffort: undefined,
+    })
+
+    expect(merged).toEqual({
+      reviewModel: 'new',
+      codingExecutor: 'subagent',
+      codingModel: 'deepseek-v4.1-flash',
+      codingReasoningEffort: 'max',
+    })
+  })
+
+  it('clearing the only field returns undefined codexHost', () => {
+    expect(mergeCodexHostConfig({ reviewReasoningEffort: 'low' }, { reviewReasoningEffort: undefined })).toBeUndefined()
   })
 })
 

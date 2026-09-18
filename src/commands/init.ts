@@ -10,15 +10,23 @@ import { codexConfigPath, listModelProviders, readCodexConfigToml, readCodexCurr
 import {
   createDefaultConfig,
   ensureLyDir,
+  mergeCodexHostConfig,
   readLyConfig,
-  sanitizeCodexHostExtras,
   sanitizeExecutor,
   sanitizeModelField,
+  sanitizeReasoningEffort,
   sanitizeReviewModel,
   writeLyConfig,
 } from '../utils/config'
 import { getCoreCommandIds, installWorkflows } from '../utils/installer'
-import { buildModelFieldChoices, MODEL_CHOICE_CUSTOM, MODEL_CHOICE_UNSET } from '../utils/model-candidates'
+import {
+  buildModelFieldChoices,
+  buildReasoningEffortChoices,
+  MODEL_CHOICE_CUSTOM,
+  MODEL_CHOICE_UNSET,
+  REASONING_CHOICE_CUSTOM,
+  REASONING_CHOICE_UNSET,
+} from '../utils/model-candidates'
 import { PACKAGE_NAME } from '../utils/package-meta'
 
 // ═══════════════════════════════════════════════════════
@@ -33,6 +41,8 @@ interface CodexHostCollected {
   codingExecutor?: ExecutorKind
   reviewModel?: string
   codingModel?: string
+  reviewReasoningEffort?: string
+  codingReasoningEffort?: string
 }
 
 type ProviderChoice
@@ -45,6 +55,12 @@ type ProviderChoice
 const MODEL_FIELDS = [
   { key: 'reviewModel', labelKey: 'init:model.reviewModelA', sanitize: sanitizeReviewModel },
   { key: 'codingModel', labelKey: 'init:model.codingModel', sanitize: sanitizeModelField },
+] as const
+
+// 推理档覆盖字段的驱动元数据（与对应执行者/模型字段配对）
+const REASONING_FIELDS = [
+  { key: 'reviewReasoningEffort', executorKey: 'reviewExecutor', labelKey: 'init:reasoning.reviewLabel' },
+  { key: 'codingReasoningEffort', executorKey: 'codingExecutor', labelKey: 'init:reasoning.codingLabel' },
 ] as const
 
 // 执行者字段的驱动元数据（候选固定为 main / subagent，默认 main）
@@ -109,6 +125,40 @@ async function pickModelField(input: {
     }])
     const model = custom?.trim()
     return model ? model : undefined
+  }
+  return typeof pick === 'string' ? pick.trim() : undefined
+}
+
+/**
+ * 推理档覆盖选择：候选 = 不覆盖 + 建议档位 + 自定义输入 + 既有值。
+ * 返回 undefined 表示不覆盖（清除字段）；自定义输入留空同样等价于不覆盖。
+ */
+async function pickReasoningEffortField(input: {
+  field: typeof REASONING_FIELDS[number]
+  current?: string
+}): Promise<string | undefined> {
+  const { field, current } = input
+  const { choices, defaultChoice } = buildReasoningEffortChoices({ current })
+
+  const { pick } = await inquirer.prompt([{
+    type: 'list',
+    name: 'pick',
+    message: i18n.t(field.labelKey),
+    choices,
+    default: defaultChoice,
+    pageSize: 15,
+  }])
+
+  if (pick === REASONING_CHOICE_UNSET)
+    return undefined
+  if (pick === REASONING_CHOICE_CUSTOM) {
+    const { custom } = await inquirer.prompt([{
+      type: 'input',
+      name: 'custom',
+      message: i18n.t('init:reasoning.customPrompt'),
+    }])
+    const value = custom?.trim()
+    return value || undefined
   }
   return typeof pick === 'string' ? pick.trim() : undefined
 }
@@ -259,6 +309,18 @@ async function collectCodexHostConfig(options: {
     const raw = await pickModelField({ field, current })
     collected[field.key] = field.sanitize(raw)
   }
+
+  // ── Step 5: 推理档覆盖采集（仅在对应执行者为 subagent 时提示；main 下保留既有值）──
+  for (const field of REASONING_FIELDS) {
+    if (collected[field.executorKey] !== 'subagent') {
+      collected[field.key] = options.defaults[field.key]?.trim() || undefined
+      continue
+    }
+    collected[field.key] = await pickReasoningEffortField({
+      field,
+      current: options.defaults[field.key],
+    })
+  }
   return collected
 }
 
@@ -276,6 +338,16 @@ function printSummary(input: { models: CodexHostCollected, commandCount: number 
       return ansis.yellow(i18n.t('init:summary.modelIneffective', { model: value }))
     return ansis.green(value)
   }
+  const reasoningLabel = (value: string | undefined, effective: boolean): string => {
+    if (!effective) {
+      return value
+        ? ansis.yellow(i18n.t('init:summary.reasoningIneffective', { value }))
+        : ansis.gray(i18n.t('init:summary.reasoningIneffectiveUnset'))
+    }
+    return value
+      ? ansis.green(i18n.t('init:summary.reasoningConfigured', { value }))
+      : ansis.gray(i18n.t('init:summary.reasoningUnset'))
+  }
   const reviewEffective = models.reviewExecutor === 'subagent'
   const codingEffective = models.codingExecutor === 'subagent'
   console.log()
@@ -287,6 +359,8 @@ function printSummary(input: { models: CodexHostCollected, commandCount: number 
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingExecutor'))}  ${executorLabel(models.codingExecutor)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))}  ${modelLabel(models.reviewModel, reviewEffective)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))}  ${modelLabel(models.codingModel, codingEffective)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewReasoningEffort'))}  ${reasoningLabel(models.reviewReasoningEffort, reviewEffective)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.codingReasoningEffort'))}  ${reasoningLabel(models.codingReasoningEffort, codingEffective)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(commandCount.toString())}`)
   console.log(ansis.yellow('━'.repeat(50)))
   console.log()
@@ -338,12 +412,13 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
   const selectedWorkflows = getCoreCommandIds()
   // 既有配置中的执行者与模型字段作为交互/非交互默认值（空白等价未配置；保真写回不丢）
-  const existingExtras = sanitizeCodexHostExtras(existingConfig?.codexHost)
   const defaultCollected: CodexHostCollected = {
     reviewExecutor: sanitizeExecutor(existingConfig?.codexHost?.reviewExecutor),
     codingExecutor: sanitizeExecutor(existingConfig?.codexHost?.codingExecutor),
     reviewModel: sanitizeReviewModel(existingConfig?.codexHost?.reviewModel),
-    codingModel: existingExtras.codingModel,
+    codingModel: sanitizeModelField(existingConfig?.codexHost?.codingModel),
+    reviewReasoningEffort: sanitizeReasoningEffort(existingConfig?.codexHost?.reviewReasoningEffort),
+    codingReasoningEffort: sanitizeReasoningEffort(existingConfig?.codexHost?.codingReasoningEffort),
   }
   // 执行者候选固定为 main / subagent；模型候选 = 留空 + 自定义输入 + 既有值。
   // agent 模型需额外配置，能否 spawn 由宿主实际能力决定（详见模板与 lycx doctor 提示）
@@ -386,13 +461,14 @@ export async function init(options: InitOptions = {}): Promise<void> {
     const config = createDefaultConfig({
       language,
       installedWorkflows: selectedWorkflows,
-      codexHost: {
-        ...existingExtras,
+      codexHost: mergeCodexHostConfig(existingConfig?.codexHost, {
         reviewExecutor: collectedModels.reviewExecutor,
         codingExecutor: collectedModels.codingExecutor,
         reviewModel: collectedModels.reviewModel,
         codingModel: collectedModels.codingModel,
-      },
+        reviewReasoningEffort: collectedModels.reviewReasoningEffort,
+        codingReasoningEffort: collectedModels.codingReasoningEffort,
+      }),
       installedHosts: ['codex'],
     })
 
