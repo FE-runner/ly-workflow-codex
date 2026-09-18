@@ -5,13 +5,13 @@
 
 ## 2. init 向导采集
 
-- [ ] 2.1 扩展 `CodexHostCollected` 与 `defaultCollected`，纳入 `reviewReasoningEffort` / `codingReasoningEffort`；执行者为 `subagent` 时在对应模型采集后追加推理档覆盖选择，执行者为 `main` 时保留既有推理档值不采集；验证 `pnpm typecheck` 通过且候选/合并单测覆盖该数据流
+- [ ] 2.1 扩展 `CodexHostCollected` 与 `defaultCollected`，纳入 `reviewReasoningEffort` / `codingReasoningEffort`；执行者为 `subagent` 时在对应模型采集后追加推理档覆盖选择（自定义输入留空等价"不覆盖"），执行者为 `main` 时保留既有推理档值不采集；验证 `pnpm typecheck` 通过且候选/合并单测覆盖该数据流
 - [ ] 2.2 交互 `lycx init` 写回改用新的合并辅助逻辑，确保选择"不覆盖"时清除既有字段，非交互 `--skip-prompt` / update 保留原值；验证相关单元测试通过并检查写回配置字段形态
-- [ ] 2.3 配置摘要展示每个 subagent 的推理档状态（不覆盖 / 已覆盖: 值），验证 `pnpm typecheck` 通过且摘要文案与 spec 用语一致
+- [ ] 2.3 配置摘要展示每个 subagent 的推理档状态（不覆盖 / 已覆盖: 值）；执行者为 `main` 时标注"主 agent 执行时不生效"；验证 `pnpm typecheck` 通过且摘要文案与 spec 用语一致
 
 ## 3. 菜单与文案
 
-- [ ] 3.1 `lycx` 菜单"配置审查模型"在 `reviewExecutor = "subagent"` 时追加 `reviewReasoningEffort` 覆盖选择，显式"不覆盖"清除该字段，未触碰时保留，且不影响 coding 与 spawnableModels；验证菜单写回路径复用合并辅助逻辑并补必要测试
+- [ ] 3.1 `lycx` 菜单"配置审查模型"在 `reviewExecutor = "subagent"` 时追加 `reviewReasoningEffort` 覆盖选择，显式"不覆盖"清除该字段，未触碰时保留，且不影响 coding 与 spawnableModels；同步把"模型与执行者都没变"的提前 return 判定纳入推理档选择变化（只改/清空推理档也必须写回）；验证菜单写回路径复用合并辅助逻辑并补必要测试
 - [ ] 3.2 补齐 zh-CN / en i18n：推理档候选、覆盖提示、摘要文案、现状检测提示改为"向导可采集覆盖/不覆盖"；验证 `pnpm typecheck` 通过且不再存在"向导不采集推理档"的旧文案
 
 ## 4. doctor 与文档
