@@ -176,6 +176,7 @@ describe('codex template set', () => {
     expect(propose).toContain('developmentBranch')
     expect(propose).toContain('worktreePath')
     expect(propose).toContain('detached HEAD')
+    expect(propose).toContain('已保留、未清理')
 
     const archive = readFileSync(join(SKILLS_TEMPLATES_DIR, 'archive.md'), 'utf-8')
     expect(archive).toContain('归档后分支收尾')
@@ -185,8 +186,13 @@ describe('codex template set', () => {
     expect(archive).toContain('git merge --no-ff')
     expect(archive).toContain('git worktree remove')
     expect(archive).toContain('git branch -d')
+    expect(archive).toContain('git -C "<targetWorktree>" worktree remove "<worktreePath>"')
     expect(archive).toContain('SHALL NOT 自动 `git push`')
     expect(archive).toContain('sourceBranch` 为 `null`')
+    expect(archive).toContain('完全缺少 isolation metadata')
+    expect(archive).toContain('checkout / 切回 `targetBranch` 失败')
+    expect(archive).toContain('`targetBranch` SHALL NOT 等于 `developmentBranch`')
+    expect(archive.indexOf('展示确认前完成一致性校验')).toBeLessThan(archive.indexOf('### 3. 展示收尾提示'))
 
     const worktree = readFileSync(join(SKILLS_TEMPLATES_DIR, 'worktree.md'), 'utf-8')
     expect(worktree).toContain('手动 `@lyx-worktree add` 不强制记录该 metadata')

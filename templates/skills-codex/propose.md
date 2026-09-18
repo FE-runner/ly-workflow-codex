@@ -61,6 +61,8 @@ argument-hint: '<需求描述>'
     4. 进入步骤 2，后续编排（opsx:propose → 自审 → commit → 流水线）在当前工作目录原位继续。
   - **留在当前分支**：捕获 `ISOLATION=none`、`ISOLATION_SOURCE_BRANCH="$SOURCE_BRANCH"`、`DEVELOPMENT_BRANCH=null`；不创建 worktree、不切换分支，直接进入步骤 2。若 `git status --porcelain` 非空，触发与"本项目切新分支"相同的脏改动三选一处置询问（其中 Stash 选项因无切换动作**不自动 pop**——改动收进 stash 由用户日后 `git stash pop` 自取，执行时如实说明；WIP commit 选项将改动提交到当前分支，message 沿用同一文案）。
 
+**隔离动作成功后的公共失败路径**：从步骤 1 捕获/创建隔离环境成功开始，步骤 2-4 任一后续中止、失败或用户取消时，命令 SHALL 报告 `ISOLATION`、`DEVELOPMENT_BRANCH`、`WORKTREE_PATH` 与“已保留、未清理”的状态，SHALL NOT 自动合并或删除。
+
 ### 2. 询问全自动/手动（创建方案前，全局只问一次）
 
 直接向用户提问：
@@ -122,6 +124,8 @@ lyx:
 ```
 
 `isolation: none` 时 `sourceBranch` 仍记录当前分支，`developmentBranch` / `worktreePath` 为 `null`。`sourceBranch` 缺失时写 `null`，不得猜测。该 metadata 属于 propose 提交单元，随步骤 6 的 `git add -- openspec/changes/<change-name>/` 一起提交。
+
+写入 metadata 后 SHALL 再运行一次 `openspec validate --changes <change-name>`；若验证失败，停止在 commit 前并报告原始错误。
 
 ### 6. 暂存并立即 commit（每步 commit）
 
