@@ -8,7 +8,7 @@ import { i18n } from '../i18n'
 import { readCodexCurrentModel } from '../utils/codex-provider'
 import { LY_PROMPTS_DIR, readLyConfig, sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, sanitizeSpawnableModels } from '../utils/config'
 import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
-import { detectOpenspecCli, detectOpenspecSkills } from '../utils/preflight'
+import { inspectOpenspec } from '../utils/preflight'
 
 const OK = ansis.green('✓')
 const WARN = ansis.yellow('⚠')
@@ -29,6 +29,26 @@ function execSafe(cmd: string): string | null {
     return execSync(cmd, { stdio: 'pipe', timeout: 10000 }).toString().trim()
   }
   catch { return null }
+}
+
+function buildOpenspecSkillsDetail(status: string, missing: string[]): string {
+  if (status === 'project-ready')
+    return i18n.t('common:doctor.skillsInitialized')
+  if (status === 'global-only')
+    return i18n.t('common:doctor.skillsGlobalOnly')
+  if (status === 'unknown')
+    return i18n.t('common:doctor.skillsUnknown')
+  return i18n.t('common:doctor.skillsMissing', { list: missing.join(', ') || 'unknown' })
+}
+
+function buildOpenspecRootDetail(status: string): string {
+  if (status === 'healthy')
+    return i18n.t('common:doctor.rootHealthy')
+  if (status === 'missing')
+    return i18n.t('common:doctor.rootMissing')
+  if (status === 'unhealthy')
+    return i18n.t('common:doctor.rootUnhealthy')
+  return i18n.t('common:doctor.rootNotChecked')
 }
 
 export interface SubagentModelFieldResult {
@@ -231,23 +251,33 @@ export async function doctor(): Promise<void> {
     detail: roleFiles.length > 0 ? roleFiles.join(', ') : 'None (~/.codex/lyx/prompts/codex/)',
   })
 
-  // 5. OpenSpec CLI
-  const openspecCli = await detectOpenspecCli()
+  // 5. OpenSpec dependency (shared inspector)
+  const openspec = await inspectOpenspec()
   checks.push({
     label: 'OpenSpec CLI',
-    status: openspecCli.installed ? OK : WARN,
-    detail: openspecCli.installed ? `v${openspecCli.version}` : i18n.t('common:doctor.openspecCliMissing'),
+    status: openspec.cli.status === 'ok' ? OK : WARN,
+    detail: openspec.cli.status === 'ok'
+      ? `v${openspec.cli.version}`
+      : openspec.cli.status === 'unhealthy'
+        ? i18n.t('common:doctor.openspecCliUnhealthy')
+        : i18n.t('common:doctor.openspecCliMissing'),
   })
 
   // 6. OpenSpec skills (openspec-* SKILL.md)
-  const hasOpenspecSkills = detectOpenspecSkills()
   checks.push({
     label: 'OpenSpec skills',
-    status: hasOpenspecSkills ? OK : WARN,
-    detail: hasOpenspecSkills ? i18n.t('common:doctor.skillsInitialized') : i18n.t('common:doctor.skillsMissing'),
+    status: openspec.skills.status === 'project-ready' ? OK : WARN,
+    detail: buildOpenspecSkillsDetail(openspec.skills.status, openspec.skills.missing),
   })
 
-  // 7. Codex 子代理模型配置（提示型）：三字段留空 = 继承当前会话模型；非空 = 已配置
+  // 7. OpenSpec root
+  checks.push({
+    label: 'OpenSpec root',
+    status: openspec.root.status === 'healthy' ? OK : WARN,
+    detail: buildOpenspecRootDetail(openspec.root.status),
+  })
+
+  // 8. Codex 子代理模型配置（提示型）：三字段留空 = 继承当前会话模型；非空 = 已配置
   // （agent 模型需额外配置，能否 spawn 由环境实际能力决定，不做清单强校验）。
   // config 缺失时第 7 项仍按全字段未配置判定 OK（行为可接受）：config 文件缺失已由
   // 第 1 项 config 检查（WARN）兜底，此处无需重复报错。
@@ -313,9 +343,8 @@ export async function status(): Promise<void> {
     }
   }
 
-  // OpenSpec dependency (same detectors as installer preflight)
-  const openspecCli = await detectOpenspecCli()
-  const hasOpenspecSkills = detectOpenspecSkills()
+  // OpenSpec dependency (shared inspector)
+  const openspec = await inspectOpenspec()
 
   // Output
   console.log()
@@ -324,8 +353,9 @@ export async function status(): Promise<void> {
   console.log(`  ${ansis.bold('Version')}        ${installedVer}${installedVer !== latestVer ? ansis.yellow(` (latest: ${latestVer})`) : ansis.green(' (up to date)')}`)
   console.log(`  ${ansis.bold('Commands')}       ${cmds.length}`)
   console.log(`  ${ansis.bold('Review model')}   ${reviewModel}`)
-  console.log(`  ${ansis.bold('OpenSpec CLI')}   ${openspecCli.installed ? `v${openspecCli.version}` : ansis.yellow(i18n.t('common:doctor.openspecCliMissing'))}`)
-  console.log(`  ${ansis.bold('OpenSpec skills')}${hasOpenspecSkills ? ` ${i18n.t('common:doctor.skillsInitialized')}` : ansis.yellow(` ${i18n.t('common:doctor.skillsMissing')}`)}`)
+  console.log(`  ${ansis.bold('OpenSpec CLI')}   ${openspec.cli.status === 'ok' ? `v${openspec.cli.version}` : ansis.yellow(i18n.t(openspec.cli.status === 'unhealthy' ? 'common:doctor.openspecCliUnhealthy' : 'common:doctor.openspecCliMissing'))}`)
+  console.log(`  ${ansis.bold('OpenSpec skills')} ${openspec.skills.status === 'project-ready' ? i18n.t('common:doctor.skillsInitialized') : ansis.yellow(buildOpenspecSkillsDetail(openspec.skills.status, openspec.skills.missing))}`)
+  console.log(`  ${ansis.bold('OpenSpec root')}   ${openspec.root.status === 'healthy' ? i18n.t('common:doctor.rootHealthy') : ansis.yellow(buildOpenspecRootDetail(openspec.root.status))}`)
   console.log(`  ${ansis.bold('Active tasks')}   ${activeTasks > 0 ? ansis.yellow(String(activeTasks)) : '0'}`)
   console.log()
 }

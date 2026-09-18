@@ -14,8 +14,11 @@
 
 ```bash
 npx ly-workflow-codex        # 交互式菜单（裸命令）
-npx ly-workflow-codex init   # 全量初始化（语言 → API 提供方 → Codex 现状检测 → 模型三连 → 摘要；生成项目 AGENTS.md + openspec init + 安装 14 个命令）
+npx ly-workflow-codex init   # 安装 14 个 skills + 配置；OpenSpec 默认 check-only（不写当前项目）
+npx ly-workflow-codex init --init-openspec  # 显式初始化当前项目 OpenSpec root/skills
 lycx doctor / status         # 体检 / 安装概览
+lycx openspec inspect --json # 只读 OpenSpec 三层检查
+lycx openspec ensure --json  # 修复 OpenSpec CLI/skills/root
 lycx uninstall               # 卸载
 ```
 
@@ -25,7 +28,7 @@ lycx uninstall               # 卸载
 
 | 命令 | 一句话说明 |
 |------|-----------|
-| `@lyx-init` | 生成项目 AGENTS.md + `openspec init` + 自动 commit |
+| `@lyx-init` | 生成项目 AGENTS.md + `lycx openspec ensure`（共享 CLI/skills/root 修复）+ 自动 commit |
 | `@lyx-explore` | 委托 `@openspec-explore skill`（纯薄壳） |
 | `@lyx-propose` | 编排入口：隔离三选一 → 全自动/手动 → `@openspec-propose skill` → 方案自审 → context.md 产出 → commit `propose:`；全自动 = review-plan → apply → review-code 流水线 |
 | `@lyx-apply` | 按 `codingExecutor` 实施（`main` = 主 agent 直接实施；`subagent` = spawn coding subagent，非 fork，经 context.md 获取软上下文）读 tasks.md 逐任务实施 + 验证 + 勾 checkbox，主会话确认后回写 context.md 并 commit `apply:` |

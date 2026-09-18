@@ -50,8 +50,9 @@ src/utils/
   installer-template.ts      模板渲染：{{REVIEW_MODEL}} 旧位兼容（历史模板/旧安装位）、
                               codingModel 模型指示透传、{{LITE_MODE_FLAG}} 恒空、条件块折叠
   codex-provider.ts          采集 ~/.codex/config.toml 的 [model_providers.*]（init 向导数据源）
-  preflight.ts               入口处 openspec 依赖检查：openspec CLI + openspec-* skills
-                             （~/.agents/skills/ 或项目 .agents/skills/，openspec init 产物）
+  preflight.ts               入口处 openspec 依赖检查：共享三层检查（CLI + 按 profile
+                             推导的 skills + openspec doctor --json root 健康），
+                             支持 inspect/ensure；扫描项目/全局 .agents 与 .codex skills
   legacy-cleanup.ts          codex 侧残留清理：~/.codex/AGENTS.md LY 区块、config.toml 旧注释
                              + [features.multi_agent_v2]、agents/ly-*.toml（update/uninstall 时回收）
   host-adapters.ts           codex 单宿主适配器（ADAPTERS 仅注册 codex；ROLE_FILE verify）
@@ -70,8 +71,11 @@ docs/codex-exec-contract.md  审查子会话调用契约（不可改；命令模
 
 ```bash
 npx ly-workflow-codex        # 一键安装/菜单（默认动作，含 preflight）
-npx ly-workflow-codex init   # 全量初始化（i 为别名）
+npx ly-workflow-codex init   # 安装 14 个 skills + 配置；OpenSpec 默认 check-only（i 为别名）
+npx ly-workflow-codex init --init-openspec  # 显式初始化当前项目 OpenSpec root/skills
 lycx doctor / status         # 体检 / 安装概览
+lycx openspec inspect --json # 只读 OpenSpec 依赖检查
+lycx openspec ensure --json  # 修复 OpenSpec CLI/skills/root
 lycx uninstall               # 卸载 ~/.agents/skills/lyx-*（含旧 ~/.codex/prompts/ly-*.md 残留）与 ~/.codex/lyx/ 配置
 ```
 
@@ -124,6 +128,7 @@ spawnableModels = [...]    # 本机实测可 spawn 的模型清单（可选，�
 3. **实施走 coding subagent 而非本会话自实施**：不存在 routing 概念与外部实施后端；coding subagent 非 fork spawn、只实施 change 范围、可指定模型、经 context.md 获取软上下文，改动回传主会话，由主会话确认后回写 context.md 并统一提交（提交权收归主会话）。
 4. **配置单宿主于 `~/.codex/lyx/config.toml`**：installedHosts 仅保留为兼容旧配置读取的字段（恒 `['codex']`）；`codexHost.reviewModel`/`codingModel` 及对应 `reviewReasoningEffort`/`codingReasoningEffort` 由模板运行时读取并落实（模型未配置回退当前会话模型，推理档空白不传；init/update/menu 重写时保留原值，手工维护入口为 `[codexHost]` 且向导不采集推理档）；执行者字段 `reviewExecutor`/`codingExecutor` 决定审查与实施主体（未配置等价 `main`），模型与推理档字段仅在对应执行者为 `subagent` 时生效。
 5. **双宿主遗产（claude 宿主、wrapper、Web UI、routing.*）已随拆分移除**：模板/文档/spec 只描述 codex 单宿主行为；与上游 ly-workflow 的关系（v0.2.0 起安装位改为 `~/.agents/skills/lyx-*/`，与 ly-workflow 的 `~/.codex/prompts/ly-*.md` 不再冲突；旧安装位残留由 init/uninstall 自动清理；迁移路径）见 [README.md](./README.md)。
+6. **OpenSpec 依赖检查统一为共享三层模型**：`lycx init` / `@lyx-init` / `lycx doctor` 共用 CLI、skills、root 三层检查；skills 按 OpenSpec profile 推导并扫描项目/全局 `.agents`/`.codex` roots，仅全局可用时 `global-only` WARN 并继续；`lycx init` 默认 check-only，`--init-openspec` 与 `@lyx-init` 才执行项目级修复。
 
 ## 相关文件
 

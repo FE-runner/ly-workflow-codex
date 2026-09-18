@@ -12,7 +12,7 @@ import { i18n, initI18n } from './i18n'
 import { readLyConfig } from './utils/config'
 import { uninstallWorkflows } from './utils/installer'
 import { BIN_NAME, PACKAGE_NAME } from './utils/package-meta'
-import { checkExternalDeps } from './utils/preflight'
+import { checkExternalDeps, confirmOpenspecCliInstall, ensureOpenspec, inspectOpenspec, printOpenspecInspection } from './utils/preflight'
 
 function customizeHelp(sections: any[]): any[] {
   sections.unshift({
@@ -27,6 +27,8 @@ function customizeHelp(sections: any[]): any[] {
       `  ${ansis.cyan(`${BIN_NAME} init`)} | ${ansis.cyan('i')}     ${i18n.t('cli:help.commandDescriptions.initConfig')}`,
       `  ${ansis.cyan(`${BIN_NAME} doctor`)}       Check installation health`,
       `  ${ansis.cyan(`${BIN_NAME} status`)}       Show installation overview`,
+      `  ${ansis.cyan(`${BIN_NAME} openspec inspect`)}  Inspect OpenSpec dependency state`,
+      `  ${ansis.cyan(`${BIN_NAME} openspec ensure`)}   Ensure OpenSpec CLI/skills/root`,
       `  ${ansis.cyan(`${BIN_NAME} uninstall`)}    Uninstall ${PACKAGE_NAME} (non-interactive)`,
       '',
       ansis.gray(`  ${i18n.t('cli:help.shortcuts')}`),
@@ -100,12 +102,44 @@ export async function setupCommands(cli: CAC): Promise<void> {
     .option('--skip-prompt, -s', i18n.t('cli:help.optionDescriptions.skipAllPrompts'))
     .option('--workflows, -w <workflows>', i18n.t('cli:help.optionDescriptions.workflows'))
     .option('--install-dir, -d <path>', i18n.t('cli:help.optionDescriptions.installDir'))
+    .option('--init-openspec', i18n.t('cli:help.optionDescriptions.initOpenspec'))
     .action(async (options: CliOptions) => {
       if (options.lang) {
         await initI18n(options.lang)
       }
-      await checkExternalDeps({ skipPrompt: options.skipPrompt })
+      await checkExternalDeps({ skipPrompt: options.skipPrompt, initOpenspec: options.initOpenspec })
       await init(options)
+    })
+
+  // OpenSpec dependency inspection / repair
+  cli
+    .command('openspec <action>', 'Inspect or ensure OpenSpec dependencies')
+    .option('--json', 'Output JSON')
+    .option('--yes, -y', 'Skip confirmation')
+    .action(async (action: string, options: { json?: boolean; yes?: boolean }) => {
+      if (action === 'inspect') {
+        const result = await inspectOpenspec()
+        if (options.json)
+          console.log(JSON.stringify(result, null, 2))
+        else
+          printOpenspecInspection(result)
+        return
+      }
+
+      if (action === 'ensure') {
+        const result = await ensureOpenspec({
+          yes: options.yes,
+          confirmInstall: () => confirmOpenspecCliInstall(),
+        })
+        if (options.json)
+          console.log(JSON.stringify(result, null, 2))
+        else
+          printOpenspecInspection(result.inspection)
+        return
+      }
+
+      console.error(ansis.red(`未知 openspec 子命令: ${action}`))
+      process.exitCode = 1
     })
 
   // Doctor: environment health check

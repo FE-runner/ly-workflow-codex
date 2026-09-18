@@ -39,3 +39,11 @@
 - 用户删除 OpenSpec skills 后，`@lyx-propose` 无法委托 `@openspec-propose`，暴露当前 boolean 检查误判。
 - 用户要求两个入口检查一致，但明确拒绝 `lycx init` 默认写当前项目的代价。
 - 用户确认全局或项目任一位置有 skills 可用即可继续；仅全局可用时必须 WARN。
+
+## 实施决策
+
+- 在 `src/utils/preflight.ts` 落地 `inspectOpenspec()` / `ensureOpenspec()`：三层检查统一返回 `cli` / `skills` / `root` / `actions`，`ensure` 只修复 CLI 缺失、root 缺失与 skills missing；`global-only` 只产生 WARN action，不写项目。
+- skills required 清单来自 `openspec config list --json` 的 workflows，并补齐 archive/bulk-archive 的 sync 依赖；profile 读取失败时回退 OpenSpec core workflows，状态标为 unknown/WARN。
+- skills 扫描覆盖项目与全局 `.agents/skills`、`.codex/skills` 四类根，项目级命中优先；doctor/status 复用同一 inspector 展示来源与缺失清单。
+- 新增 `lycx openspec inspect|ensure` 子命令；`lycx init` 默认 check-only，`--init-openspec` 才调用 ensure；`@lyx-init` 模板改为优先调用 `lycx openspec ensure --yes --json`，缺失时回退 `npx -y ly-workflow-codex ...`。
+- 本次 `@lyx-review-plan` 配置为 `reviewExecutor = "subagent"`、`reviewModel = "glm-5.3-flash"`，因未配置 `reviewReasoningEffort` 被上游拒绝；按模板回退主 agent 审查，Critical 为 0。

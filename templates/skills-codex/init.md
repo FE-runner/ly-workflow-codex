@@ -22,24 +22,21 @@ argument-hint: '<项目摘要或名称>'
 
 由当前会话直接生成/更新项目根目录的 `AGENTS.md`（单 Agent 模式，无外部技能委托）：以 `参数`（项目摘要或名称）为线索，结合当前仓库结构，写清模块职责、入口与启动方式、核心类型、构建/测试命令、关键约定。已存在时增量更新，不推翻既有内容、不删除既有章节。
 
-### 步骤 2：初始化 OpenSpec
+### 步骤 2：确保 OpenSpec 可用（共享检查/修复入口）
 
-1. **检测 OpenSpec CLI**：
+1. **调用共享 ensure 入口**（当前工作目录下执行，禁止 `cd` 到其他路径；不确定当前目录先 `pwd` 确认）：
    ```bash
-   openspec --version
+   lycx openspec ensure --yes --json
    ```
-2. **未安装则全局安装**：
+   若 `lycx` 不在 PATH，则回退：
    ```bash
-   npm install -g @fission-ai/openspec@latest
+   npx -y ly-workflow-codex openspec ensure --yes --json
    ```
-3. **检查是否已初始化**：
-   ```bash
-   ls -la openspec/ 2>/dev/null || echo "Not initialized"
-   ```
-4. **未初始化则运行**（当前工作目录下执行，禁止 `cd` 到其他路径；不确定当前目录先 `pwd` 确认）——用 `--tools codex` 非交互指定 AI 工具为 Codex，避免卡在交互式选择上：
-   ```bash
-   openspec init --tools codex
-   ```
+2. **解析 JSON 结果**：读取 `cli.status`、`skills.status`、`skills.missing`、`root.status`、`actions` 与 `executed`。
+   - `skills.status === "global-only"`：输出 WARN 说明 skills 仅全局可用但命令可继续；不自动固化项目级。
+   - `cli.status !== "ok"`、`skills.status === "missing"` 或 `root.status` 为 `missing` / `unhealthy` 且 ensure 后仍未修复：停止，展示缺失 skill 清单与 `openspec doctor --json` 的 fix 建议。
+   - `root.status === "healthy"` 且 `skills.status` 为 `project-ready` 或 `global-only`：继续步骤 3。
+3. **不要自行复制 workflow → skill 检测逻辑**。CLI、skills、root 的检查与修复统一由 `lycx openspec ensure` 负责。
 
 ### 步骤 3：提交初始化产物
 
