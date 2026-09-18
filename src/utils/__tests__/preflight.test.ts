@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'pathe'
 import { initI18n } from '../../i18n'
 
-import { checkExternalDeps, detectOpenspecCli, detectOpenspecSkills, inspectOpenspec } from '../preflight'
+import { checkExternalDeps, detectOpenspecCli, detectOpenspecSkills, ensureOpenspec, inspectOpenspec } from '../preflight'
 
 const execFileMock = vi.fn()
 const spawnMock = vi.fn()
@@ -146,6 +146,18 @@ describe('inspectOpenspec', () => {
     expect(result.actions).toContainEqual({ kind: 'warn-global-only' })
   })
 
+  it('treats mixed project/global skill sources as global-only', async () => {
+    const globalRoot = join(homedir(), '.agents', 'skills')
+    existsSyncMock.mockImplementation((p: any) => {
+      const path = String(p)
+      if (path.includes('openspec-explore'))
+        return path.startsWith(globalRoot)
+      return true
+    })
+    const result = await inspectOpenspec()
+    expect(result.skills.status).toBe('global-only')
+  })
+
   it('reports missing skills when one required skill is absent everywhere', async () => {
     existsSyncMock.mockImplementation((p: any) => !String(p).includes('openspec-explore'))
     const result = await inspectOpenspec()
@@ -177,6 +189,27 @@ describe('inspectOpenspec', () => {
     expect(result.root.status).toBe('missing')
   })
 
+  it('requires root.healthy=true instead of accepting malformed doctor output as healthy', async () => {
+    existsSyncMock.mockReturnValue(true)
+    execFileMock.mockImplementation((cmd: string, args: any[], _opts: any, cb: any) => {
+      if (cmd === 'openspec' && args[0] === '--version') {
+        cb(null, '1.13.0\n')
+        return
+      }
+      if (cmd === 'openspec' && args[0] === 'config') {
+        cb(null, JSON.stringify({ workflows: ['propose', 'explore', 'apply', 'archive'] }))
+        return
+      }
+      if (cmd === 'openspec' && args[0] === 'doctor') {
+        cb(null, JSON.stringify({ root: {}, status: [] }))
+        return
+      }
+      cb(null, '')
+    })
+    const result = await inspectOpenspec()
+    expect(result.root.status).toBe('unhealthy')
+  })
+
   it('reports skills unknown when profile read fails but fallback skills exist', async () => {
     existsSyncMock.mockReturnValue(true)
     execFileMock.mockImplementation((cmd: string, args: any[], _opts: any, cb: any) => {
@@ -196,6 +229,32 @@ describe('inspectOpenspec', () => {
     })
     const result = await inspectOpenspec()
     expect(result.skills.status).toBe('unknown')
+  })
+
+  it('does not repair missing skills while root is unhealthy', async () => {
+    existsSyncMock.mockImplementation((p: any) => !String(p).includes('openspec-explore'))
+    execFileMock.mockImplementation((cmd: string, args: any[], _opts: any, cb: any) => {
+      if (cmd === 'openspec' && args[0] === '--version') {
+        cb(null, '1.13.0\n')
+        return
+      }
+      if (cmd === 'openspec' && args[0] === 'config') {
+        cb(null, JSON.stringify({ workflows: ['propose', 'explore', 'apply', 'archive'] }))
+        return
+      }
+      if (cmd === 'openspec' && args[0] === 'doctor') {
+        cb(Object.assign(new Error('unhealthy'), { code: 1 }), JSON.stringify({
+          root: { healthy: false },
+          status: [{ severity: 'error', code: 'broken_reference' }],
+        }))
+        return
+      }
+      cb(null, '')
+    })
+    const result = await ensureOpenspec({ yes: true })
+    expect(result.inspection.root.status).toBe('unhealthy')
+    const updateCalls = execFileMock.mock.calls.filter(([, args]) => Array.isArray(args) && args[0] === 'update')
+    expect(updateCalls).toHaveLength(0)
   })
 })
 

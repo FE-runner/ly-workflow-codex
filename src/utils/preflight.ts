@@ -233,7 +233,7 @@ function inspectOpenspecSkills(
     status = 'missing'
   else if (profileSource === 'fallback')
     status = 'unknown'
-  else if (projectHits.size === 0)
+  else if (projectHits.size !== required.length)
     status = 'global-only'
   else
     status = 'project-ready'
@@ -266,9 +266,9 @@ async function inspectOpenspecRoot(cwd: string, cli: OpenspecCliStatus): Promise
   }
 
   const rootHealthy = (doctor as { root?: { healthy?: boolean } } | undefined)?.root?.healthy
-  return rootHealthy === false
-    ? { status: 'unhealthy', doctor }
-    : { status: 'healthy', doctor }
+  return rootHealthy === true
+    ? { status: 'healthy', doctor }
+    : { status: 'unhealthy', doctor }
 }
 
 export async function inspectOpenspec(options?: { cwd?: string }): Promise<OpenspecInspection> {
@@ -409,6 +409,9 @@ export async function ensureOpenspec(options?: OpenspecEnsureOptions): Promise<O
   }
 
   if (inspection.cli.status !== 'ok')
+    return { inspection, executed }
+
+  if (inspection.root.status === 'unhealthy')
     return { inspection, executed }
 
   if (inspection.root.status === 'missing') {
