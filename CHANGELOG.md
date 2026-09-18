@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-09-18
+
+本版统一了 lyx 生成提交的 message 正文规范，并补齐归档后的隔离环境收尾：propose 记录来源分支与 worktree metadata，archive 完成后可提示合并回来源分支并清理 worktree / 开发分支。
+
+### Added
+
+- 新能力 `archive-branch-cleanup`：归档提交完成后按 isolation metadata 提示合并回 `sourceBranch`，并清理 worktree 与开发分支
+- `@lyx-propose` 记录 `sourceBranch` / `isolation` / `developmentBranch` / `worktreePath` metadata 到 change `.openspec.yaml`
+- `@lyx-commit` 正文规范：所有 lyx 显式生成 message 的提交使用动机/改动/影响正文
+
+### Changed
+
+- propose / apply / archive / review 修复自动提交复用统一正文规范，并保留 `Change-Stage` / `Change-Name` trailer
+- init / release / changelog / publish / WIP / worktree `.gitignore` 等非 change 生命周期提交补齐正文，但不追加 Change trailer
+- 提交 message 文件路径改用 `git rev-parse --git-path COMMIT_EDITMSG`，兼容 linked worktree
+- `@lyx-publish` 版本 bump 改为 `npm version --no-git-tag-version` 后按规范提交，并补 annotated tag，确保 `git push --follow-tags` 可触发 CI
+- README / CLAUDE / templates 导航同步归档后分支收尾与提交正文规范说明
+
+### Fixed
+
+- 归档后收尾在展示确认提示前完成 branch/worktree 状态校验，失败时保留 worktree 与开发分支
+- worktree 模式收尾从 `sourceBranch` 所在 worktree 执行，避免在开发 linked worktree 中 checkout 被占用的目标分支
+- 修正 host-adapters 模板断言，覆盖 isolation cleanup 与 `-C` 路径引用命令
+
 ## [0.4.0] - 2026-09-18
 
 本版把子代理推理档从"只能手改配置"升级为交互可配置：`lycx init` 与菜单现在可以显式选择覆盖某个档位，或选择不覆盖以继承模型/宿主默认。

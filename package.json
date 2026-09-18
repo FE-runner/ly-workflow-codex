@@ -1,7 +1,7 @@
 {
   "name": "ly-workflow-codex",
   "type": "module",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "packageManager": "pnpm@10.17.1",
   "description": "Codex 单 Agent 工作流 —— OpenSpec 生命周期 + 独立审查关卡 + GitFlow 发布管线",
   "author": {
