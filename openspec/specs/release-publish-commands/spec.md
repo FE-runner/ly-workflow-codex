@@ -116,6 +116,7 @@ The system SHALL insert the new version entry at the top of an existing `CHANGEL
 #### Scenario: Empty commit range prevents empty version section
 - **WHEN** no commits exist since the last version boundary
 - **THEN** the system SHALL report "no commits since last version" and SHALL NOT generate a version section
+
 ### Requirement: release/hotfix 上线合并二选一与主分支名检测
 `/ly:release` 的 release 与 hotfix 场景 SHALL 提供两种上线合并方式供用户选择：**方式 A 远端 PR 合并**（默认，push 分支后创建 PR 到主分支，等 code review 通过后 merge）与**方式 B 本地直接合并**（先 push 分支留档 → checkout 主分支 → pull → `merge --no-ff <开发分支>` → push 主分支，跳过远端 PR）。两种方式合并完成后，后续三分支同步步骤 SHALL 以相同流程执行（SHALL NOT 因合并方式不同而分叉）。
 
@@ -140,3 +141,23 @@ The system SHALL insert the new version entry at the top of an existing `CHANGEL
 #### Scenario: hotfix 场景同样支持二选一
 - **WHEN** 用户执行 hotfix 场景的上线合并步骤
 - **THEN** 与 release 场景一致提供方式 A（默认）/方式 B 二选一，合并完成后三分支同步照常执行
+
+### Requirement: release / publish / changelog 提交使用增强正文
+
+`/ly:release`、`/ly:publish` 与 `/ly:changelog` 中由命令显式生成 message 的提交 SHALL 遵守 `commit-conventions` 的“非 change 生命周期 lyx 提交遵守正文规范但不追加 Change trailer”要求。版本 bump、changelog 更新、hotfix 修复与 publish 相关提交 SHALL 包含动机、改动、影响正文，SHALL NOT 使用只有版本号或只有单行说明的默认 message。`git merge` / `git cherry-pick` 产生的 git 原生默认 message 不在强制范围。
+
+#### Scenario: release 版本 bump 使用规范正文
+- **WHEN** `/ly:release` 需要创建版本 bump commit
+- **THEN** 该 commit 包含版本变更动机、版本文件/变更日志改动与影响，而不是默认短 message
+
+#### Scenario: publish 路径不绕过规范
+- **WHEN** `/ly:publish` 计划通过 `npm version` 完成版本提交
+- **THEN** 命令改用 `--no-git-tag-version` 后按规范手动提交再打 tag，或提供等价的完整 message，SHALL NOT 接受 npm 默认短 message
+
+#### Scenario: changelog 提交不携带 Change trailer
+- **WHEN** `@lyx-changelog` 更新日志后创建提交
+- **THEN** commit message 包含正文，但不携带 `Change-Stage` / `Change-Name` trailer
+
+#### Scenario: hotfix 修复提交包含正文
+- **WHEN** `/ly:release` 的 hotfix 场景执行 `git commit` 提交 bug 修复
+- **THEN** 该 commit 包含动机、改动、影响正文，而不是只有 `fix: <问题描述>`
