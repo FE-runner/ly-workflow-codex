@@ -14,6 +14,7 @@
 **Non-Goals:**
 
 - 不约束用户在终端直接执行的裸 `git commit`。
+- 不约束 git 原生生成的 merge / revert / cherry-pick 默认 message；只约束模板显式写 message 的 lyx 提交。
 - 不改变 Conventional Commits 前缀、`Change-Stage` / `Change-Name` trailer 的语义或定位方式。
 - 不新增 commitlint/husky 类外部依赖，也不实现运行时提交信息校验器。
 - 不改变 changelog 分组、SemVer 推导和 release/publish 分支流程。
@@ -25,6 +26,8 @@
 `commit-conventions` 定义可审查的行为契约，`@lyx-commit` 提供用户可执行的 message 生成规范与示例。其他 skill 模板只引用该规范并补充阶段重点，不复制完整规则。
 
 理由：避免 10 个模板各写一套规则后漂移。替代方案是把完整正文规范复制到每个自动模板，可读性略好但维护成本高；本次不采用。
+
+“lyx 生成提交”限定为 message 由 `@lyx-commit` 或 lyx skill 模板显式生成的提交，包括 change 生命周期提交、WIP、worktree `.gitignore`、init/release/changelog/publish。`git merge` / `git revert` / `git cherry-pick` 等由 git 直接生成的默认 message 不在范围内，避免为结构性提交强塞无意义正文。
 
 ### 2. 自动提交统一使用完整 message 文件
 
@@ -42,6 +45,8 @@ Change-Name: <change-name>
 ```
 
 理由：`-m` 多段拼接容易在 shell 引号、换行和 trailer 空行上出错；完整 message 文件与 `@lyx-commit` 现有执行方式一致。替代方案是多个 `-m`，本次不采用。
+
+中英文标签规则沿用 `@lyx-commit` 的语言判断：中文提交用 `- 动机：` / `- 改动：` / `- 影响：`，英文提交用 `- Motivation:` / `- Change:` / `- Impact:`。`--emoji` 保留为兼容扩展，默认自动阶段提交不带 emoji。
 
 ### 3. `npm version` 不再生成默认 commit
 
