@@ -132,26 +132,38 @@ describe('codex template set', () => {
     ]
     for (const file of bodyTemplates) {
       const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
-      expect(content, file).toMatch(/(动机|Motivation)/)
+      expect(content, file).toMatch(/(动机[\s\S]*改动[\s\S]*影响|Motivation[\s\S]*Change[\s\S]*Impact)/)
     }
 
     const commit = readFileSync(join(SKILLS_TEMPLATES_DIR, 'commit.md'), 'utf-8')
     expect(commit).toContain('- 动机：')
     expect(commit).toContain('- Motivation:')
 
+    for (const file of ['propose.md', 'apply.md']) {
+      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
+      expect(content, file).toContain('git commit --only -F "$MSG_FILE"')
+    }
+
     for (const file of ['propose.md', 'apply.md', 'archive.md', 'review-plan.md', 'review-code.md']) {
       const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
       expect(content, file).toContain('Change-Stage')
       expect(content, file).toContain('Change-Name: <change-name>')
-      expect(content, file).toContain('git commit -F .git/COMMIT_EDITMSG')
+      expect(content, file).toContain('git rev-parse --git-path COMMIT_EDITMSG')
+      expect(content, file).toContain('git commit -F "$MSG_FILE"')
     }
 
     const publish = readFileSync(join(SKILLS_TEMPLATES_DIR, 'publish.md'), 'utf-8')
     expect(publish).toContain('npm version <patch|minor|major> --no-git-tag-version')
-    expect(publish).toContain('git tag v<新版本号>')
+    expect(publish).toContain('git tag -a "v<新版本号>" -m "v<新版本号>"')
 
     const worktree = readFileSync(join(SKILLS_TEMPLATES_DIR, 'worktree.md'), 'utf-8')
     expect(worktree).toContain('chore(worktree): 忽略 .worktrees 目录')
+
+    for (const file of ['init.md', 'release.md', 'changelog.md', 'publish.md', 'worktree.md']) {
+      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
+      expect(content, file).not.toContain('Change-Stage:')
+      expect(content, file).not.toContain('Change-Name: <change-name>')
+    }
   })
 
   it('no codex template contains wrapper/lite/routing residue', () => {

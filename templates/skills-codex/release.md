@@ -43,7 +43,7 @@ argument-hint: '<场景描述>'
 
 ## 提交信息规范
 
-本命令中所有显式 `git commit` 示例 SHALL 按 `@lyx-commit` 正文规范写完整 message，并使用 `git commit -F .git/COMMIT_EDITMSG`。message 结构为：
+本命令中所有显式 `git commit` 示例 SHALL 按 `@lyx-commit` 正文规范写完整 message。message 文件路径用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取，提交命令使用 `git commit -F "$MSG_FILE"`，兼容 linked worktree。message 结构为：
 
 ```text
 <type>(<scope>): <subject>
@@ -142,10 +142,11 @@ git merge --no-ff feature/<功能名>
 # 读取当前版本：grep -oP 'VERSION=\K[^ ]+' version.sh
 # 按上方「版本号确定规则」分析 commit 历史，给出建议档位，询问用户确认
 # 编辑 version.sh 将 VERSION=x.x.x 改为确认的版本号，再执行：
+MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"
 git add version.sh
-# 写入 .git/COMMIT_EDITMSG：首行 chore: bump version to <确认的版本号>，
+# 写入 "$MSG_FILE"：首行 chore: bump version to <确认的版本号>，
 # 正文按 @lyx-commit 规范写动机/改动/影响
-git commit -F .git/COMMIT_EDITMSG
+git commit -F "$MSG_FILE"
 git push origin master
 
 # 方式 C 上线合并完成后，三分支同步（以远端 origin/master 为基准）：
@@ -193,10 +194,11 @@ git checkout -b release/<版本号>   # 例如 release/1.4.0
 #   b. 按 feat/fix/BREAKING 推导建议档位
 #   c. 将建议展示给用户：「建议 bump X → Y，是否确认？（可改为 Z）」
 #   d. 用户确认后，编辑 version.sh 将 VERSION=x.x.x 改为确认的版本号
+MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"
 git add version.sh
-# 写入 .git/COMMIT_EDITMSG：首行 chore: bump version to <确认的版本号>，
+# 写入 "$MSG_FILE"：首行 chore: bump version to <确认的版本号>，
 # 正文按 @lyx-commit 规范写动机/改动/影响
-git commit -F .git/COMMIT_EDITMSG
+git commit -F "$MSG_FILE"
 
 # 3. 更新 CHANGELOG（如有）
 # 若已安装 @lyx-changelog：直接触发它生成/更新 CHANGELOG.md 并提交
@@ -209,10 +211,11 @@ git commit -F .git/COMMIT_EDITMSG
 # 【如果存在 CHANGELOG】：以本次 version.sh 的更新 commit 为节点，收集 commit 并按类型分组（Added/Fixed/Changed）写入
 #
 # 提交 CHANGELOG 变更：
-# 如果文件存在；写入 .git/COMMIT_EDITMSG：首行 docs: update CHANGELOG for v<确认的版本号>，
+MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"
+# 如果文件存在；写入 "$MSG_FILE"：首行 docs: update CHANGELOG for v<确认的版本号>，
 # 正文按 @lyx-commit 规范写动机/改动/影响
 git add CHANGELOG.md
-git commit -F .git/COMMIT_EDITMSG
+git commit -F "$MSG_FILE"
 
 # 4. 上线合并到 master（二选一）：
 #
@@ -263,20 +266,22 @@ git pull origin master
 git checkout -b hotfix/<问题描述>   # 例如 hotfix/login-crash
 
 # 2. 修复 bug，提交
-# 写入 .git/COMMIT_EDITMSG：首行 fix: <问题描述>，
+MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"
+# 写入 "$MSG_FILE"：首行 fix: <问题描述>，
 # 正文按 @lyx-commit 规范写动机/改动/影响
 git add .
-git commit -F .git/COMMIT_EDITMSG
+git commit -F "$MSG_FILE"
 
 # 3. 确定版本号并 bump（必须！否则部署会失败）
 # 读取当前版本：grep -oP 'VERSION=\K[^ ]+' version.sh
 # hotfix 场景下通常只包含 fix: 类型 commit，自动推导结果为 patch（如 1.6.1 → 1.6.2）
 # 按上方「版本号确定规则」展示推导结果给用户确认，确认后：
 # 编辑 version.sh 将 VERSION=x.x.x 改为确认的版本号
+MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"
 git add version.sh
-# 写入 .git/COMMIT_EDITMSG：首行 chore: bump version to <确认的版本号>，
+# 写入 "$MSG_FILE"：首行 chore: bump version to <确认的版本号>，
 # 正文按 @lyx-commit 规范写动机/改动/影响
-git commit -F .git/COMMIT_EDITMSG
+git commit -F "$MSG_FILE"
 
 # 4. 上线合并到 master（二选一）：
 #

@@ -156,14 +156,15 @@ echo "$RAW" | grep -v "^[a-f0-9]* feat" | grep -v "^[a-f0-9]* fix" || true
 ## 步骤五：提交变更
 
 ```bash
+MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"
 git add CHANGELOG.md
-# 先将完整 message 写入 .git/COMMIT_EDITMSG：
+# 先将完整 message 写入 "$MSG_FILE"：
 # docs: update CHANGELOG for v<版本号>
 #
 # - 动机：为 v<版本号> 补充发布日志
 # - 改动：更新 CHANGELOG.md 的 <版本号> 段落
 # - 影响：发布说明与本次版本变更保持一致
-git commit -F .git/COMMIT_EDITMSG
+git commit -F "$MSG_FILE"
 ```
 
 ---

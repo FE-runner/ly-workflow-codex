@@ -109,7 +109,7 @@ echo "$COMMITS" | grep -i "BREAKING CHANGE" || true      # 破坏性变更
 是否使用此建议？可以改为 patch（1.6.1 → 1.6.2）或 major（1.6.1 → 2.0.0）
 ```
 
-- **同意建议**：按建议执行 `npm version <patch|minor|major> --no-git-tag-version`，随后按 `@lyx-commit` 正文规范提交版本变更并补 `git tag v<新版本号>`
+- **同意建议**：按建议执行 `npm version <patch|minor|major> --no-git-tag-version`，随后按 `@lyx-commit` 正文规范提交版本变更并补 annotated tag `git tag -a "v<新版本号>" -m "v<新版本号>"`
 - **覆盖**：按用户输入的档位执行
 - **不存在以往的 commit**：回退到直接询问版本号
 
@@ -162,7 +162,7 @@ pnpm lint            # 有则跑，失败先询问是否继续
 - 分析上次 bump 以来的 commit 列表
 - 按 feat/fix/BREAKING 推导建议档位
 - 将建议展示给用户确认/覆盖
-- 确认后执行 `npm version <patch|minor|major> --no-git-tag-version` 更新 package.json；随后按 `@lyx-commit` 正文规范提交版本变更，再执行 `git tag v<新版本号>`
+- 确认后执行 `npm version <patch|minor|major> --no-git-tag-version` 更新 package.json；随后按 `@lyx-commit` 正文规范提交版本变更，再执行 `git tag -a "v<新版本号>" -m "v<新版本号>"`
 
 若项目已装 `@lyx-changelog`，version bump 后触发它更新 CHANGELOG，再补一次符合 `@lyx-commit` 正文规范的 commit；没装则询问用户要不要更新日志。
 
@@ -323,11 +323,12 @@ pnpm type-check
 
 # 版本号 bump（按上方「版本号确定规则」自动推导 + 确认）
 npm version <patch|minor|major> --no-git-tag-version
-# 写入 .git/COMMIT_EDITMSG：首行 chore(release): v<新版本号>，
+MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"
+# 写入 "$MSG_FILE"：首行 chore(release): v<新版本号>，
 # 正文按 @lyx-commit 规范写动机/改动/影响
 git add package.json package-lock.json 2>/dev/null || git add package.json
-git commit -F .git/COMMIT_EDITMSG
-git tag v<新版本号>
+git commit -F "$MSG_FILE"
+git tag -a "v<新版本号>" -m "v<新版本号>"
 
 # 若装了 @lyx-changelog，此时更新 CHANGELOG 并补符合 @lyx-commit 正文规范的 commit；没装则询问用户
 ```

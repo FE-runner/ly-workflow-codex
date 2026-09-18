@@ -91,7 +91,8 @@ argument-hint: '[--all] [--amend] [--type <type>] [--scope <scope>]'
 `[模式：执行]`
 
 ```bash
-git commit [-S] [--no-verify] [-s] -F .git/COMMIT_EDITMSG
+MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"
+git commit [-S] [--no-verify] [-s] -F "$MSG_FILE"
 ```
 
 ---
@@ -136,5 +137,5 @@ git commit [-S] [--no-verify] [-s] -F .git/COMMIT_EDITMSG
 
 1. **仅使用 Git** – 不调用包管理器
 2. **尊重钩子** – 默认执行，`--no-verify` 可跳过
-3. **不改源码** – 只读写 `.git/COMMIT_EDITMSG`
+3. **不改源码** – 只读写 message 文件；路径用 `git rev-parse --git-path COMMIT_EDITMSG` 获取，兼容 linked worktree
 4. **原子提交** – 一次提交只做一件事

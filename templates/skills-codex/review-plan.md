@@ -148,7 +148,7 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 
 **正常清零结束：**
 
-先执行统一提交：先 `git add` 该 change 目录下的 `proposal.md`/`design.md`/`tasks.md` 及全部 delta spec 文件（审查目标全部文件——编排方（`@lyx-propose`）已暂存的产物与循环期间修复的改动一并暂存；若产物此前已在暂存区则保持，修复改动由本次 `git add` 覆盖进 index），再执行一次统一 commit（仅暂存并提交这些文件，不做范围外的 `git add`），提交信息先按 `@lyx-commit` 正文规范写入 `.git/COMMIT_EDITMSG`，采用 Conventional Commits 前缀 + 正文 + trailer 结构：CC 前缀形如 `fix(<scope>): review-plan 反馈修复（N 轮）`，正文至少含 `- 动机：` / `- 改动：` / `- 影响：`，并说明本轮 Critical、修复动作与验证，末尾带 `Change-Stage: review-plan-fix` 与 `Change-Name: <change-name>` trailer，提交命令使用 `git commit -F .git/COMMIT_EDITMSG`。**不存在"循环开始前已脏文件的隔离跳过"**——该 change 目录下的 artifact 与 delta spec 是合法审查对象，产物与修复是同一个待提交单元，全部一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若统一提交本身执行失败，在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
+先执行统一提交：先 `git add` 该 change 目录下的 `proposal.md`/`design.md`/`tasks.md` 及全部 delta spec 文件（审查目标全部文件——编排方（`@lyx-propose`）已暂存的产物与循环期间修复的改动一并暂存；若产物此前已在暂存区则保持，修复改动由本次 `git add` 覆盖进 index），再执行一次统一 commit（仅暂存并提交这些文件，不做范围外的 `git add`），提交信息先用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取路径并按 `@lyx-commit` 正文规范写入完整 message，采用 Conventional Commits 前缀 + 正文 + trailer 结构：CC 前缀形如 `fix(<scope>): review-plan 反馈修复（N 轮）`，正文至少含 `- 动机：` / `- 改动：` / `- 影响：`，并说明本轮 Critical、修复动作与验证，末尾带 `Change-Stage: review-plan-fix` 与 `Change-Name: <change-name>` trailer，提交命令使用 `git commit -F "$MSG_FILE"`。**不存在"循环开始前已脏文件的隔离跳过"**——该 change 目录下的 artifact 与 delta spec 是合法审查对象，产物与修复是同一个待提交单元，全部一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若统一提交本身执行失败，在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
 
 ```
 📋 方案审查：<change-name>

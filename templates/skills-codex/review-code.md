@@ -145,7 +145,7 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证统一�
 
 **正常清零结束：**
 
-先执行统一提交：先 `git add` 审查范围内的全部文件（审查范围首轮判定的 `git diff HEAD` 圈定的文件 —— 原始改动与循环期间修复的改动一并暂存；未跟踪的新建文件，扫描 `??` 清单得到的路径同样 `git add`，直到审查目标内不再有未暂存的改动），再对审查目标执行一次统一 commit（不做审查范围外的 `git add`），提交信息先按 `@lyx-commit` 正文规范写入 `.git/COMMIT_EDITMSG`，采用 Conventional Commits 前缀 + 正文 + trailer 结构：CC 前缀形如 `fix(<scope>): review-code 反馈修复（N 轮）`，正文至少含 `- 动机：` / `- 改动：` / `- 影响：`，并说明本轮 Critical、代码修复动作与验证，末尾带 `Change-Stage: review-code-fix` 与 `Change-Name: <change-name>` trailer，提交命令使用 `git commit -F .git/COMMIT_EDITMSG`。审查目标为审查范围圈定的全部文件（有 apply 阶段 commit 时为该 commit 差异叠加循环修复；退化场景下才是未提交变更），原始内容与循环产生的修复是同一个待提交单元，不做隔离，一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若这次统一提交本身执行失败（Git hook 拒绝、身份未配置、锁文件冲突等），在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
+先执行统一提交：先 `git add` 审查范围内的全部文件（审查范围首轮判定的 `git diff HEAD` 圈定的文件 —— 原始改动与循环期间修复的改动一并暂存；未跟踪的新建文件，扫描 `??` 清单得到的路径同样 `git add`，直到审查目标内不再有未暂存的改动），再对审查目标执行一次统一 commit（不做审查范围外的 `git add`），提交信息先用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取路径并按 `@lyx-commit` 正文规范写入完整 message，采用 Conventional Commits 前缀 + 正文 + trailer 结构：CC 前缀形如 `fix(<scope>): review-code 反馈修复（N 轮）`，正文至少含 `- 动机：` / `- 改动：` / `- 影响：`，并说明本轮 Critical、代码修复动作与验证，末尾带 `Change-Stage: review-code-fix` 与 `Change-Name: <change-name>` trailer，提交命令使用 `git commit -F "$MSG_FILE"`。审查目标为审查范围圈定的全部文件（有 apply 阶段 commit 时为该 commit 差异叠加循环修复；退化场景下才是未提交变更），原始内容与循环产生的修复是同一个待提交单元，不做隔离，一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若这次统一提交本身执行失败（Git hook 拒绝、身份未配置、锁文件冲突等），在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
 
 ```
 📋 代码审查报告

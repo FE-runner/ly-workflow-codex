@@ -25,8 +25,9 @@ argument-hint: '[<change-name>]'
 归档会把 `openspec/changes/<change-name>/` 移动到 `openspec/changes/archive/`，并可能同步更新 `openspec/specs/`。提交涉及的全部文件：
 
 ```bash
+MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"
 git add -- openspec/
-# 先将完整 message 写入 .git/COMMIT_EDITMSG：
+# 先将完整 message 写入 "$MSG_FILE"：
 # chore(openspec): 归档 <change-name>
 #
 # - 动机：完成 <change-name> 的归档收尾
@@ -35,9 +36,9 @@ git add -- openspec/
 #
 # Change-Stage: archive
 # Change-Name: <change-name>
-git commit -F .git/COMMIT_EDITMSG
+git commit -F "$MSG_FILE"
 ```
 
-message 采用 Conventional Commits 前缀 + 正文 + trailer 结构：先按 `@lyx-commit` 规范写入完整 message，CC 前缀固定 `chore(openspec)`，正文包含动机/改动/影响，末尾带 `Change-Stage: archive` 与 `Change-Name: <change-name>` trailer。
+message 采用 Conventional Commits 前缀 + 正文 + trailer 结构：先用 `git rev-parse --git-path COMMIT_EDITMSG` 获取 message 路径并按 `@lyx-commit` 规范写入完整 message，CC 前缀固定 `chore(openspec)`，正文包含动机/改动/影响，末尾带 `Change-Stage: archive` 与 `Change-Name: <change-name>` trailer。
 
 若无可提交内容或 `git commit` 失败，跳过提交，如实报告原始错误，不视为归档失败。
