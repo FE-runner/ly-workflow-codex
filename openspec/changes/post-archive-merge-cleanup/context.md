@@ -5,11 +5,14 @@
 - `sourceBranch` 的定义已确认：propose 开始时当前所在分支。
 - 用户确认 archive 收尾时选择“是”后，应同时删除 worktree（如有）和开发分支。
 - metadata 使用 change 的 `.openspec.yaml`，放在 `lyx:` 命名空间下，随 change 归档移动。
+- metadata 在隔离动作前只捕获到会话内存；change 名确认后、propose commit 前再写入 `.openspec.yaml`。
 - archive 收尾提示发生在 archive 阶段 commit 成功之后；archive commit 失败或无提交时不清理。
 - merge 使用 `git merge --no-ff`，只做本地合并，不自动 push。
 - worktree 模式下不能在当前开发 linked worktree 里 checkout sourceBranch；必须先定位 sourceBranch 所在 worktree（通常是主 worktree）并在那里 merge、删除 worktree。
 - 用户选择“否”时保留当前分支、worktree 和开发分支，只报告未执行收尾。
 - 旧 change 没有 isolation metadata 时不猜 main/master，提示用户选择目标分支或跳过。
+- 已在 worktree 内发起 propose 时记录当前开发分支与 worktree；若无法确定 sourceBranch，archive 阶段保守提示。
+- detached HEAD 下 propose 直接停止，要求先切到命名分支。
 
 ## 已否决备选
 

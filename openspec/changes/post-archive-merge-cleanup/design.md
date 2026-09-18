@@ -20,9 +20,9 @@
 
 ## Decisions
 
-### 1. isolation metadata 写入 `.openspec.yaml` 的 `lyx:` 命名空间
+### 1. isolation metadata 先捕获，change 名确认后写入 `.openspec.yaml`
 
-propose 阶段写入：
+propose 开始时先捕获到会话内存：
 
 ```yaml
 lyx:
@@ -34,11 +34,13 @@ lyx:
 
 `branch` 模式不写 `worktreePath`；`none` 模式只写 `isolation: none` 与 `sourceBranch`。
 
-理由：`.openspec.yaml` 已经是 change 的机器可读 metadata，archive 移动 change 目录时天然随行。替代方案是新增独立 metadata 文件，语义更干净但会增加一个需要同步维护的 artifact；本次不采用。
+在 `opsx:propose` 生成 change 并确认真实 change 名之后、propose commit 之前，才把上述 metadata 写入 `openspec/changes/<change-name>/.openspec.yaml`。理由：worktree/branch 隔离动作早于 change 目录生成，此时没有可写的 `.openspec.yaml`；若隔离动作成功但 change 生成失败，命令只报告隔离环境状态，不自动清理。
 
 ### 2. sourceBranch 在隔离动作之前捕获
 
 `sourceBranch` SHALL 是 propose 开始时所在分支，必须在 `git worktree add` 或 `git checkout -b` 之前读取。理由：一旦切到开发分支，当前分支已不再是目标分支；事后无法可靠推断。
+
+若 propose 开始时已在某个 linked worktree 内，命令捕获当前分支为 `developmentBranch`、当前 worktree 为 `worktreePath`，并把 `sourceBranch` 记录为 `null`；archive 阶段走保守提示，要求用户选择目标分支或跳过。若 propose 开始时处于 detached HEAD，命令 SHALL 停止并要求用户切到命名分支后再运行。
 
 ### 3. archive 提交完成后执行收尾
 
@@ -58,10 +60,16 @@ worktree 模式成功 merge 后，先删除 `worktreePath`，再删除 `developm
 
 缺少 isolation metadata 时，不默认合并到 `main` / `master`。命令提示用户选择目标分支后继续，或跳过自动收尾。理由：旧 change 没有可靠来源信息，猜测会带来错误合并风险。
 
+缺 metadata 时可保守推导 `developmentBranch = 当前分支`、`worktreePath = 当前 linked worktree（若存在）`；`sourceBranch` 必须由用户选择。若当前分支或 worktree 状态无法唯一判定，跳过收尾并保留现场。
+
+`isolation != none` 但 `sourceBranch` 为 `null` / 空值时，也走同一保守路径。`isolation = branch` 时当前分支必须等于 `developmentBranch`，否则停止并要求人工复核。
+
 ## Risks / Trade-offs
 
 - [`.openspec.yaml` 增加未知字段可能受未来 OpenSpec schema 影响] → 使用 `lyx:` 命名空间隔离；任务中保留 `openspec validate` 验证。
 - [worktree 存在未跟踪文件导致删除失败] → 不强制删除，报告失败并保留现场。
 - [sourceBranch 已被其他 worktree 占用] → 切回失败即停止，不做替代 checkout 或强制切换。
 - [sourceBranch 所在 worktree 有未提交改动] → 收尾前同时检查开发 worktree 与目标 worktree，任一 dirty 即停止。
+- [metadata 与实际 Git 状态不一致] → 收尾提示前校验 worktree 注册状态、开发分支和当前执行环境，不一致即停止并要求复核。
+- [propose 在 detached HEAD 下启动] → 停止并要求用户切到命名分支后再运行，避免记录无意义 sourceBranch。
 - [merge 后不 push 可能被误认为已完成远端同步] → 成功报告中明确“仅本地合并，未 push”。
