@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2026-09-18
+
+本版把子代理推理档从"只能手改配置"升级为交互可配置：`lycx init` 与菜单现在可以显式选择覆盖某个档位，或选择不覆盖以继承模型/宿主默认。
+
+### Added
+
+- `lycx init` 在对应执行者为 `subagent` 时采集 `reviewReasoningEffort` / `codingReasoningEffort`：候选为不覆盖、常见档位建议、自定义输入与既有值
+- `lycx` 菜单"配置审查模型"支持编辑 review 推理档覆盖选择
+- 交互配置摘要展示推理档状态（未覆盖 / 已覆盖: 值），执行者为 `main` 时标注不生效
+
+### Changed
+
+- 推理档字段语义统一为"覆盖 / 不覆盖"：不覆盖等价于不传 `reasoning_effort`，继承模型/宿主默认
+- `lycx doctor` 的推理档展示文案改为"未覆盖（继承模型/宿主默认）"与"已覆盖: 值"
+- README / CLAUDE / AGENTS 与 `subagent-agent-config` spec 同步推理档配置入口与保留/清除边界
+
+### Fixed
+
+- 菜单仅修改推理档时不再被"模型与执行者未变化"的早退判定忽略
+- 交互选择不覆盖时会真正清除既有推理档字段；非交互 update 与未触碰字段继续保留原值
+
 ## [0.3.0] - 2026-09-18
 
 本版完成三件主要工作：审查 / 实施改为"执行者可切换"（默认由主 agent 直接执行）；私有配置目录迁移到 `~/.codex/lyx/`；commit message 约定统一为 Conventional Commits 前缀 + git trailer，并统一 propose / apply 的 index 隔离协议。
