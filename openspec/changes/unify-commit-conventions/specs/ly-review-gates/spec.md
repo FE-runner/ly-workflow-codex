@@ -64,7 +64,7 @@
 
 统一提交的 commit message SHALL 采用 `commit-conventions` 定义的结构：CC 前缀为 `fix(<scope>): <subject>`，subject 含目标标识与总轮次说明（例如"review-plan 反馈修复（2 轮）"），末尾带 trailer——`/ly:review-plan` 用 `Change-Stage: review-plan-fix`，`/ly:review-code` 用 `Change-Stage: review-code-fix`，两者均带 `Change-Name: <change-name>`。
 
-**审查目标原始改动的提交归属**：`/ly:review-code` 的审查目标本身就是"当前工作区尚未提交的变更"（`git diff HEAD` 圈定的范围），这些文件在循环开始前处于未提交状态是设计上的正常输入；同样地，`/ly:review-plan` 的审查目标（该 change 的 artifact 与 delta spec 文件）现在也允许在循环开始前处于未暂存或已暂存状态（`/ly:propose` 编排下产物已暂存、独立运行时可能未暂存）。循环产生的修复是在这份原始改动之上的修正，清零后的统一提交本来就应同时包含"原始改动"与"审查修正"，二者是同一个待提交单元，不需要也不应该被拆开。**因此 `review-plan` 场景下不再存在任何"循环开始前已脏的文件被跳过提交"的隔离逻辑**——propose 产物是合法审查对象不是无关脏文件，用户手工编辑的 artifact 同样属于审查目标内容，一并提交；删除对"循环开始前未提交状态文件"的 `git status --porcelain` 预检查和隔离跳过行为。
+**审查目标原始改动的提交归属**：`/ly:review-code` 的审查目标是**审查范围圈定的全部文件**——有 apply 阶段 commit 时为该 commit 的差异（`git show <commit>`）叠加循环期间未提交的修复；仅在无 apply 阶段 commit 的退化场景下才是"当前工作区尚未提交的变更"（`git diff HEAD` 圈定的范围）。两种场景下，循环产生的修复都是在原始内容之上的修正，清零后的统一提交本来就应同时包含"原始内容"与"审查修正"，二者是同一个待提交单元，不需要也不应该被拆开。同样地，`/ly:review-plan` 的审查目标（该 change 的 artifact 与 delta spec 文件）允许在循环开始前处于未暂存或已暂存状态（`/ly:propose` 编排下产物已暂存、独立运行时可能未暂存）。**因此 `review-plan` 场景下不再存在任何"循环开始前已脏的文件被跳过提交"的隔离逻辑**——propose 产物是合法审查对象不是无关脏文件，用户手工编辑的 artifact 同样属于审查目标内容，一并提交；删除对"循环开始前未提交状态文件"的 `git status --porcelain` 预检查和隔离跳过行为。
 
 若循环全程没有任何 Critical 被认可修复（从未发生实际文件改动），SHALL NOT 创建空 commit。若循环以其余任一终止条件结束（熔断、无法安全修复、验证失败、驳回硬线、审查对象类型持续系统性误判）或达到全局轮数上限，命令 SHALL NOT 提交，已产生的改动保持在工作区未提交状态，交由人工核实后自行决定是否提交——这些场景本身已经需要人工介入，不适合先自动提交半成品。当编排方（`/ly:propose` 或 `/ly:apply`）按自身规则决定对这类非清零终止的改动是否提交（见 `ly-propose-flow`、`ly-lifecycle-commands` 能力中的手动模式询问规则）时，是编排方层面在循环结束后对暂存区做提交决策，SHALL NOT 被理解为 review 循环自身的行为；循环自身的约束始终是"非清零 SHALL NOT 提交"。若"正常清零"后的这次统一提交本身执行失败（Git hook 拒绝、身份未配置、锁文件冲突等），必须（SHALL）在报告中如实说明该失败，视为"循环已清零, 但统一提交失败"的独立结果——循环本身不重新进入下一轮（因为已经清零, 没有下一轮的意义），但报告必须明确指出还需要人工手动完成这次提交。传入可选标志 `--no-commit` 时，命令 SHALL NOT 执行这次最终统一提交（不管循环以何种方式结束），修复结果始终留给调用方或用户自行处理。
 
@@ -95,3 +95,31 @@
 #### Scenario: 清零后的统一提交本身失败
 - **WHEN** 循环第二轮清零, 命令尝试执行统一提交, 但因 pre-commit hook 拒绝或 Git 身份未配置导致 commit 失败
 - **THEN** 命令不重新进入循环（因为已经清零), 在报告中如实说明这次统一提交失败的原始错误信息, 并指出需要人工手动完成提交
+
+### Requirement: 审查关卡以单审查 subagent（非 fork）执行
+
+review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 subagent 执行本轮审查；SHALL NOT spawn 第二个审查 agent，SHALL NOT 实现或保留"并行双审、交换结论、共识归并"环节——单 agent 的分级结论即本轮唯一审查发现来源，逐条 Critical 由主会话裁决（见「Critical 裁决：认可即修复、不认可必须附可核验依据」），SHALL NOT 因"只有一个 agent"而跳过裁决或把结论当作自动生效。
+
+**非 fork spawn**：审查 subagent SHALL 以非 fork 方式 spawn——子代理只携带 spawn 消息（TASK），SHALL NOT 携带父线程对话历史（宿主 V1 语义为 `fork_context: false` 默认值；V2 语义为 `fork_turns: none`）。仅当宿主不支持完全非 fork 而仅支持"最近 N 轮"fork 模式时，SHALL 取最小 N（或 0）近似非 fork 并在报告中如实说明；SHALL NOT 使用全量 fork（`fork_turns: all`）。
+
+**软上下文载体**：非 fork 意味着主会话讨论中的软上下文（关键决策、取舍、已知边界）不再随 fork 自动到达审查 agent；TASK SHALL 指示审查 subagent 读取该 change 目录下的 `context.md`（见 `review-context-artifact` 能力）获取软上下文，SHALL NOT 在 TASK 中整段复制其内容。
+
+**范围点名与角色词**：审查任务 SHALL 点名审查范围（review-plan 为"只审 change 产物：proposal/design/specs/tasks"——该点名范围本身是显式枚举的文件集合，不包含 `context.md`；review-code 为"只审最近一次相关 commit 对应 diff（apply 阶段 commit，未有 apply 阶段 commit 时退化为 propose 阶段 commit；两者定位见 `commit-conventions`）及未跟踪清单"——`context.md` 可能因 apply 阶段回写而实际出现在该 diff 范围内，此时 SHALL NOT 因其出现在 diff 中而将其当作可挑错的审查对象或修复对象）。两个命令共同遵守：`context.md` 始终只是背景引用来源（见「软上下文载体」），SHALL NOT 被当作可挑错的审查对象或修复对象；SHALL NOT 超出点名范围作业；SHALL 继续引用对应 ROLE_FILE（`~/.codex/lyx/prompts/codex/plan-reviewer.md` / `reviewer.md`），角色词内容不重写。
+
+**模型与推理档**：SHALL 经"模板指示 + 宿主 spawn 能力"落实——审查 subagent 用 `codexHost.reviewModel` + 非空 `reviewReasoningEffort`；模型未配置或空白时继承当前会话模型，推理档 trim 后为空时不传 `reasoning_effort`。`reviewModelB`/`reviewReasoningEffortB` SHALL NOT 被审查流程读取使用（字段降级为弃用，见 `subagent-agent-config`）。SHALL NOT 依赖任何 shell 层模型或推理档参数，SHALL NOT 内置"模型名 → 推理档"的硬编码映射。审查 subagent 具备自主执行 shell 命令与读取文件的能力；TASK SHALL 只传基线引用或路径清单，SHALL NOT 由当前会话预先读取并拼贴审查内容全文。
+
+#### Scenario: 审查 subagent 以非 fork 方式 spawn
+- **WHEN** 审查关卡（review-plan 或 review-code）spawn 审查 subagent
+- **THEN** 子代理只收到 TASK（范围点名、路径/基线清单、context.md 引用、模型指示），不携带主会话对话历史；SHALL NOT 使用全量 fork
+
+#### Scenario: 按配置模型与推理档 spawn
+- **WHEN** 用户配置 `reviewModel = "A"`、`reviewReasoningEffort = "low"`，运行一个审查关卡
+- **THEN** 审查 subagent 以模型 A 和推理档 `low` 非 fork spawn；若 `reviewModelB` 也已配置，该值被忽略且不影响 spawn
+
+#### Scenario: 不得恢复双审查
+- **WHEN** 主会话在某一轮审查前考虑"再 spawn 一个复核 agent 更保险"
+- **THEN** SHALL NOT spawn 第二个审查 agent；额外把关由主会话逐条裁决与"驳回硬线"终止条件承担
+
+#### Scenario: 软上下文经 context.md 到达
+- **WHEN** 审查 subagent 判断某条发现需要"为什么这样设计"的背景
+- **THEN** 它从 change 目录下的 `context.md` 读取背景（TASK 已含路径引用），SHALL NOT 依赖任何 fork 历史或上一轮 subagent 会话记忆
