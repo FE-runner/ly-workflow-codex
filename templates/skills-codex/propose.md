@@ -49,7 +49,7 @@ argument-hint: '<需求描述>'
   - **本项目切新分支**：
     1. 询问/确认开发分支名 `<开发分支名>`（规则与 worktree 路径一致：可含 `/`，如 `feature/xxx`）。
     2. 检查当前工作区未提交改动（`git status --porcelain`）：非空时用一次三选一询问处置方式，各选项文案如实说明后果：
-       - **提交（WIP commit）**：`git add -A && git commit -m "wip: 切分支前暂存工作区改动"` 后再切分支——新分支从含 WIP commit 的 HEAD 切出，改动固化为新分支上的提交，review-code 审查对象不受污染；
+       - **提交（WIP commit）**：写入 `.git/COMMIT_EDITMSG`（首行 `chore(wip): 切分支前暂存工作区改动`，正文按 `@lyx-commit` 规范写动机/改动/影响），执行 `git add -A && git commit -F .git/COMMIT_EDITMSG` 后再切分支——新分支从含 WIP commit 的 HEAD 切出，改动固化为新分支上的提交，review-code 审查对象不受污染；
        - **Stash**：`git stash push -u` → 切分支 → `git stash pop`——如实说明"pop 回来后改动仍在工作区，stash 仅提供日志留底"；
        - **原样保留**：不做任何处理——明示"改动会进入 review-code 审查范围（`git diff HEAD`），可能污染审查对象"；且若这些改动与后续 apply 的实施目标文件重叠，apply 会直接停止转人工（停止报告会回指此处处置选择）。
 
@@ -113,16 +113,20 @@ argument-hint: '<需求描述>'
 1. `git add -- openspec/changes/<change-name>/`（该目录含 `.openspec.yaml` 元数据、proposal/design/tasks、context.md 与全部 delta spec，集群暂存，不用 `git add -A`）。
 2. **按共用 index 隔离协议提交**——目标范围为 `openspec/changes/<change-name>/` 目录，协议分支：
    - index 中无该目录外的已暂存内容 → 直接 commit（见第 3 步命令）。
-   - index 中存在该目录外的已暂存内容、且与目标范围无文件重叠 → 用 `git commit --only -m "<message>" -- openspec/changes/<change-name>/` 隔离提交（**`-m` 必须放在 `--` 之前**；目标范围含未跟踪新文件时**必须先 `git add`**，否则 `--only` 报 `pathspec ... did not match any file(s) known to git`），或先 unstage 非目标文件、提交后恢复原暂存状态；范围外文件保留原暂存状态。
+   - index 中存在该目录外的已暂存内容、且与目标范围无文件重叠 → 用 `git commit --only -F .git/COMMIT_EDITMSG -- openspec/changes/<change-name>/` 隔离提交（**`-F` 必须放在 `--` 之前**；目标范围含未跟踪新文件时**必须先 `git add`**，否则 `--only` 报 `pathspec ... did not match any file(s) known to git`），或先 unstage 非目标文件、提交后恢复原暂存状态；范围外文件保留原暂存状态。
    - 同一文件内既存 staged hunk 与本次 hunk 混合、无法机械分离时 → **停止转人工**，如实报告，不猜测性提交。
-3. **立即 commit**，message 采用 Conventional Commits 前缀 + trailer 结构：
+3. **立即 commit**，先按 `@lyx-commit` 正文规范写入 `.git/COMMIT_EDITMSG`，message 采用 Conventional Commits 前缀 + 正文 + trailer 结构：
    ```
    docs(openspec): <subject>
+
+   - 动机：<为什么发起本次方案>
+   - 改动：<方案覆盖范围与关键决策>
+   - 影响：<后续实施/审查/兼容性影响>
 
    Change-Stage: propose
    Change-Name: <change-name>
    ```
-   （subject 用一句人话概括本次方案；`Change-Stage` 固定 `propose`。）
+   （subject 用一句人话概括本次方案；正文按 `@lyx-commit` 规范；`Change-Stage` 固定 `propose`。提交命令使用 `git commit -F .git/COMMIT_EDITMSG`。）
 4. 用 `git show --name-only --format=` 校验这次 commit 的实际文件集合严格等于目标范围（该目录全部应提交文件，含 `.openspec.yaml` 与 `context.md`）——不许超出、不许漏项。
 5. 若该目录下无可提交内容、`git commit` 失败，或校验发现文件集合与目标范围不相等，**停止后续自动化步骤**，报告具体原因。
 

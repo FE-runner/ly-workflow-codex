@@ -109,11 +109,11 @@ echo "$COMMITS" | grep -i "BREAKING CHANGE" || true      # 破坏性变更
 是否使用此建议？可以改为 patch（1.6.1 → 1.6.2）或 major（1.6.1 → 2.0.0）
 ```
 
-- **同意建议**：直接按建议执行 `npm version <patch|minor|major>`
+- **同意建议**：按建议执行 `npm version <patch|minor|major> --no-git-tag-version`，随后按 `@lyx-commit` 正文规范提交版本变更并补 `git tag v<新版本号>`
 - **覆盖**：按用户输入的档位执行
 - **不存在以往的 commit**：回退到直接询问版本号
 
-若已装 `@lyx-changelog`，version bump 后触发它更新 CHANGELOG，再补一次 commit；没装则询问用户要不要更新日志。
+若已装 `@lyx-changelog`，version bump 后触发它更新 CHANGELOG，再补一次符合 `@lyx-commit` 正文规范的 commit；没装则询问用户要不要更新日志。`npm version` 默认短 commit SHALL NOT 被接受。
 
 ---
 
@@ -162,9 +162,9 @@ pnpm lint            # 有则跑，失败先询问是否继续
 - 分析上次 bump 以来的 commit 列表
 - 按 feat/fix/BREAKING 推导建议档位
 - 将建议展示给用户确认/覆盖
-- 确认后执行 `npm version <patch|minor|major>`（会自动更新 package.json + 打 git tag + commit）
+- 确认后执行 `npm version <patch|minor|major> --no-git-tag-version` 更新 package.json；随后按 `@lyx-commit` 正文规范提交版本变更，再执行 `git tag v<新版本号>`
 
-若项目已装 `@lyx-changelog`，version bump 后触发它更新 CHANGELOG，再补一次 commit；没装则询问用户要不要更新日志。
+若项目已装 `@lyx-changelog`，version bump 后触发它更新 CHANGELOG，再补一次符合 `@lyx-commit` 正文规范的 commit；没装则询问用户要不要更新日志。
 
 ### 5. 发布
 
@@ -258,7 +258,7 @@ npm publish --access public   # 首次发布 scoped 公共包必须加 --access 
 ### 5. GitHub Release
 
 ```bash
-# 确认 tag 已推送（npm version 已打好 tag）
+# 确认 tag 已推送（版本变更已按规范提交并补打 tag）
 git push --follow-tags
 
 # 用 gh cli 建 release，标题/说明取自 CHANGELOG 对应版本段落
@@ -322,9 +322,14 @@ pnpm build
 pnpm type-check
 
 # 版本号 bump（按上方「版本号确定规则」自动推导 + 确认）
-npm version <patch|minor|major>
+npm version <patch|minor|major> --no-git-tag-version
+# 写入 .git/COMMIT_EDITMSG：首行 chore(release): v<新版本号>，
+# 正文按 @lyx-commit 规范写动机/改动/影响
+git add package.json package-lock.json 2>/dev/null || git add package.json
+git commit -F .git/COMMIT_EDITMSG
+git tag v<新版本号>
 
-# 若装了 @lyx-changelog，此时更新 CHANGELOG 并补 commit；没装则询问用户
+# 若装了 @lyx-changelog，此时更新 CHANGELOG 并补符合 @lyx-commit 正文规范的 commit；没装则询问用户
 ```
 
 ### 4. 推送触发
@@ -368,7 +373,7 @@ npm pack --dry-run
 | 报错 | 触发条件 | 处理 |
 |---|---|---|
 | `403 Forbidden` / `You must be logged in` | 未登录或 token 过期 | 重新 `npm login --registry=<对应地址>`；GitHub Packages/CI 场景检查 token 权限是否含 `write:packages` 或 Secret 是否过期 |
-| `409 Conflict` / `You cannot publish over the previously published version` | 版本号已存在 | 先 `npm view <包名>@<版本号> --registry=<对应地址>` 确认；确实冲突则重新 `npm version patch/minor/major` 打一个新版本号，不要改已发布版本 |
+| `409 Conflict` / `You cannot publish over the previously published version` | 版本号已存在 | 先 `npm view <包名>@<版本号> --registry=<对应地址>` 确认；确实冲突则重新 `npm version patch/minor/major --no-git-tag-version`、按规范提交并补 tag，不要改已发布版本 |
 | `402 Payment Required` / 需要 `--access public` | 首次发布 scoped 公共包没加 `--access public` | 补上 `--access public` 重试；私有包保持 `--access restricted` 别改 |
 | 构建脚本报错 / `prepublishOnly` 失败 | 代码本身有问题，或依赖没装齐 | 别绕过直接强发（`npm publish` 会先跑 `prepublishOnly`，失败会自动中止，不用手动加 `--ignore-scripts` 硬闯）；先定位报错原因修好代码再重试 |
 | CI 里 `npm publish` 卡住或失败但本地能发 | CI runner 网络不通私域 Nexus，或 Secret 没配对 | 检查该 workflow 是否为 self-hosted runner、Secret 名字是否与 workflow 里 `secrets.XXX` 一致；不确定就让用户去 Actions 页面看具体报错，不要瞎猜重试 |

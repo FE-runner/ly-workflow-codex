@@ -116,6 +116,44 @@ describe('codex template set', () => {
     expect(content).toContain('Change-Name: <change-name>')
   })
 
+  it('commit-generating templates reuse the standardized message body rules', () => {
+    const bodyTemplates = [
+      'commit.md',
+      'propose.md',
+      'apply.md',
+      'archive.md',
+      'review-plan.md',
+      'review-code.md',
+      'init.md',
+      'release.md',
+      'changelog.md',
+      'publish.md',
+      'worktree.md',
+    ]
+    for (const file of bodyTemplates) {
+      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
+      expect(content, file).toMatch(/(动机|Motivation)/)
+    }
+
+    const commit = readFileSync(join(SKILLS_TEMPLATES_DIR, 'commit.md'), 'utf-8')
+    expect(commit).toContain('- 动机：')
+    expect(commit).toContain('- Motivation:')
+
+    for (const file of ['propose.md', 'apply.md', 'archive.md', 'review-plan.md', 'review-code.md']) {
+      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
+      expect(content, file).toContain('Change-Stage')
+      expect(content, file).toContain('Change-Name: <change-name>')
+      expect(content, file).toContain('git commit -F .git/COMMIT_EDITMSG')
+    }
+
+    const publish = readFileSync(join(SKILLS_TEMPLATES_DIR, 'publish.md'), 'utf-8')
+    expect(publish).toContain('npm version <patch|minor|major> --no-git-tag-version')
+    expect(publish).toContain('git tag v<新版本号>')
+
+    const worktree = readFileSync(join(SKILLS_TEMPLATES_DIR, 'worktree.md'), 'utf-8')
+    expect(worktree).toContain('chore(worktree): 忽略 .worktrees 目录')
+  })
+
   it('no codex template contains wrapper/lite/routing residue', () => {
     for (const file of readdirSync(SKILLS_TEMPLATES_DIR).filter(f => f.endsWith('.md'))) {
       const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')

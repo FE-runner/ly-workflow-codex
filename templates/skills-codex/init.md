@@ -42,10 +42,16 @@ argument-hint: '<项目摘要或名称>'
 
 ```bash
 git add -- AGENTS.md openspec/
-git commit -m "chore: init AGENTS.md + openspec structure"
+# 先将完整 message 写入 .git/COMMIT_EDITMSG：
+# chore: init AGENTS.md + openspec structure
+#
+# - 动机：初始化项目上下文与 OpenSpec 目录结构
+# - 改动：生成/更新 AGENTS.md，并初始化 openspec/
+# - 影响：后续 propose/apply 可在该项目内使用 OpenSpec 流程
+git commit -F .git/COMMIT_EDITMSG
 ```
 
-仅暂存本次初始化产生的文件（`AGENTS.md`、`openspec/`），不用 `git add -A`。若无可提交内容（两者均已存在且未变化）或 `git commit` 失败，跳过提交，在汇总中如实报告，不中断步骤 4。
+仅暂存本次初始化产生的文件（`AGENTS.md`、`openspec/`），不用 `git add -A`。提交信息按 `@lyx-commit` 正文规范写完整 message，不追加 `Change-Stage` / `Change-Name` trailer。若无可提交内容（两者均已存在且未变化）或 `git commit` 失败，跳过提交，在汇总中如实报告，不中断步骤 4。
 
 ### 步骤 4：汇总
 

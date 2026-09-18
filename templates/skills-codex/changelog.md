@@ -157,9 +157,15 @@ echo "$RAW" | grep -v "^[a-f0-9]* feat" | grep -v "^[a-f0-9]* fix" || true
 
 ```bash
 git add CHANGELOG.md
-git commit -m "docs: update CHANGELOG for v<版本号>"
+# 先将完整 message 写入 .git/COMMIT_EDITMSG：
+# docs: update CHANGELOG for v<版本号>
+#
+# - 动机：为 v<版本号> 补充发布日志
+# - 改动：更新 CHANGELOG.md 的 <版本号> 段落
+# - 影响：发布说明与本次版本变更保持一致
+git commit -F .git/COMMIT_EDITMSG
 ```
 
 ---
 
-**注意：** 本命令只负责生成/更新 CHANGELOG 内容，不负责版本号修改、分支操作、PR 创建——那些属于 `@lyx-release` 的职责。发版流程中，先由 release 完成版本号 bump commit，再触发本命令生成 CHANGELOG。
+**注意：** 提交信息按 `@lyx-commit` 正文规范写完整 message，不追加 `Change-Stage` / `Change-Name` trailer。本命令只负责生成/更新 CHANGELOG 内容，不负责版本号修改、分支操作、PR 创建——那些属于 `@lyx-release` 的职责。发版流程中，先由 release 完成版本号 bump commit，再触发本命令生成 CHANGELOG。

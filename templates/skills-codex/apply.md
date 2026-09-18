@@ -62,10 +62,10 @@ argument-hint: '[<change-name>]'
 2. 确认一致后，**回写 context.md（实施软上下文）**：把实施阶段新产生的关键决策（实现取舍、对方案的偏差及理由、发现的坑）更新进 `openspec/changes/<change-name>/context.md`——增量追加或修订，SHALL NOT 重写或删除 propose 阶段已沉淀的内容（确已过时的条目标注"已过时"保留痕迹）；实施无新增软上下文时保持原样不强行凑写。`context.md` 缺失（历史 change）时跳过回写并在报告中注明。**回写了 context.md 时 SHALL 把它并入"本次待提交文件清单"**（清单 = coding subagent 回传清单 ∪ 回写后的 `context.md`；自实施路径同理——主会话记录的实施改动清单 ∪ `context.md`），后续暂存与提交校验均以更新后的清单为准。
 3. 确认一致后提交，按共用 index 隔离协议执行（目标范围为本次待提交文件清单）：
    - 先 `git add -- <本次待提交文件清单>`（不用 `git add -A`）。
-   - **步骤 2 快照中已存在 staged 内容时**：用 `git commit --only -m "<message>" -- <本次待提交文件清单>` 仅提交该清单（**`-m` 必须放在 `--` 之前**；清单含未跟踪新文件时**必须先 `git add`**，否则 `--only` 报 `pathspec ... did not match any file(s) known to git`；SHALL NOT 用全量 `git commit` 吞并 index 既存 staged 内容），或先 unstage 非本次文件、提交后恢复原暂存状态；范围外文件保留原暂存状态。
+   - **步骤 2 快照中已存在 staged 内容时**：用 `git commit --only -F .git/COMMIT_EDITMSG -- <本次待提交文件清单>` 仅提交该清单（**`-F` 必须放在 `--` 之前**；清单含未跟踪新文件时**必须先 `git add`**，否则 `--only` 报 `pathspec ... did not match any file(s) known to git`；SHALL NOT 用全量 `git commit` 吞并 index 既存 staged 内容），或先 unstage 非本次文件、提交后恢复原暂存状态；范围外文件保留原暂存状态。
    - 同一文件内既存 staged hunk 与本次 hunk 混合、无法机械分离时 → 无法安全隔离，SHALL 停止转人工，不猜测性提交。
    - 快照中无 staged 内容时：直接 `git commit`。
-   - message 采用 Conventional Commits 前缀 + trailer 结构：`<cc-type>(<scope>): <subject>`（type 由主会话按本次实际改动判断，如 `feat` / `fix` / `refactor`；SHALL NOT 固定为某个 type），末尾带 `Change-Stage: apply` 与 `Change-Name: <change-name>` trailer。
+   - message 采用 Conventional Commits 前缀 + 正文 + trailer 结构：先按 `@lyx-commit` 规范写入 `.git/COMMIT_EDITMSG`，首行 `<cc-type>(<scope>): <subject>`（type 由主会话按本次实际改动判断，如 `feat` / `fix` / `refactor`；SHALL NOT 固定为某个 type），正文至少包含 `- 动机：` / `- 改动：` / `- 影响：`，末尾带 `Change-Stage: apply` 与 `Change-Name: <change-name>` trailer。提交命令使用 `git commit -F .git/COMMIT_EDITMSG`。
    - 提交后 SHALL 以 `git show --name-only` 校验该 apply 阶段 commit 的文件集合严格等于本次待提交清单（含回写的 `context.md`，如适用），不相等 SHALL 如实报告并修复，不得带着多余文件进入 apply 阶段 commit。
 4. apply 阶段 commit 即 `@lyx-review-code` 的审查对象（定位见 `@lyx-review-code` 的 trailer 优先规约）。
 5. 无可提交内容（如 tasks 本身无产出、或改动已在审查循环中被提交）则跳过，不创建空 commit。

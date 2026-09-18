@@ -41,6 +41,22 @@ argument-hint: '<场景描述>'
 
 ---
 
+## 提交信息规范
+
+本命令中所有显式 `git commit` 示例 SHALL 按 `@lyx-commit` 正文规范写完整 message，并使用 `git commit -F .git/COMMIT_EDITMSG`。message 结构为：
+
+```text
+<type>(<scope>): <subject>
+
+- 动机：...
+- 改动：...
+- 影响：...
+```
+
+非 change 生命周期提交不追加 `Change-Stage` / `Change-Name` trailer。`git merge` / `git cherry-pick` 产生的 git 原生默认 message 不强制补正文。
+
+---
+
 ## 版本号确定规则（SemVer + Conventional Commits 自动推导）
 
 **不要直接问用户「patch 还是 minor」，先分析 commit 历史给出建议，再让用户确认/覆盖。**
@@ -127,7 +143,9 @@ git merge --no-ff feature/<功能名>
 # 按上方「版本号确定规则」分析 commit 历史，给出建议档位，询问用户确认
 # 编辑 version.sh 将 VERSION=x.x.x 改为确认的版本号，再执行：
 git add version.sh
-git commit -m "chore: bump version to <确认的版本号>"
+# 写入 .git/COMMIT_EDITMSG：首行 chore: bump version to <确认的版本号>，
+# 正文按 @lyx-commit 规范写动机/改动/影响
+git commit -F .git/COMMIT_EDITMSG
 git push origin master
 
 # 方式 C 上线合并完成后，三分支同步（以远端 origin/master 为基准）：
@@ -176,7 +194,9 @@ git checkout -b release/<版本号>   # 例如 release/1.4.0
 #   c. 将建议展示给用户：「建议 bump X → Y，是否确认？（可改为 Z）」
 #   d. 用户确认后，编辑 version.sh 将 VERSION=x.x.x 改为确认的版本号
 git add version.sh
-git commit -m "chore: bump version to <确认的版本号>"
+# 写入 .git/COMMIT_EDITMSG：首行 chore: bump version to <确认的版本号>，
+# 正文按 @lyx-commit 规范写动机/改动/影响
+git commit -F .git/COMMIT_EDITMSG
 
 # 3. 更新 CHANGELOG（如有）
 # 若已安装 @lyx-changelog：直接触发它生成/更新 CHANGELOG.md 并提交
@@ -189,8 +209,10 @@ git commit -m "chore: bump version to <确认的版本号>"
 # 【如果存在 CHANGELOG】：以本次 version.sh 的更新 commit 为节点，收集 commit 并按类型分组（Added/Fixed/Changed）写入
 #
 # 提交 CHANGELOG 变更：
-git add CHANGELOG.md   # 如果文件存在
-git commit -m "docs: update CHANGELOG for v<确认的版本号>"
+# 如果文件存在；写入 .git/COMMIT_EDITMSG：首行 docs: update CHANGELOG for v<确认的版本号>，
+# 正文按 @lyx-commit 规范写动机/改动/影响
+git add CHANGELOG.md
+git commit -F .git/COMMIT_EDITMSG
 
 # 4. 上线合并到 master（二选一）：
 #
@@ -241,8 +263,10 @@ git pull origin master
 git checkout -b hotfix/<问题描述>   # 例如 hotfix/login-crash
 
 # 2. 修复 bug，提交
+# 写入 .git/COMMIT_EDITMSG：首行 fix: <问题描述>，
+# 正文按 @lyx-commit 规范写动机/改动/影响
 git add .
-git commit -m "fix: <问题描述>"
+git commit -F .git/COMMIT_EDITMSG
 
 # 3. 确定版本号并 bump（必须！否则部署会失败）
 # 读取当前版本：grep -oP 'VERSION=\K[^ ]+' version.sh
@@ -250,7 +274,9 @@ git commit -m "fix: <问题描述>"
 # 按上方「版本号确定规则」展示推导结果给用户确认，确认后：
 # 编辑 version.sh 将 VERSION=x.x.x 改为确认的版本号
 git add version.sh
-git commit -m "chore: bump version to <确认的版本号>"
+# 写入 .git/COMMIT_EDITMSG：首行 chore: bump version to <确认的版本号>，
+# 正文按 @lyx-commit 规范写动机/改动/影响
+git commit -F .git/COMMIT_EDITMSG
 
 # 4. 上线合并到 master（二选一）：
 #

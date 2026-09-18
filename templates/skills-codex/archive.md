@@ -26,10 +26,18 @@ argument-hint: '[<change-name>]'
 
 ```bash
 git add -- openspec/
-git commit -m "chore(openspec): 归档 <change-name>" -m "Change-Stage: archive
-Change-Name: <change-name>"
+# 先将完整 message 写入 .git/COMMIT_EDITMSG：
+# chore(openspec): 归档 <change-name>
+#
+# - 动机：完成 <change-name> 的归档收尾
+# - 改动：移动 change 目录并同步 openspec/specs
+# - 影响：归档后的 change 不再作为活跃 change
+#
+# Change-Stage: archive
+# Change-Name: <change-name>
+git commit -F .git/COMMIT_EDITMSG
 ```
 
-message 采用 Conventional Commits 前缀 + trailer 结构：CC 前缀固定 `chore(openspec)`，末尾带 `Change-Stage: archive` 与 `Change-Name: <change-name>` trailer（`-m` 分两段传入时，git 会在两段之间插入空行，trailer 块因此位于 message 末尾）。
+message 采用 Conventional Commits 前缀 + 正文 + trailer 结构：先按 `@lyx-commit` 规范写入完整 message，CC 前缀固定 `chore(openspec)`，正文包含动机/改动/影响，末尾带 `Change-Stage: archive` 与 `Change-Name: <change-name>` trailer。
 
 若无可提交内容或 `git commit` 失败，跳过提交，如实报告原始错误，不视为归档失败。

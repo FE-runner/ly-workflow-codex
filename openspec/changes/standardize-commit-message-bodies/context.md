@@ -29,3 +29,11 @@
 - 重点检查所有会生成提交的模板是否都覆盖：commit/propose/apply/archive/review-plan/review-code/init/release/changelog/publish。
 - 重点检查 `commit-conventions` 中“非 change 生命周期不套用本结构”与新正文规范的边界是否表达清楚：不套 trailer，但必须有正文。
 - 重点检查 release/publish 是否仍保留 tag 与 changelog 流程，避免为了正文规范破坏发布行为。
+
+## 实施决策
+
+- 自动阶段模板统一改为“先写完整 `.git/COMMIT_EDITMSG`，再 `git commit -F`”；index 隔离场景使用 `git commit --only -F .git/COMMIT_EDITMSG -- <paths>`。
+- WIP 提交首行从 `wip:` 调整为 `chore(wip):`，使其符合 Conventional Commits 前缀。
+- release 模板保留 merge/cherry-pick 原生命令；只把显式 `git commit` 示例改为完整 message。
+- publish 的版本 bump 改为 `npm version --no-git-tag-version`，随后按规范提交并补 `git tag`，避免 npm 默认短 commit。
+- 模板断言覆盖正文标签、change trailer、`-F`、`--no-git-tag-version` 与 worktree `.gitignore` 提交。

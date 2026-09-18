@@ -64,13 +64,27 @@ argument-hint: '[--all] [--amend] [--type <type>] [--scope <scope>]'
 
 `[模式：生成]`
 
-**格式**：`[emoji] <type>(<scope>): <subject>`
+**格式**：
+
+```text
+[emoji] <type>(<scope>): <subject>
+
+- 动机：...
+- 改动：...
+- 影响：...
+```
 
 - 首行 ≤ 72 字符
 - 祈使语气
-- 消息体：动机、实现要点、影响范围
+- 正文 SHALL 至少包含三条 bullet：中文提交用 `- 动机：`、`- 改动：`、`- 影响：`；英文提交用 `- Motivation:`、`- Change:`、`- Impact:`
+- 正文与任意 git trailer 块之间保留空行
+- 只有 subject、没有正文的 message 不符合本规范
+- `--emoji` 是兼容扩展：仅在用户显式请求时使用；自动流程提交默认不带 emoji
+- 自动流程提交（propose/apply/archive/review 修复）SHALL 复用本正文规范，并在正文后追加自己的 trailer
 
 **语言**：根据最近 50 次提交判断中文/英文
+
+**提交前自检**：检查最终 message 是否包含 subject、三条正文 bullet、以及按需追加的 trailer 块；trailer 必须是 message 最后一段。
 
 ### ✅ 阶段 5：执行提交
 

@@ -82,7 +82,7 @@ your-project/
    - 用户本次显式指定路径 → 直接用
    - 传 `--local` → 用项目内 `.worktrees/`（不再靠"目录已存在"自动判断，避免误触发）
    - 默认 `~/.ly/worktrees/项目名/<path>`（用户目录下，见上方目录结构）
-3. **`--local` 时必须校验已忽略**：`git check-ignore -q .worktrees`。未忽略则先写入 `.gitignore` 并提交，再继续创建——防止 worktree 内容被误提交进仓库。
+3. **`--local` 时必须校验已忽略**：`git check-ignore -q .worktrees`。未忽略则先写入 `.gitignore`，按 `@lyx-commit` 正文规范提交（首行 `chore(worktree): 忽略 .worktrees 目录`，正文写动机/改动/影响，不追加 Change trailer），再继续创建——防止 worktree 内容被误提交进仓库。
 4. 创建 worktree（`git worktree add <path> -b <branch>`）
 5. 自动复制环境文件（`.env` 等）
 6. **验证 baseline**：自动检测并跑项目安装/测试命令（`npm install && npm test` / `cargo build && cargo test` / `pip install -r requirements.txt && pytest` / `go mod download && go test ./...` 等），确认新 worktree 干净可用后才报告完成；测试失败则汇报失败详情，询问是继续还是先排查。
