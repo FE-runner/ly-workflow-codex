@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.1] - 2026-09-20
+
+本版补充英文 README，并支持中英文切换；默认入口改为英文，中文文档保留为独立文件。
+
+### Changed
+
+- 新增英文 `README.md`，原中文 README 调整为 `README.zh-CN.md`
+- 两份 README 顶部增加 `English | 简体中文` 切换链接
+- npm 包文件清单包含 `README.zh-CN.md`，发布包同时携带中英文 README
+- README 中移除与 ly-workflow 的关系说明
+
 ## [0.5.0] - 2026-09-18
 
 本版统一了 lyx 生成提交的 message 正文规范，并补齐归档后的隔离环境收尾：propose 记录来源分支与 worktree metadata，archive 完成后可提示合并回来源分支并清理 worktree / 开发分支。
