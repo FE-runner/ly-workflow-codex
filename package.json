@@ -31,6 +31,7 @@
   "files": [
     "bin/lycx.mjs",
     "dist",
+    "README.zh-CN.md",
     "docs/codex-exec-contract.md",
     "templates/prompts/codex/",
     "templates/skills-codex/"

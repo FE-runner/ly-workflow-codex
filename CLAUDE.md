@@ -8,7 +8,7 @@
 
 ## 项目定位
 
-**ly-workflow-codex**：Codex 单 Agent 工作流——同一 Codex 会话内自己完成探索 / 方案 / 实施 / 审查编排。审查与实施主体由 `[codexHost] reviewExecutor` / `codingExecutor` 决定：未配置等价 `main`（主 agent 直接执行，默认），显式配置 `subagent` 才 spawn 独立子代理（非 fork spawn + 范围点名；软上下文经 change 目录 `context.md` 到达），模型经 `codexHost.reviewModel`/`codingModel` 指定、非空推理档经 `reviewReasoningEffort`/`codingReasoningEffort` 随对应 spawn 传入（执行者为 `main` 时这些字段不生效，`lycx doctor` 输出 WARN）。慢验证（测试 / 类型检查 / 构建）统一由 `@lyx-archive` 的归档前关卡执行。无 wrapper、无 Web UI、无 routing/implementer 概念；配置单宿主于 `~/.codex/lyx/config.toml`（本包私有目录，与 ly-workflow 彻底解耦，不做任何自动迁移）。它是 ly-workflow（双宿主）的 codex 单宿主独立版，关系与迁移路径见 [README.md](./README.md#与-ly-workflow-的关系)。
+**ly-workflow-codex**：Codex 单 Agent 工作流——同一 Codex 会话内自己完成探索 / 方案 / 实施 / 审查编排。审查与实施主体由 `[codexHost] reviewExecutor` / `codingExecutor` 决定：未配置等价 `main`（主 agent 直接执行，默认），显式配置 `subagent` 才 spawn 独立子代理（非 fork spawn + 范围点名；软上下文经 change 目录 `context.md` 到达），模型经 `codexHost.reviewModel`/`codingModel` 指定、非空推理档经 `reviewReasoningEffort`/`codingReasoningEffort` 随对应 spawn 传入（执行者为 `main` 时这些字段不生效，`lycx doctor` 输出 WARN）。慢验证（测试 / 类型检查 / 构建）统一由 `@lyx-archive` 的归档前关卡执行。无 wrapper、无 Web UI、无 routing/implementer 概念；配置单宿主于 `~/.codex/lyx/config.toml`（本包私有目录，不做任何自动迁移）。对外说明见 [README.md](./README.md) 与 [README.zh-CN.md](./README.zh-CN.md)。
 
 ## 常用命令
 
@@ -53,6 +53,6 @@ lycx uninstall               # 卸载
 ## 相关文件
 
 - [AGENTS.md](./AGENTS.md) — 开发权威文档（模块职责 / 常量 / 配置 / 设计决策 / 发版规则）
-- [README.md](./README.md) — 对外用户文档（安装 / 命令表 / 架构 / 与 ly-workflow 的关系）
+- [README.md](./README.md) / [README.zh-CN.md](./README.zh-CN.md) — 对外用户文档（安装 / 命令表 / 架构）
 - [docs/codex-exec-contract.md](./docs/codex-exec-contract.md) — codex exec 调用契约（DEPRECATED，历史参考）
 - [templates/CLAUDE.md](./templates/CLAUDE.md) — 模板库导航
