@@ -2,7 +2,7 @@
 
 > Codex 单 Agent 工作流：同一 Codex 会话内自己完成聊天 / 分析 / 规划 / 实施。审查与实施主体由 `[codexHost] reviewExecutor` / `codingExecutor` 决定（未配置等价 `main` = 主 agent 直接执行；`subagent` = spawn 独立子代理，非 fork spawn + 主会话逐条裁决异议）；慢验证统一由 `@lyx-archive` 的归档前关卡执行。执行约定内联于各 skill 模板（[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED）。
 
-**Last Updated**: 2026-09-18 (v0.4.0)
+**Last Updated**: 2026-09-23 (v0.6.0)
 
 ---
 
@@ -114,6 +114,7 @@ spawnableModels = [...]    # 本机实测可 spawn 的模型清单（可选，�
 
 - 审查关卡 = **执行者可切换**：`reviewExecutor = "main"`（默认）= 主 agent 直接自审，无 spawn、无逐条裁决、无驳回硬线，最多 2 轮；`reviewExecutor = "subagent"` = review-plan / review-code 各 spawn 1 个审查 subagent（非 fork spawn、只携带 TASK + 只审 change 范围），每条 Critical 由主会话逐条裁决——认可即修复，不认可必须附**可核验依据**（泛泛"误报"视为未完成裁决）；subagent 路径第 2 轮起默认 `send_input` 复用同一子代理，复用失败才重新 spawn
 - 软上下文载体 = **change 目录 `context.md`**：propose 阶段产出（内容边界自检）、apply 阶段维护（实施决策回写）、subagent 路径消费（TASK 只传路径）；执行者为 `main` 时主 agent 保有完整上下文，`context.md` 仅作决策留痕
+- 审查未修项快照 = **change 目录 `review-findings.md`**（快照式留痕，非台账）：review-plan / review-code 循环结束时按节 upsert 写入最后一轮 **Warning**（不收 Info / Critical）；正常清零在统一 commit **之后**写（保持未跟踪），随 `@lyx-archive` 的 `git add -- openspec/` 落库并搬入 `archive/`；`@lyx-explore` 进入时扫描并**先询问后列出**；该文件在 `main` / `subagent` 两条路径下均被排除在审查范围与中间 commit 之外
 - 驳回硬线（终止条件，防主会话裁决失效）：（a）逐条口径——同一 Critical 复现且再被驳回；（b）整轮口径——连续 2 轮对当轮全部 Critical 均不认可（零认可零修复）；命中即停转人工
 - 实施 = **按 `codingExecutor` 切换**：`main`（默认）= 主 agent 直接读 tasks.md 逐任务实施 + 验证 + 勾选；`subagent` = spawn coding subagent（非 fork + 只实施 change 范围），回传主会话**不自行 commit**。两条路径均由主会话统一提交 `apply: <change-name>`；subagent 路径环境级不可用回退主 agent，业务失败原样呈报转人工
 - 模型与推理档：审查 subagent = `codexHost.reviewModel` + 非空 `reviewReasoningEffort`，coding subagent = `codexHost.codingModel` + 非空 `codingReasoningEffort`；**仅在对应执行者为 `subagent` 时生效**，执行者为 `main` 时字段被忽略并由 doctor 输出 WARN；模型未配置或空白回退当前会话模型，推理档未配置或空白不传，经"模板指示 + 宿主 spawn 能力"落实，无 shell 层模型参数；推理档不做枚举强校验，禁止模型名到档位的硬编码映射

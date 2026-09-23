@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-09-23
+
+本版新增"审查未修项快照"：审查产生的未修复 Warning 不再随对话消失——按节写入 change 目录下的 `review-findings.md`，随归档落库，并可由 `@lyx-explore` 先询问后列出。
+
+### Added
+
+- 新能力 `review-findings-snapshot`：change 目录下 `review-findings.md` 单文件两节（`## 方案审查` / `## 代码审查`）快照，只收最后一轮 Warning（不收 Info / Critical）
+- `@lyx-review-plan` / `@lyx-review-code` 在审查循环结束时按节 upsert 写入快照：正常清零在统一 commit **之后**写（保持未跟踪），非正常终止、`--no-commit`、commit 失败等场景照写
+- `@lyx-explore` 进入时扫描 active 与 archive 下的快照，有命中则**先询问**是否列出，用户同意后才按 change 分组展示
+
+### Changed
+
+- 审查命令的未跟踪（`??`）清单显式排除 `review-findings.md`，且在 `main` / `subagent` 两条执行者路径下同样生效；该文件不会被当作审查对象，也不会被中间 commit 提前纳入
+- `@lyx-archive` 随既有 `git add -- openspec/` 把快照落库并搬入 `archive/`，不新增归档专门步骤
+- `@lyx-explore` 由"纯委托"调整为"纯委托为主 + 委托前一次快照询问"，参数转发仍原样
+- README / CLAUDE.md 同步快照行为摘要
+
 ## [0.5.1] - 2026-09-20
 
 本版补充英文 README，并支持中英文切换；默认入口改为英文，中文文档保留为独立文件。
