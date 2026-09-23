@@ -92,6 +92,49 @@ describe('codex template set', () => {
     }
   })
 
+  it('review templates write unresolved-Warning snapshot and exclude it from review scope', () => {
+    const sections: Record<string, string> = {
+      'review-plan.md': '## 方案审查',
+      'review-code.md': '## 代码审查',
+    }
+    for (const [name, section] of Object.entries(sections)) {
+      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, name), 'utf-8')
+      // 写入 change 目录下的审查未修项快照，并按本命令负责的节写入
+      expect(content, name).toContain('review-findings.md')
+      expect(content, name).toContain(section)
+      // 只收 Warning；不收 Info、不收 Critical
+      expect(content, name).toContain('SHALL NOT 收录 Info')
+      // 节级 upsert：重跑后该类零 Warning 时移除旧节，不保留过期内容
+      expect(content, name).toContain('SHALL NOT 保留过期节内容')
+      // 写入失败不改变审查结论
+      expect(content, name).toContain('写入失败容错')
+      // 排除规则：不被当审查对象、不进统一 commit，且两条执行者路径一致
+      expect(content, name).toContain('未跟踪清单排除')
+      expect(content, name).toContain('统一 commit 纳入')
+      expect(content, name).toContain('两条执行者路径')
+      // 该轮发现原文按执行者取值（main 路径无 subagent 也要记录）
+      expect(content, name).toContain('该轮发现原文')
+    }
+  })
+
+  it('explore template asks before listing review-findings snapshots', () => {
+    const content = readFileSync(join(SKILLS_TEMPLATES_DIR, 'explore.md'), 'utf-8')
+    expect(content).toContain('review-findings.md')
+    expect(content).toContain('先询问')
+    expect(content).toContain('SHALL NOT 直接列出')
+    expect(content).toContain('openspec/changes/archive/')
+    // 询问/列出不改变参数原样转发
+    expect(content).toContain('原样转发')
+    // 读取失败容错
+    expect(content).toContain('跳过该条并如实注明')
+  })
+
+  it('archive template notes review-findings snapshot rides along with openspec add', () => {
+    const content = readFileSync(join(SKILLS_TEMPLATES_DIR, 'archive.md'), 'utf-8')
+    expect(content).toContain('review-findings.md')
+    expect(content).toContain('git add -- openspec/')
+  })
+
   it('apply template is coding-subagent implementation (main session commits)', () => {
     const content = readFileSync(join(SKILLS_TEMPLATES_DIR, 'apply.md'), 'utf-8')
     expect(content).toContain('coding subagent')

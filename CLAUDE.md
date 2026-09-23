@@ -29,12 +29,12 @@ lycx uninstall               # 卸载
 | 命令 | 一句话说明 |
 |------|-----------|
 | `@lyx-init` | 生成项目 AGENTS.md + `lycx openspec ensure`（共享 CLI/skills/root 修复）+ 自动 commit |
-| `@lyx-explore` | 委托 `@openspec-explore skill`（纯薄壳） |
+| `@lyx-explore` | 委托 `@openspec-explore skill`；委托前扫描 `review-findings.md` 审查未修项快照，有命中则先询问是否列出（纯薄壳 + 一次快照询问） |
 | `@lyx-propose` | 编排入口：隔离三选一 → 全自动/手动 → `@openspec-propose skill` → 记录 isolation metadata → 方案自审 → context.md 产出 → commit `propose:`；全自动 = review-plan → apply → review-code 流水线 |
 | `@lyx-apply` | 按 `codingExecutor` 实施（`main` = 主 agent 直接实施；`subagent` = spawn coding subagent，非 fork，经 context.md 获取软上下文）读 tasks.md 逐任务实施 + 验证 + 勾 checkbox，主会话确认后回写 context.md 并 commit `apply:` |
 | `@lyx-archive` | 委托 `@openspec-archive-change skill` + 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
-| `@lyx-review-plan` | 按 `reviewExecutor` 审方案（`main` = 主 agent 直接自审，最多 2 轮；`subagent` = 单审查 subagent + 主会话逐条裁决 + 驳回硬线），清零统一提交 |
-| `@lyx-review-code` | 按 `reviewExecutor` 审代码（同上），Critical/Warning/Info 分级 |
+| `@lyx-review-plan` | 按 `reviewExecutor` 审方案（`main` = 主 agent 直接自审，最多 2 轮；`subagent` = 单审查 subagent + 主会话逐条裁决 + 驳回硬线），清零统一提交；循环结束后写 `review-findings.md` 的 `## 方案审查` 节（只收 Warning） |
+| `@lyx-review-code` | 按 `reviewExecutor` 审代码（同上），Critical/Warning/Info 分级；循环结束后写 `review-findings.md` 的 `## 代码审查` 节（只收 Warning） |
 | `@lyx-release` | GitFlow 四场景发版 + SemVer 推导 + 上线合并二选一 |
 | `@lyx-changelog` | Keep a Changelog 格式生成/更新 CHANGELOG.md |
 | `@lyx-publish` | npm 包发布四场景 |
@@ -44,6 +44,7 @@ lycx uninstall               # 卸载
 
 - 审查关卡 = **执行者可切换**：`reviewExecutor = "main"`（默认）= 主 agent 直接自审，无 spawn、无逐条裁决、无驳回硬线，最多 2 轮；`reviewExecutor = "subagent"` = 每关 spawn 1 个审查 subagent（非 fork、只携带 TASK、只审 change 范围），每条 Critical 由主会话逐条裁决——认可即修复，不认可必须附**可核验依据**；subagent 路径第 2 轮起默认 `send_input` 复用同一子代理
 - 软上下文 = **change 目录 `context.md`**：propose 产出（内容边界自检：无整段重复、决策可溯源、≤100 行）→ apply 维护（实施决策回写，只增不删）→ review-plan / review-code / coding subagent 消费（TASK 只传路径）
+- 审查未修项快照 = **change 目录 `review-findings.md`**（快照式留痕，非台账）：review-plan / review-code 循环结束时按节 upsert 写入最后一轮 **Warning**（不收 Info / Critical）；正常清零在统一 commit **之后**写（保持未跟踪），随 `@lyx-archive` 的 `git add -- openspec/` 落库并搬入 `archive/`；`@lyx-explore` 进入时扫描并**先询问后列出**；该文件被排除在审查范围与中间 commit 之外
 - **驳回硬线**（终止条件）：（a）同一 Critical 复现且再被驳回；（b）连续 2 轮对当轮全部 Critical 均不认可——命中即停转人工
 - 实施 = **按 `codingExecutor` 切换**：`main`（默认）= 主 agent 直接实施；`subagent` = spawn coding subagent（非 fork，只实施 change 范围 + context.md），模型 = `codexHost.codingModel`。两条路径均由主会话统一提交 `apply: <change-name>`；subagent 路径环境级不可用回退主 agent，业务失败原样呈报转人工
 - 模型与推理档：仅在对应执行者为 `subagent` 时生效（审查 = `reviewModel` + 非空 `reviewReasoningEffort`；实施 = `codingModel` + 非空 `codingReasoningEffort`）；执行者为 `main` 时字段不生效并由 doctor 输出 WARN；模型未配置或空白回退当前会话模型，推理档空白不传、不做枚举强校验；交互 init / 菜单可选择不覆盖（清除字段）或覆盖指定档位，非交互 update 保留原值；能否 spawn 由宿主实际报错判定（报错含 `Unknown model` / `Available models: ...` 时如实展示）；读取配置失败 → "配置状态未知"提示运行 `lycx doctor`；宿主无 subagent 能力或 spawn 失败 → 环境级不可用回退

@@ -39,6 +39,8 @@ git add -- openspec/
 git commit -F "$MSG_FILE"
 ```
 
+change 目录下若存在审查阶段写入的未跟踪 `review-findings.md`（审查未修项快照，见 `review-findings-snapshot`），随既有 `git add -- openspec/` 一并落库并随 change 目录搬入 `archive/`，无需额外步骤——SHALL NOT 为它新增任何专门的归档命令。
+
 message 采用 Conventional Commits 前缀 + 正文 + trailer 结构：先用 `git rev-parse --git-path COMMIT_EDITMSG` 获取 message 路径并按 `@lyx-commit` 规范写入完整 message，CC 前缀固定 `chore(openspec)`，正文包含动机/改动/影响，末尾带 `Change-Stage: archive` 与 `Change-Name: <change-name>` trailer。
 
 若无可提交内容或 `git commit` 失败，跳过提交，如实报告原始错误，不视为归档失败。

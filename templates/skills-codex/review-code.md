@@ -36,6 +36,8 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 **无论哪种情况**，额外用 `git status --porcelain` 抓取 `??` 开头的未跟踪文件路径——避免新建但未 `git add` 的文件被漏审。
 
+**未跟踪清单排除 `review-findings.md`**：上述 `??` 清单 SHALL 排除该 change 目录下的 `review-findings.md`（审查未修项快照，见 `review-findings-snapshot`）——它既 SHALL NOT 被当作可挑错的审查对象或修复对象，也 SHALL NOT 被循环结束时的统一 commit 纳入；它保持未跟踪直到 `@lyx-archive`。该排除与 `context.md` 同待遇，且在 `main` 与 `subagent` 两条执行者路径下同样生效（`main` 路径不 spawn subagent，但排除照旧）。
+
 ```bash
 git log --grep="^Change-Stage: apply$" --grep="^Change-Name: <change-name>$" --all-match -1 --format='%H' 2>/dev/null
 git log --grep="^apply: <change-name>" -1 --format='%H' 2>/dev/null
@@ -140,6 +142,16 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证统一�
 每一轮审查 subagent 派发完成后（包括首轮 Critical 为 0、直接跳到步骤 4 结束的情况，不只是进入了循环体的轮次），都要在报告中包含一个独立区块，逐字展示该轮审查 subagent 返回的原始 Critical/Warning/Info 内容（不经概括、改写或合并），与当前会话对该轮每条 Critical 的裁决（认可 / 不认可及可核验依据）并排列出（若该轮无 Critical，只展示原文，不需要并排判定）。这个区块在该轮审查返回之后即可呈现，不是审查 subagent 执行期间的流式展示。这是给需要核实细节的人看的补充材料；最终报告的主体是人话摘要（见步骤 4），二者并存，不互相替代。
 
 **硬性约束（逐字性）**：该区块中的 Warning/Info 与 Critical 同样必须逐字完整贴出，**禁止用省略号（"…"、"（同前）"等）改写或压缩**；清零轮（某轮 Critical 为 0）的判定仍需写明依据——对照前一轮各 Critical 的修复情况与验证结果说明"认可清零"的理由，不得仅以"无 Critical，正常清零"一句带过。
+
+### 循环结束后写入审查未修项快照（Warning）
+
+循环结束后（无论以正常清零还是任一终止条件收尾）SHALL 按节 upsert 写入 `openspec/changes/<change-name>/review-findings.md`，本命令负责 `## 代码审查` 节。写入内容与纪律：
+
+- **只收 Warning**：记录**最后一轮**审查报告的 Warning 逐字原文（位置 + 问题 + 建议），并附元信息（执行轮次、记录时间、基线 commit 引用或明确的基线状态）。SHALL NOT 收录 Info；SHALL NOT 收录 Critical（含非正常终止时未修的 Critical）。
+- **"该轮发现原文"按执行者取值**：`subagent` 路径 = 审查 subagent 返回的原文；`main`（默认）路径 = 主 agent 本轮审查报告中产出的原文。SHALL NOT 因 `main` 路径不存在审查 subagent 而跳过记录或虚构 subagent 原文。
+- **节级 upsert**：替换 `## 代码审查` 旧节、保留 `## 方案审查` 节（由 `@lyx-review-plan` 维护）。重跑本命令后该类 Warning 为零时 SHALL 移除 `## 代码审查` 节：移除后若 `## 方案审查` 节仍存在则保留文件，若两节均不存在则删除该文件，SHALL NOT 保留过期节内容。该节零 Warning 时 SHALL NOT 写空节；文件不存在且两节都空时 SHALL NOT 创建文件。
+- **写入时机**：正常清零场景 SHALL 在步骤 4 的统一 commit **之后**写入（快照保持未跟踪状态，SHALL NOT 进入该 commit）；非正常终止、`--no-commit`、统一 commit 失败、本轮无实际改动不建 commit 等场景 SHALL 照写，并在元信息中如实记录基线状态，SHALL NOT 为快照补建 commit。
+- **写入失败容错**：写入失败（change 目录不可写、路径被占用等）SHALL 如实报告失败与原始错误，SHALL NOT 因此改变本轮审查结论（Critical 是否清零、是否提交均不受影响），SHALL NOT 重试写入或回滚已完成的提交；快照缺失只是留痕丢失，不视为审查失败。
 
 ### 4. 输出报告
 
