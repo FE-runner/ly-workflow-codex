@@ -1,33 +1,51 @@
 ## MODIFIED Requirements
 
-### Requirement: 审查关卡以单审查 subagent（非 fork）执行
+### Requirement: 审查执行者可切换（main / subagent）
 
-review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 subagent 执行本轮审查；SHALL NOT spawn 第二个审查 agent，SHALL NOT 实现或保留"并行双审、交换结论、共识归并"环节——单 agent 的分级结论即本轮审查唯一审查发现来源，逐条 Critical 由主会话裁决（见「Critical 裁决：认可即修复、不认可必须附可核验依据」），SHALL NOT 因"只有一个 agent"而跳过裁决或把结论当作自动生效。
+**适用范围覆盖（自本 change 起）**：本能力中凡以"spawn 审查 subagent"为前提的 Requirement（含「审查 subagent 轮内纪律」「审查返回有效性判定」「审查关卡以单审查 subagent（非 fork）执行」「Critical 裁决：认可即修复、不认可必须附可核验依据」「审查调用失败分类处理」「审查-修复循环与终止条件」「全局轮数上限作为最后兜底」「循环结束后统一提交」），其适用范围 SHALL 限定为 `reviewExecutor = "subagent"` 时；`reviewExecutor = "main"`（默认，含未配置）时 SHALL 以本 Requirement 为准。两条路径的分歧点以本 Requirement 为权威。
 
-**非 fork spawn**：审查 subagent SHALL 以非 fork 方式 spawn——子代理只携带 spawn 消息（TASK），SHALL NOT 携带父线程对话历史（宿主 V1 语义为 `fork_context: false` 默认值；V2 语义为 `fork_turns: none`）。仅当宿主不支持完全非 fork 而仅支持"最近 N 轮"fork 模式时，SHALL 取最小 N（或 0）近似非 fork 并在报告中如实说明；SHALL NOT 使用全量 fork（`fork_turns: all`）。
+**执行者解析**：`@lyx-review-plan` / `@lyx-review-code` SHALL 读取 `~/.codex/lyx/config.toml` 的 `[codexHost] reviewExecutor`（未配置、空白或非法取值等价 `"main"`）决定本轮审查的执行者。审查范围判定、基线锚定、未跟踪清单采集（含 `review-findings.md` 审查未修项快照的排除，见 `review-findings-snapshot`）、Critical / Warning / Info 分级输出、`openspec validate` 这些与执行者无关的规则 SHALL 在两条路径下保持一致。`review-findings.md` SHALL NOT 被当作可挑错的审查对象或修复对象，且 SHALL 从审查命令的未跟踪（`??`）清单中排除——避免它既被当作审查对象、又被 review-plan / apply / review-code 的中间 commit 提前纳入；该排除 SHALL 在 `main` 与 `subagent` 两条路径下同样生效。
 
-**软上下文载体**：非 fork 意味着主会话讨论中的软上下文（关键决策、取舍、已知边界）不再随 fork 自动到达审查 agent；TASK SHALL 指示审查 subagent 读取该 change 目录下的 `context.md`（见 `review-context-artifact` 能力）获取软上下文，SHALL NOT 在 TASK 中整段复制其内容。
+**main 路径（默认）**：
 
-**范围点名与角色词**：审查任务 SHALL 点名审查范围（review-plan 为"只审 change 产物：proposal/design/specs/tasks"——该点名范围本身是显式枚举的文件集合，不包含 `context.md`；review-code 为"只审最近一次相关 commit 对应 diff（apply 阶段 commit，未有 apply 阶段 commit 时退化为 propose 阶段 commit；两者定位见 `commit-conventions`）及未跟踪清单"——`context.md` 可能因 apply 阶段回写而实际出现在该 diff 范围内，此时 SHALL NOT 因其出现在 diff 中而将其当作可挑错的审查对象或修复对象）。两个命令共同遵守：`context.md` 始终只是背景引用来源（见「软上下文载体」），SHALL NOT 被当作可挑错的审查对象或修复对象；`review-findings.md`（审查未修项快照，见 `review-findings-snapshot`）SHALL NOT 被当作可挑错的审查对象或修复对象，且 SHALL 从审查命令的未跟踪（`??`）清单中排除——避免它既被当作审查对象、又被 review-plan / apply / review-code 的中间 commit 提前纳入；SHALL NOT 超出点名范围作业；SHALL 继续引用对应 ROLE_FILE（`~/.codex/lyx/prompts/codex/plan-reviewer.md` / `reviewer.md`），角色词内容不重写。
+- 主 agent SHALL 在当前会话直接执行审查，SHALL NOT spawn 子代理、SHALL NOT 读取 `reviewModel` / `reviewReasoningEffort`、SHALL NOT 产生 `[回退]` 标记。
+- 主 agent SHALL 直接读取审查对象（review-plan 为 change 产物与全部 delta spec；review-code 为审查范围对应的 git diff 与未跟踪清单），产出 Critical / Warning / Info 分级发现。
+- SHALL NOT 存在"审查发现 vs 主会话裁决"两个主体：主 agent 的发现即最终裁决，SHALL NOT 适用逐条裁决、驳回硬线、熔断、审查对象类型持续系统性误判这些为双主体仲裁设计的条件。
+- 发现 Critical 时主 agent SHALL 直接修复，修复后 SHALL 再自查一轮确认清零；自审循环 SHALL 最多 2 轮，达到上限仍非清零时 SHALL 停止并转人工。
+- review-plan 场景每轮修复后 SHALL 运行 `openspec validate --changes <change-name>`；SHALL NOT 运行测试 / 类型检查 / 构建——慢验证统一由 `archive-verification-gate` 在归档前执行一次。
+- 清零后 SHALL 按既有「循环结束后统一提交」规则提交一次；`--no-commit` 时跳过。
 
-**模型与推理档**：SHALL 经"模板指示 + 宿主 spawn 能力"落实——审查 subagent 用 `codexHost.reviewModel` + 非空 `reviewReasoningEffort`；模型未配置或空白时继承当前会话模型，推理档 trim 后为空时不传 `reasoning_effort`。`reviewModelB`/`reviewReasoningEffortB` SHALL NOT 被审查流程读取使用（字段降级为弃用，见 `subagent-agent-config`）。SHALL NOT 依赖任何 shell 层模型或推理档参数，SHALL NOT 内置"模型名 → 推理档"的硬编码映射。审查 subagent 具备自主执行 shell 命令与读取文件的能力；TASK SHALL 只传基线引用或路径清单，SHALL NOT 由当前会话预先读取并拼贴审查内容全文。
+**subagent 路径**：
 
-#### Scenario: 审查 subagent 以非 fork 方式 spawn
-- **WHEN** 审查关卡（review-plan 或 review-code）spawn 审查 subagent
-- **THEN** 子代理只收到 TASK（范围点名、路径/基线清单、context.md 引用、模型指示），不携带主会话对话历史；SHALL NOT 使用全量 fork
+- 主会话 SHALL spawn 1 个审查 subagent（非 fork，只携带 TASK），模型按 `reviewModel`、非空推理档按 `reviewReasoningEffort` 传入；TASK SHALL 指示读取该 change 目录下 `context.md`。
+- 首轮之后 SHALL 优先以 `send_input` 复用同一子代理；复用失败（会话丢失、`send_input` 或 `resume_agent` 报错）SHALL 回退为重新 spawn 全新子代理，并按增量语义携带上一轮全部 Critical 逐字原文与路径清单。
+- 逐条裁决、驳回硬线、熔断、审查对象类型持续系统性误判、全局轮数上限（5 轮）等既有规则 SHALL 保持适用。
+- review-plan 场景每轮修复后 SHALL 运行 `openspec validate`；SHALL NOT 运行测试 / 类型检查 / 构建——慢验证统一由 `archive-verification-gate` 在归档前执行一次。
 
-#### Scenario: 按配置模型与推理档 spawn
-- **WHEN** 用户配置 `reviewModel = "A"`、`reviewReasoningEffort = "low"`，运行一个审查关卡
-- **THEN** 审查 subagent 以模型 A 和推理档 `low` 非 fork spawn；若 `reviewModelB` 也已配置，该值被忽略且不影响 spawn
+**回退**：`reviewExecutor = "subagent"` 但宿主不支持 spawn 或首次 spawn 失败时，SHALL 按 `subagent-agent-config` 的回退口径回退 main 路径并输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为流程失败。
 
-#### Scenario: 不得恢复双审查
-- **WHEN** 主会话在某一轮审查前考虑"再 spawn 一个复核 agent 更保险"
-- **THEN** SHALL NOT spawn 第二个审查 agent；额外把关由主会话逐条裁决与"驳回硬线"终止条件承担
+**废止被实测推翻的假设**：本能力原有 Requirement 中"子 agent 会话随主会话回合结构而存在，回合结束即失去访问能力"SHALL 废止——宿主支持子代理首次任务完成后再唤醒并保留其会话上下文，因此"每轮必须重新 spawn"不再是约束。
 
-#### Scenario: 软上下文经 context.md 到达
-- **WHEN** 审查 subagent 判断某条发现需要"为什么这样设计"的背景
-- **THEN** 它从 change 目录下的 `context.md` 读取背景（TASK 已含路径引用），SHALL NOT 依赖任何 fork 历史或上一轮 subagent 会话记忆
+#### Scenario: 默认由主 agent 直接审查
+- **WHEN** 用户未配置 `reviewExecutor`（等价 `main`），运行 `@lyx-review-plan`
+- **THEN** 主 agent 直接读取 change 产物产出分级发现，不 spawn 子代理、不产生回退标记；发现 Critical 时直接修复并最多自查 2 轮
 
-#### Scenario: 未修项快照不被当作审查对象或提前提交
-- **WHEN** 某 change 目录下存在未跟踪的 `review-findings.md`，用户运行 review-code 或 review-plan
+#### Scenario: 主 agent 路径不适用裁决与驳回硬线
+- **WHEN** 主 agent 执行审查并发现 Critical
+- **THEN** 主 agent 直接修复，不进入"逐条裁决 / 不认可须附可核验依据 / 驳回硬线 / 熔断"流程
+
+#### Scenario: 主 agent 路径不做慢验证
+- **WHEN** 主 agent 在 review-code 场景修复了 Critical
+- **THEN** 命令 SHALL NOT 运行测试 / 类型检查 / 构建，仅在报告中说明慢验证已由归档前关卡负责
+
+#### Scenario: subagent 路径复用同一子代理
+- **WHEN** 配置 `reviewExecutor = "subagent"`，首轮审查报告 Critical，主会话修复后进入第 2 轮
+- **THEN** 主会话以 `send_input` 复用首轮子代理，携带修复说明与上轮 Critical 原文；复用失败才回退重新 spawn
+
+#### Scenario: spawn 不可用时回退 main 路径
+- **WHEN** 配置 `reviewExecutor = "subagent"` 但宿主不支持 spawn 或首次 spawn 失败
+- **THEN** 命令回退主 agent 直接审查并输出 `[回退] subagent 不可用: <原始报错>`，流程不中断
+
+#### Scenario: 未修项快照在两条执行者路径下都被排除
+- **WHEN** 某 change 目录下存在未跟踪的 `review-findings.md`，用户运行 review-plan 或 review-code（无论 `reviewExecutor` 为 `main` 还是 `subagent`）
 - **THEN** 该文件从审查命令的未跟踪清单中排除，既不被当作可挑错的审查对象，也不被审查循环的统一 commit 纳入；它保持未跟踪直到 `@lyx-archive`

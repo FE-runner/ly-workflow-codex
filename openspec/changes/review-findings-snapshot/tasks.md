@@ -1,9 +1,10 @@
 ## 1. review 模板写入快照
 
-- [ ] 1.1 更新 `templates/skills-codex/review-plan.md`：在循环结束（正常清零的统一 commit 之后；非正常终止照写）新增"写入 `## 方案审查` 节"步骤，只收最后一轮 Warning（逐字原文 + 位置 + 建议 + 轮次/基线元信息），按节 upsert 保留代码节，某节零 Warning 不写、两节都空不建文件，写失败如实报告且不改变审查结论；验证模板出现 `review-findings.md`、`## 方案审查`、循环结束/commit 之后写入、写失败不改变结论的措辞。
-- [ ] 1.2 更新 `templates/skills-codex/review-plan.md`：在未跟踪（`??`）清单采集处显式排除 `review-findings.md`（与 `context.md` 同待遇），避免其被当作审查对象或被统一 commit 纳入；验证模板在未跟踪清单段落出现排除说明。
-- [ ] 1.3 更新 `templates/skills-codex/review-code.md`：同 1.1，新增写 `## 代码审查` 节（正常清零在统一 commit 之后写入、异常终止照写、节级 upsert、写失败如实报告且不改变审查结论）；验证模板出现 `review-findings.md`、`## 代码审查`。
-- [ ] 1.4 更新 `templates/skills-codex/review-code.md`：同 1.2，在未跟踪清单采集处排除 `review-findings.md`，并确保正常清零的统一 `git add` 范围不含该文件；验证模板未跟踪清单段落与统一提交段落均体现排除。
+- [ ] 1.1 更新 `templates/skills-codex/review-plan.md`：在循环结束（正常清零的统一 commit 之后；非正常终止、`--no-commit`、commit 失败、无实际改动不建 commit 等场景照写）新增"写入 `## 方案审查` 节"步骤，只收最后一轮 Warning（该轮发现原文 + 位置 + 建议 + 轮次/基线元信息），按节 upsert 保留代码节，重跑后该类零 Warning 时移除旧节（两节皆无则删文件），某节零 Warning 不写、两节都空不建文件，写失败如实报告且不改变审查结论；验证模板出现 `review-findings.md`、`## 方案审查`、循环结束/commit 之后写入、零 Warning 移除旧节、写失败不改变结论的措辞。
+- [ ] 1.2 更新 `templates/skills-codex/review-plan.md`：在未跟踪（`??`）清单采集处显式排除 `review-findings.md`（与 `context.md` 同待遇），且**明确该排除在 main 与 subagent 两条执行者路径下同样生效**（main 路径不存在 subagent 但排除照旧），避免其被当作审查对象或被统一 commit 纳入；验证模板在未跟踪清单段落出现排除说明与"两条路径一致"措辞。
+- [ ] 1.3 更新 `templates/skills-codex/review-code.md`：同 1.1，新增写 `## 代码审查` 节（正常清零在统一 commit 之后写入、异常终止与 `--no-commit`/commit 失败照写、节级 upsert、零 Warning 移除旧节、写失败如实报告且不改变审查结论）；验证模板出现 `review-findings.md`、`## 代码审查`。
+- [ ] 1.4 更新 `templates/skills-codex/review-code.md`：同 1.2，在未跟踪清单采集处排除 `review-findings.md`（两条执行者路径一致），并确保正常清零的统一 `git add` 范围不含该文件；验证模板未跟踪清单段落与统一提交段落均体现排除。
+- [ ] 1.5 在两个 review 模板中明确"该轮发现原文"按执行者取值：`subagent` 路径为审查 subagent 返回原文、`main`（默认）路径为主 agent 本轮审查报告原文，不得因 main 路径无 subagent 而跳过记录；验证模板出现该取值说明。
 
 ## 2. archive 落库说明
 

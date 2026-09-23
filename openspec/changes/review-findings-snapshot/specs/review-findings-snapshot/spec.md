@@ -6,7 +6,7 @@
 
 ### Requirement: 快照文件的位置与格式
 
-审查未修项快照 SHALL 位于 `openspec/changes/<change-name>/review-findings.md`，采用单文件两节结构：`## 方案审查`（来源 `@lyx-review-plan`）与 `## 代码审查`（来源 `@lyx-review-code`）。快照 SHALL 只收录 Warning——SHALL NOT 收录 Info，SHALL NOT 收录 Critical。每节 SHALL 记录该审查类型**最近一轮**未被自动修复的发现，逐字保留审查 subagent 原文的位置、问题与建议，并附轮次与基线元信息（执行轮次、记录时间、基线 commit 引用）。快照 SHALL NOT 承担 open/closed 跟踪状态或关闭职责。某一节零 Warning 时 SHALL NOT 写该节；两节都为空时 SHALL NOT 创建文件。
+审查未修项快照 SHALL 位于 `openspec/changes/<change-name>/review-findings.md`，采用单文件两节结构：`## 方案审查`（来源 `@lyx-review-plan`）与 `## 代码审查`（来源 `@lyx-review-code`）。快照 SHALL 只收录 Warning——SHALL NOT 收录 Info，SHALL NOT 收录 Critical。每节 SHALL 记录该审查类型**最近一轮**未被自动修复的发现，逐字保留该轮审查发现的原文与位置、问题、建议，并附轮次与基线元信息（执行轮次、记录时间、基线 commit 引用或明确的基线状态）。"该轮审查发现的原文"按执行者路径取值：`reviewExecutor = "subagent"` 时为审查 subagent 返回的原文，`reviewExecutor = "main"`（默认）时为主 agent 在本轮审查报告中产出的原文——SHALL NOT 因 main 路径不存在 subagent 而跳过记录或虚构 subagent 原文。快照 SHALL NOT 承担 open/closed 跟踪状态或关闭职责。某一节零 Warning 时 SHALL NOT 写该节；两节都为空时 SHALL NOT 创建文件。
 
 #### Scenario: 有 Warning 时按节写入
 
@@ -30,7 +30,7 @@
 
 ### Requirement: 审查关卡在循环结束时按节写入快照
 
-`@lyx-review-plan` 与 `@lyx-review-code` SHALL 在审查-修复循环结束时按节 upsert 写入快照——替换本类型旧节、保留另一节。写入时机 SHALL 为循环结束后：正常清零场景 SHALL 在统一 commit **之后**写入（快照保持未跟踪状态，SHALL NOT 进入该 commit）；非正常终止场景（熔断 / 驳回硬线 / 无法安全修复 / 修复无法落盘 / 审查调用失败 / 达到轮数上限 / 审查对象类型持续系统性误判）SHALL 照写。SHALL NOT 在循环进行中逐轮写入——快照只承载最后一轮结论。快照文件缺失容错：写入前不存在该文件时 SHALL 创建，存在时 SHALL 只替换本类型节。非正常终止时未修的 Critical SHALL NOT 写入快照。
+`@lyx-review-plan` 与 `@lyx-review-code` SHALL 在审查-修复循环结束时按节 upsert 写入快照——替换本类型旧节、保留另一节。重跑同类审查后该类型 Warning 为零时 SHALL 移除该类型旧节（SHALL NOT 保留过期内容）：移除后若另一节仍存在则文件保留，若两节均不存在则删除该文件。写入时机 SHALL 为循环结束后：正常清零场景 SHALL 在统一 commit **之后**写入（快照保持未跟踪状态，SHALL NOT 进入该 commit）；非正常终止场景（熔断 / 驳回硬线 / 无法安全修复 / 修复无法落盘 / 审查调用失败 / 达到轮数上限 / 审查对象类型持续系统性误判）SHALL 照写。`--no-commit`、统一 commit 失败、本轮无实际改动不建 commit 等场景下 SHALL 照写快照，并在元信息中如实记录基线状态，SHALL NOT 为快照补建 commit。SHALL NOT 在循环进行中逐轮写入——快照只承载最后一轮结论。快照文件缺失容错：写入前不存在该文件时 SHALL 创建，存在时 SHALL 只替换本类型节。非正常终止时未修的 Critical SHALL NOT 写入快照。
 
 #### Scenario: 正常清零后在统一 commit 之后写入
 
@@ -51,6 +51,16 @@
 
 - **WHEN** 某 change 已存在快照，用户再次运行 review-code 并产生新的一轮 Warning
 - **THEN** `## 代码审查` 节被最后一轮结果替换，`## 方案审查` 节不受影响
+
+#### Scenario: 重跑后该类零 Warning 时移除旧节
+
+- **WHEN** 某 change 已存在含 `## 代码审查` 节的快照，重跑 review-code 后该类 Warning 为零
+- **THEN** `## 代码审查` 旧节被移除；若 `## 方案审查` 节仍存在则保留文件，若两节都不存在则删除该文件，SHALL NOT 保留过期的旧节内容
+
+#### Scenario: main 执行者路径下记录主 agent 审查原文
+
+- **WHEN** 未配置 `reviewExecutor`（等价 `main`），review-plan 循环结束时最后一轮存在 Warning
+- **THEN** 快照记录主 agent 本轮审查报告中产出的原文，SHALL NOT 因不存在审查 subagent 而跳过记录或虚构 subagent 原文
 
 ### Requirement: 快照写入失败不改变审查结论
 
