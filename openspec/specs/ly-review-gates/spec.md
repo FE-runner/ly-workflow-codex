@@ -397,7 +397,7 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 
 **适用范围覆盖（自本 change 起）**：本能力中凡以"spawn 审查 subagent"为前提的 Requirement（含「审查 subagent 轮内纪律」「审查返回有效性判定」「审查关卡以单审查 subagent（非 fork）执行」「Critical 裁决：认可即修复、不认可必须附可核验依据」「审查调用失败分类处理」「审查-修复循环与终止条件」「全局轮数上限作为最后兜底」「循环结束后统一提交」），其适用范围 SHALL 限定为 `reviewExecutor = "subagent"` 时；`reviewExecutor = "main"`（默认，含未配置）时 SHALL 以本 Requirement 为准。两条路径的分歧点以本 Requirement 为权威。
 
-**执行者解析**：`@lyx-review-plan` / `@lyx-review-code` SHALL 读取 `~/.codex/lyx/config.toml` 的 `[codexHost] reviewExecutor`（未配置、空白或非法取值等价 `"main"`）决定本轮审查的执行者。审查范围判定、基线锚定、未跟踪清单采集、Critical / Warning / Info 分级输出、`openspec validate` 这些与执行者无关的规则 SHALL 在两条路径下保持一致。
+**执行者解析**：`@lyx-review-plan` / `@lyx-review-code` SHALL 读取 `~/.codex/lyx/config.toml` 的 `[codexHost] reviewExecutor`（未配置、空白或非法取值等价 `"main"`）决定本轮审查的执行者。审查范围判定、基线锚定、未跟踪清单采集（含 `review-findings.md` 审查未修项快照的排除，见 `review-findings-snapshot`）、Critical / Warning / Info 分级输出、`openspec validate` 这些与执行者无关的规则 SHALL 在两条路径下保持一致。`review-findings.md` SHALL NOT 被当作可挑错的审查对象或修复对象，且 SHALL 从审查命令的未跟踪（`??`）清单中排除——避免它既被当作审查对象、又被 review-plan / apply / review-code 的中间 commit 提前纳入；该排除 SHALL 在 `main` 与 `subagent` 两条路径下同样生效。
 
 **main 路径（默认）**：
 
@@ -438,6 +438,10 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 #### Scenario: spawn 不可用时回退 main 路径
 - **WHEN** 配置 `reviewExecutor = "subagent"` 但宿主不支持 spawn 或首次 spawn 失败
 - **THEN** 命令回退主 agent 直接审查并输出 `[回退] subagent 不可用: <原始报错>`，流程不中断
+
+#### Scenario: 未修项快照在两条执行者路径下都被排除
+- **WHEN** 某 change 目录下存在未跟踪的 `review-findings.md`，用户运行 review-plan 或 review-code（无论 `reviewExecutor` 为 `main` 还是 `subagent`）
+- **THEN** 该文件从审查命令的未跟踪清单中排除，既不被当作可挑错的审查对象，也不被审查循环的统一 commit 纳入；它保持未跟踪直到 `@lyx-archive`
 
 ### Requirement: review 清零统一提交使用增强正文
 

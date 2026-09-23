@@ -35,7 +35,7 @@
 
 **实施主体变更（自本 change 起）**：本 Requirement 标题中"Apply 由当前会话本人实施"为历史措辞——自 `switchable-executor-flow` 起，`@lyx-apply` 的实施主体由 `[codexHost] codingExecutor` 决定：`"subagent"`（显式配置）时由 coding subagent 实施，`"main"`（默认，含未配置）时由主 agent 在当前会话直接实施。语义以正文为准。
 
-`/ly:explore` 必须（SHALL）只调用 `opsx:explore`，原样转发 `$ARGUMENTS`，不得包含自定义的多模型分派、环境校验，或超出底层技能本身的输出后处理逻辑；讨论收敛到"要落地方案"时提示用户切换 `/ly:propose`，explore 本身不接管 artifact 创建。
+`/ly:explore` SHALL 保持纯委托为主——调用 `opsx:explore` 并原样转发 `$ARGUMENTS`，SHALL NOT 包含自定义的多模型分派或环境校验；唯一例外是委托**之前**的一次审查未修项快照询问（扫描 active 与 archive 下的 `review-findings.md`，有命中则先询问是否列出，用户同意才列出，见 `review-findings-snapshot`），该例外 SHALL NOT 改写参数转发、SHALL NOT 接管 artifact 创建；讨论收敛到"要落地方案"时提示用户切换 `/ly:propose`。
 
 `/ly:apply` SHALL 在实施**之前**解析目标 change 名：按固定优先级 `$ARGUMENTS` 中显式且合法的 change 名 → `openspec/changes/` 下唯一未归档的 change → 无法唯一确定时直接询问用户。
 
@@ -56,7 +56,11 @@
 
 #### Scenario: explore 命令原样转发参数
 - **WHEN** 用户运行 `/ly:explore "real-time collaboration"`
-- **THEN** 命令以未经改动的参数调用 `opsx:explore` 技能，不附加任何额外步骤
+- **THEN** 命令以未经改动的参数调用 `opsx:explore` 技能；委托前的一次快照询问/列出不改变参数转发本身
+
+#### Scenario: explore 进入时先处理快照询问
+- **WHEN** 用户运行 `/ly:explore`，active 或 archive 下存在 `review-findings.md` 快照
+- **THEN** 命令在委托 `opsx:explore` 前先询问是否列出快照，用户同意才列出，拒绝则直接进入讨论（见 `review-findings-snapshot`）
 
 #### Scenario: archive 命令归档后自动提交
 - **WHEN** 用户运行 `/ly:archive`，项目完整验证全部通过，归档移动了 `openspec/changes/<change-name>/` 到 `archive/` 目录
