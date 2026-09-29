@@ -8,9 +8,9 @@
 
 ## 2. codex 宿主包抽取
 
-- [ ] 2.1 新建 `src/hosts/codex/`（适配器、路径常量、配置 schema、模板目录、角色词目录），把 codex 专属路径常量与适配器实现迁入；验证 `pnpm typecheck` 与既有全部测试通过。
+- [ ] 2.1 新建 `src/hosts/codex/`（适配器、路径常量、配置 schema），把 codex 专属路径常量与适配器实现迁入；模板与角色词不在此目录内（物理布局见 design D15）；验证 `pnpm typecheck` 与既有全部测试通过。
 - [ ] 2.2 精简 `src/utils/package-meta.ts` 为包级常量（包名、二进制名、仓库地址等），验证 `rg` 检索 `src/utils` 下不再出现任何宿主专属路径常量。
-- [ ] 2.3 把 `templates/skills-codex/` 与 `templates/prompts/codex/` 迁入 codex 宿主包；验证安装后的产物路径与文件清单同迁移前逐项一致（对比改造前的产物清单）。
+- [ ] 2.3 重组顶层 `templates/`：共享正文保持单源，宿主片段与角色词/子代理定义按宿主分层（如 `templates/hosts/codex/`、`templates/hosts/claude/`）；模板不迁入 `src/`（design D15 的 `PACKAGE_ROOT` 与 `files` 约束）；验证 codex 安装产物路径与文件清单同迁移前逐项一致，且 `PACKAGE_ROOT` 仍解析到含顶层 `templates/` 的包根。
 
 ## 3. 每宿主配置文件
 

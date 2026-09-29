@@ -38,7 +38,7 @@ ly-workflow-codex 目前是 codex 单宿主：14 个命令模板、角色词、�
 ## Impact
 
 - **代码**：共享层（`src/utils/` 下的 installer / installer-template / config / preflight）宿主化、新增 `src/hosts/{codex,claude}/*` 与宿主注册表、`src/commands/{init,doctor,menu,update}.ts`、`src/types/*`、`src/index.ts`、`src/i18n/index.ts`。
-- **模板**：`templates/` 重组为共享正文 + 宿主包；`review-plan.md` / `review-code.md` / `apply.md` / `propose.md` 四个文件含宿主分歧段落（约 20 处）需隔离，另有 `changelog.md` / `release.md` 各一处"告诉 Codex"字样需改为宿主中立写法；14 个文件含 `@lyx-*` 交叉引用、3 个文件含 `@openspec-*` 委托引用（均渲染期改写，不动正文）。
+- **模板**：顶层 `templates/` 重组为共享正文 + `templates/hosts/<id>/` 的宿主片段与角色词/子代理定义（模板不随 TS 宿主包迁入 `src/`，见 design D15 的 `PACKAGE_ROOT` 与 `files` 约束）；`review-plan.md` / `review-code.md` / `apply.md` / `propose.md` 四个文件含宿主分歧段落（约 20 处）需隔离，另有 `changelog.md` / `release.md` 各一处"告诉 Codex"字样需改为宿主中立写法；14 个文件含 `@lyx-*` 交叉引用、3 个文件含 `@openspec-*` 委托引用（均渲染期改写，不动正文）。
 - **配置**：每宿主配置文件；`[codexHost]` → `[host]` 兼容读取与重写；`installedHosts` 移除。
 - **打包**：`package.json` 的 `files` 字段现仅列 `templates/prompts/codex/` 与 `templates/skills-codex/`，新增模板目录必须同步登记，否则发布包缺模板并静默安装失败。
 - **文档**：`README.md`、`README.zh-CN.md`、`CLAUDE.md`、`templates/CLAUDE.md`、`workflow.md`、`AGENTS.md`。

@@ -72,6 +72,9 @@ main 路径复用既有语义（分级产出、Critical 清零准出、自审最
 **D14：角色词来源按宿主显式定义，不依赖"配置路径按宿主"这类兜底表述。**
 proposal 承诺了"角色词来源按宿主"，因此 `ly-review-gates` 的 delta 必须有独立条款：codex 走角色词文件（TASK 指示读取绝对路径），claude 走子代理定义自带的系统提示词；共享模板中的 codex 角色词绝对路径归入 codex 宿主片段。仅靠配置载体条款覆盖不了这条，因为它是提示词来源而非配置取值。
 
+**D15：模板不能随 TS 宿主包迁入 `src/hosts/<id>/`，改为顶层 `templates/` 下按宿主分层。**
+运行时有两处硬约束：`installer-template.ts` 的 `PACKAGE_ROOT` 解析要求包根存在**顶层 `templates/` 目录**（缺失即打印 `PACKAGE_ROOT resolution failed` 并导致静默安装失败）；`package.json` 的 `files` 逐项列举发布内容且只收录顶层 `templates/...`，构建工具也不会把非 TS 资源复制进 `dist`。因此物理布局定为：TS 宿主包在 `src/hosts/<id>/`（适配器、路径常量、配置 schema），模板与角色词/子代理定义留在顶层 `templates/` 下按宿主分层，共享正文保持单源。替代方案"把模板放进 `src/hosts/<id>/` 并加进 `files`"被否：会让发布内容依赖 `src/` 目录结构，并与 `PACKAGE_ROOT` 的模板探测口径冲突。这是实施层约束，`src/hosts/<id>/` 自包含的语义指该宿主**代码侧**自包含，不含模板文件的物理位置。
+
 ## Risks / Trade-offs
 
 - [发布包缺模板导致静默安装失败] → `package.json` 的 `files` 逐项列举模板目录，新增目录必须同步登记；把该登记列为实施任务并在测试中校验包内模板目录与实际源目录一致。
