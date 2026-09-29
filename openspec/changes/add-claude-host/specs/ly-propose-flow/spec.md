@@ -5,7 +5,7 @@
 
 **子代理模型取值按宿主（自本 change 起）**：本 Requirement 正文原先以 `codexHost.codingModel` 指代模型来源，该指代 SHALL 按宿主作用域解读——值取自当前宿主的宿主作用域配置节（见 `multi-host-install` 与 `subagent-agent-config`）。宿主把模型落实为"运行时按次传参"或"安装期写入子代理定义"由该能力定义，本 Requirement 只要求取值来源与回退语义两宿主一致。
 
-**本能力其他 Requirement 的配置载体按宿主解读（自本 change 起）**：本能力其余 Requirement 正文中出现的 `~/.codex/lyx/config.toml`、`[codexHost]` 与以 `codexHost.<字段>` 形式书写的取值引用，SHALL 按宿主作用域解读——取当前宿主的宿主配置节（见 `multi-host-install` 与 `subagent-agent-config`），执行者与模型字段语义两宿主一致；正文中以 `@lyx-<command>` 形式出现的命令引用 SHALL 视为命令标识，其宿主调用写法由各宿主定义（见 `claude-host`）。
+**本能力其他 Requirement 的配置载体按宿主解读（自本 change 起）**：本能力其余 Requirement 正文中出现的 `~/.codex/lyx/config.toml`、`[codexHost]` 与以 `codexHost.<字段>` 形式书写的取值引用，SHALL 按宿主作用域解读——取当前宿主的宿主配置节（见 `multi-host-install` 与 `subagent-agent-config`），执行者与模型字段语义两宿主一致；正文中以 `@lyx-<command>` 形式出现的命令引用 SHALL 视为命令标识，其宿主调用写法由各宿主定义（见 `multi-host-install` 的命令标识约定）。
 
 #### Scenario: coding subagent 完成实施
 - **WHEN** coding subagent 读 tasks.md 完成全部任务并验证通过

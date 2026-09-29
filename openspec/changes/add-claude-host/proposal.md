@@ -8,9 +8,9 @@ ly-workflow-codex 目前是 codex 单宿主：14 个命令模板、角色词、�
 
 - **新增宿主包结构**：`src/hosts/<id>/` 自包含（适配器、路径常量、配置 schema、模板、角色词）；共享层（现位于 `src/utils/` 的安装、配置读写、前置检查模块）只认适配器接口与宿主注册表，不出现任何宿主名。本次不新增 `src/core/` 物理目录，共享层与宿主包的边界由遍历断言守住。
 - **BREAKING**：配置改为**每宿主一个配置文件**——`~/.codex/lyx/config.toml`（路径不变）与新增 `~/.claude/lyx/config.toml`；`installedHosts` 字段移除，改为"该宿主的配置文件存在即已安装"；宿主配置段由 `[codexHost]` 归一为 `[host]`（旧键保留兼容读取，下次 init 重写）。
-- **新增 Claude 宿主**：命令安装到 `~/.claude/skills/lyx-*/SKILL.md`，审查与 coding subagent 定义为 `~/.claude/agents/lyx-*.md`；模板中的 `@lyx-*` 在 Claude 侧由渲染期改写为 `/lyx-*`，模板正文不做条件块。
+- **新增 Claude 宿主**：命令安装到 `~/.claude/skills/lyx-*/SKILL.md`，审查与 coding subagent 定义为 `~/.claude/agents/lyx-*.md`（始终安装）；模板中的 `@lyx-*` 在 Claude 侧由渲染期改写为 `/lyx-*`，`@openspec-<skill>` 委托引用改写为 skill 调用 `openspec-<skill>`，模板正文不做条件块。
 - **Claude 侧审查保留，main 为基线**：`review-plan` / `review-code` / `apply` 全部可主 agent 直接执行（复用既有 main 语义：分级产出 + Critical 清零 + 自审最多 2 轮 + 快照留痕）；subagent 路径实现为非 fork 自定义 subagent，走不通时按既有 `[回退] subagent 不可用` 口径降级。
-- **`lycx init` 增加宿主选择**：默认按 `~/.codex` / `~/.claude` 探测勾选；非交互 `--skip-prompt` 按已存在的 per-host 配置文件重装同一集合，不新增必填参数。Claude 侧向导零字段（不采集 provider、不采集模型，agent 定义用 `model: inherit`），**不写 Claude 的 provider 配置**。
+- **`lycx init` 增加宿主选择**：默认按 `~/.codex` / `~/.claude` 探测勾选；非交互 `--skip-prompt` 按已存在的 per-host 配置文件重装同一集合；一个配置文件都没有时按探测目录决定，都探测不到则装 codex（保持现有全新环境行为），不新增必填参数。Claude 侧向导只采集执行者二连（main / subagent），不采集 provider、模型与推理档（agent 定义用 `model: inherit`），**不写 Claude 的 provider 配置**。
 - **OpenSpec 集成按宿主**：技能扫描根补 `<project>/.claude/skills` 与 `~/.claude/skills`；项目级修复命令由写死的 `openspec init --tools codex` 改为按缺失宿主传 `--tools <host>`；宿主集合由 lyx 侧传入（`openspec/config.yaml` 不记录 tools，无法反推）。
 - **`@lyx-init` 按宿主产出记忆文件**：Claude 宿主下额外产出导入 `AGENTS.md` 的 `CLAUDE.md`（Claude Code 仅在项目无 `CLAUDE.md` 时读 `AGENTS.md`），提交文件清单与汇总同步。
 - **`uninstall` / `doctor` / `status` / `update` 改为遍历宿主**，支持单宿主卸载；卸载 SHALL NOT 触碰 OpenSpec 自有产物（`.claude/commands/opsx/`、`.claude/skills/openspec-*`）与共用 `~/.ly/worktrees/`。
@@ -38,7 +38,7 @@ ly-workflow-codex 目前是 codex 单宿主：14 个命令模板、角色词、�
 ## Impact
 
 - **代码**：共享层（`src/utils/` 下的 installer / installer-template / config / preflight）宿主化、新增 `src/hosts/{codex,claude}/*` 与宿主注册表、`src/commands/{init,doctor,menu,update}.ts`、`src/types/*`、`src/index.ts`、`src/i18n/index.ts`。
-- **模板**：`templates/` 重组为共享正文 + 宿主包；`review-plan.md` / `review-code.md` / `apply.md` / `propose.md` 四个文件含宿主分歧段落（共 20 处）需隔离；14 个文件含 `@lyx-*` 交叉引用（渲染期改写，不动正文）。
+- **模板**：`templates/` 重组为共享正文 + 宿主包；`review-plan.md` / `review-code.md` / `apply.md` / `propose.md` 四个文件含宿主分歧段落（约 20 处）需隔离，另有 `changelog.md` / `release.md` 各一处"告诉 Codex"字样需改为宿主中立写法；14 个文件含 `@lyx-*` 交叉引用、3 个文件含 `@openspec-*` 委托引用（均渲染期改写，不动正文）。
 - **配置**：每宿主配置文件；`[codexHost]` → `[host]` 兼容读取与重写；`installedHosts` 移除。
 - **打包**：`package.json` 的 `files` 字段现仅列 `templates/prompts/codex/` 与 `templates/skills-codex/`，新增模板目录必须同步登记，否则发布包缺模板并静默安装失败。
 - **文档**：`README.md`、`README.zh-CN.md`、`CLAUDE.md`、`templates/CLAUDE.md`、`workflow.md`、`AGENTS.md`。

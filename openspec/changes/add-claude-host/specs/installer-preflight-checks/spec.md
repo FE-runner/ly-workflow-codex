@@ -7,6 +7,8 @@ skills 检查 SHALL NOT 以"任一 `openspec-*` skill 存在"判定通过。检�
 
 **扫描根按宿主展开（自本 change 起）**：扫描根 SHALL 覆盖已安装宿主的全部技能位置——codex 宿主为 `<project>/.agents/skills`、`<project>/.codex/skills`、`~/.agents/skills`、`~/.codex/skills`；claude 宿主为 `<project>/.claude/skills`、`~/.claude/skills`。已安装宿主集合 SHALL 由本包各宿主配置文件的存在情况判定（见 `multi-host-install`），SHALL NOT 写死为单一宿主。项目级命中优先于全局级命中。全部 required skill 均在项目级可发现时状态为 `project-ready`；全部 required skill 只能通过全局级命中时状态为 `global-only` 且 SHALL 输出 WARN 后继续；任一 required skill 在项目级与全局级均不可发现时状态为 `missing` 且 SHALL 输出缺失 skill 清单与建议修复命令。仅某一宿主缺少对应技能根时 SHALL NOT 被误判为 `missing`——判定 SHALL 以该宿主实际使用的技能位置为准。
 
+**多宿主结论汇总（自本 change 起）**：宿主集合含多个宿主时，skills 层 SHALL 对每个宿主分别判定并按宿主分行输出各自状态；整体状态 SHALL 取各宿主中最差者（`missing` > `global-only` > `project-ready`）。缺失清单与建议修复命令 SHALL 只针对判定为 `missing` 的宿主，`global-only` 的 WARN 同样按宿主标注；SHALL NOT 因某一宿主就绪而掩盖另一宿主的缺失。
+
 **本能力其他 Requirement 的技能根按宿主解读（自本 change 起）**：本能力其余 Requirement 正文与其 Scenario 中出现的具体技能根路径（`<project>/.agents/skills`、`<project>/.codex/skills`、`~/.agents/skills`、`~/.codex/skills`）SHALL 按上述宿主展开规则解读——在 claude 宿主场景下对应 `<project>/.claude/skills` 与 `~/.claude/skills`。这些 Requirement 描述的分层检查、状态口径、非阻断提示与降级行为本身 SHALL 保持不变。
 
 **宿主集合为空时的处理（自本 change 起）**：本检查在主流程之前执行，此时可能尚不存在任何宿主配置文件。不存在任何宿主配置文件时，读取型检查（技能与 root 的扫描判定）的宿主集合 SHALL 按 `multi-host-install` 的"无配置文件时的宿主集合"语义取全部已注册宿主，SHALL NOT 因集合为空而跳过技能层检查、报告 `missing`，或让修复目标落空。
@@ -38,6 +40,10 @@ skills 检查 SHALL NOT 以"任一 `openspec-*` skill 存在"判定通过。检�
 #### Scenario: 仅 claude 宿主已安装时使用 claude 技能根
 - **WHEN** 磁盘上只有 claude 宿主的配置文件，用户执行前置检查，`.claude/skills` 下技能齐备
 - **THEN** 检查按 claude 宿主技能根判定为 `project-ready` 或 `global-only`，SHALL NOT 因缺少 codex 侧技能根而报告 `missing`
+
+#### Scenario: 多宿主结论不一致时按宿主分行并取最差
+- **WHEN** 两个宿主均已安装，codex 宿主的 required skills 全部项目级可发现，claude 宿主的某个 required skill 在项目级与全局级均不可发现
+- **THEN** 输出按宿主分行（codex `project-ready`、claude `missing`），整体状态为 `missing`；缺失清单与修复命令只针对 claude 宿主
 
 #### Scenario: 全新环境首次初始化
 - **WHEN** 磁盘上不存在任何宿主配置文件，用户首次执行 `lycx init` 或 `lycx init --init-openspec`

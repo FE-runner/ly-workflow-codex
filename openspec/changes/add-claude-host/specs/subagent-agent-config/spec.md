@@ -8,9 +8,11 @@
 
 每个宿主的配置文件 SHALL 提供 `reviewModel`、`codingModel`、`reviewExecutor`、`codingExecutor` 四个可选字段，均非必填。
 
-**执行者字段语义**：`reviewExecutor` SHALL 决定审查关卡的执行者，`codingExecutor` SHALL 决定实施环节的执行者；取值 SHALL 为 `"main"` 或 `"subagent"`，未配置、空白或非法取值 SHALL 等价于 `"main"`（主 agent 直接执行）。该默认值 SHALL 视为破坏性变更：升级用户即使不改配置，行为也会从"spawn 子代理"变为"主 agent 直接执行"。
+**执行者字段语义**：`reviewExecutor` SHALL 决定审查关卡（`@lyx-review-plan` / `@lyx-review-code`）的执行者，`codingExecutor` SHALL 决定实施环节（`@lyx-apply`）的执行者；取值 SHALL 为 `"main"` 或 `"subagent"`，未配置、空白或非法取值 SHALL 等价于 `"main"`（主 agent 直接执行）。该默认值 SHALL 视为破坏性变更：升级用户即使不改配置，行为也会从"spawn 子代理"变为"主 agent 直接执行"。
 
 **模型字段语义**：`reviewModel` / `codingModel` SHALL 仅在对应执行者为 `"subagent"` 时生效，未配置或空白时回退当前会话模型。执行者为 `"main"` 时，模型字段与对应推理档字段 SHALL 被忽略，`lycx doctor` 对该组合输出 WARN 提示（见「doctor 校验子代理模型配置」）。
+
+`src/types/index.ts` SHALL 同步移除 `reviewModelB` 类型定义，新增 `reviewExecutor` / `codingExecutor` 字段。
 
 **模型字段的落实方式按宿主（自本 change 起）**：codex 宿主 SHALL 按原有"模板指示 + 宿主 spawn 能力"方式落实模型与推理档取值。claude 宿主 SHALL 把模型与推理档写入该宿主的子代理定义（子代理定义中的模型字段与推理档字段），未配置或空白时 SHALL 以"继承当前会话模型"为默认取值写入，使该宿主子代理默认继承会话模型与会话推理档；该宿主 SHALL NOT 依赖运行时按次传参的模型/推理档通道。两种宿主下 `main` 执行者路径 SHALL NOT 读取模型与推理档字段。
 
@@ -58,12 +60,12 @@
 
 ### Requirement: Claude 宿主的子代理字段采集与体检边界
 
-claude 宿主的安装向导 SHALL NOT 采集子代理的模型与推理档字段，也 SHALL NOT 采集或写入该宿主自身的 provider（模型与网关）配置；该宿主的子代理定义 SHALL 以"继承当前会话"为默认。`lycx doctor` 的子代理配置检查项 SHALL 按宿主分别展示：codex 宿主沿用既有展示口径，claude 宿主 SHALL 展示其宿主配置节中的执行者字段与子代理定义侧的实际取值来源（继承或已指定），并在未采集模型字段时不报缺失错误。
+claude 宿主的安装向导 SHALL 采集执行者字段（`reviewExecutor` / `codingExecutor`，取值 main / subagent），交互菜单 SHALL 提供同一开关；SHALL NOT 采集子代理的模型与推理档字段，也 SHALL NOT 采集或写入该宿主自身的 provider（模型与网关）配置；该宿主的子代理定义 SHALL 以"继承当前会话"为默认。`lycx doctor` 的子代理配置检查项 SHALL 按宿主分别展示：codex 宿主沿用既有展示口径，claude 宿主 SHALL 展示其宿主配置节中的执行者字段与子代理定义侧的实际取值来源（继承或已指定），并在未采集模型字段时不报缺失错误。
 
 #### Scenario: claude 宿主向导不采集模型字段
 
 - **WHEN** 用户交互安装 claude 宿主
-- **THEN** 向导不出现子代理模型与推理档采集步骤，也不出现该宿主 provider 配置的采集或写入，摘要中如实说明子代理默认继承会话模型
+- **THEN** 向导出现执行者选择（main / subagent）并写入该宿主配置节；不出现子代理模型与推理档采集步骤，也不出现该宿主 provider 配置的采集或写入，摘要中如实说明子代理默认继承会话模型
 
 #### Scenario: doctor 按宿主展示子代理配置
 
