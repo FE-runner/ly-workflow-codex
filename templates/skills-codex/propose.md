@@ -77,6 +77,8 @@ argument-hint: '<需求描述>'
 
 读取 `@openspec-propose skill`（opsx propose 编排 prompt）并按其定义的完整流程，围绕 `参数`（需求描述）生成 proposal/design/tasks 全部 artifacts。生成过程中遵循该编排 prompt 的全部步骤与约束（本命令的步骤 4-9 在其后继续编排）。
 
+**解决的审查未修项声明（可选）**：若用户在本次讨论中明确本次 change 解决了某条历史 `review-findings.md` 的 Warning，SHALL 在生成的 `proposal.md` 末尾新增 `## 解决的审查未修项` 小节，每条以 `- <归档快照路径>#<节名>#<序号> — <一句解决说明>` 列出。节名仅允许 `方案审查` / `代码审查`（如 `...#方案审查#1` / `...#代码审查#2`），序号为该节 Warning 条目的 1 起连续编号，路径 SHALL 指向 `openspec/changes/archive/**/review-findings.md` 下的已归档快照。本次 change 不解决任何历史 Warning 时 SHALL 省略该小节，SHALL NOT 创建空小节。propose 阶段 SHALL NOT 直接改写历史快照——实际回写由 `@lyx-archive` 在归档时完成（见 `review-findings-snapshot` 的「追加式解决说明」）。
+
 ### 4. 确定真实 change 名（前后快照比对）
 
 调用前记录一次 `openspec list --json` 的候选 change 名集合（快照 A，若步骤 3 之前尚未记录则在生成前先记录）；生成完成后再查询一次（快照 B）。取快照 B 相对快照 A 新增的那一条作为本次实际生成的 change 名。**不依赖 `参数`、不单纯依赖全局 `lastModified` 最新一条**——opsx:propose 会把用户输入的原始描述转成 kebab-case slug，两者不保证一致。若新增条目不唯一，或没有新增条目，**不猜测**，直接询问用户本次生成的 change 名，待确认后再继续。

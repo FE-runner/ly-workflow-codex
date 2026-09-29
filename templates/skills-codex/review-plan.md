@@ -151,6 +151,7 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 循环结束后（无论以正常清零还是任一终止条件收尾）SHALL 按节 upsert 写入 `openspec/changes/<change-name>/review-findings.md`，本命令负责 `## 方案审查` 节。写入内容与纪律：
 
 - **只收 Warning**：记录**最后一轮**审查报告的 Warning 逐字原文（位置 + 问题 + 建议），并附元信息（执行轮次、记录时间、基线 commit 引用或明确的基线状态）。SHALL NOT 收录 Info；SHALL NOT 收录 Critical（含非正常终止时未修的 Critical）。
+- **条目连续编号**：`## 方案审查` 节内的 Warning 条目 SHALL 使用从 1 起的连续编号（`1.` / `2.` / ...），作为 `<归档路径>#方案审查#<序号>` 解决说明锚点的定位基础；后续 change 追加的解决说明作为对应编号条目的缩进子项，不参与 Warning 计数。
 - **"该轮发现原文"按执行者取值**：`subagent` 路径 = 审查 subagent 返回的原文；`main`（默认）路径 = 主 agent 本轮审查报告中产出的原文。SHALL NOT 因 `main` 路径不存在审查 subagent 而跳过记录或虚构 subagent 原文。
 - **节级 upsert**：替换 `## 方案审查` 旧节、保留 `## 代码审查` 节（由 `@lyx-review-code` 维护）。重跑本命令后该类 Warning 为零时 SHALL 移除 `## 方案审查` 节：移除后若 `## 代码审查` 节仍存在则保留文件，若两节均不存在则删除该文件，SHALL NOT 保留过期节内容。该节零 Warning 时 SHALL NOT 写空节；文件不存在且两节都空时 SHALL NOT 创建文件。
 - **写入时机**：正常清零场景 SHALL 在步骤 5 的统一 commit **之后**写入（快照保持未跟踪状态，SHALL NOT 进入该 commit）；非正常终止、`--no-commit`、统一 commit 失败、本轮无实际改动不建 commit 等场景 SHALL 照写，并在元信息中如实记录基线状态，SHALL NOT 为快照补建 commit。

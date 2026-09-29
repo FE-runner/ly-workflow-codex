@@ -20,6 +20,18 @@ argument-hint: '[<change-name>]'
 
 该验证是慢验证的**唯一执行点**：审查关卡（`@lyx-review-plan` / `@lyx-review-code`）SHALL NOT 重复执行测试 / 类型检查 / 构建（`openspec validate` 仍由 review-plan 每轮执行，不属于本步范围）。
 
+## 回写审查未修项解决说明（SHALL，opsx 归档完成后、提交归档改动之前）
+
+opsx:archive 成功把本 change 移入 `openspec/changes/archive/` 之后、执行下面的"提交归档改动"之前，SHALL 读取本 change 的 `proposal.md` 中的可选小节 `## 解决的审查未修项`，并按条回写历史快照：
+
+- **触发条件**：仅处理该小节显式列出的引用；没有该小节时跳过本步骤，SHALL NOT 扫描或推断哪条 Warning 被解决（不做自动语义匹配）。
+- **引用格式**：`<归档快照路径>#<节名>#<序号>`，节名仅允许 `方案审查` / `代码审查`，序号为该节 Warning 条目的 1 起连续编号；路径 SHALL 指向已归档快照（`openspec/changes/archive/**/review-findings.md`）。引用 active（未归档）快照 SHALL 拒绝并如实报告。
+- **追加内容**：在该 Warning 编号条目之下追加缩进子项 `- 解决：<change-name>（归档于 <YYYY-MM-DD>）— <说明>`；原 Warning 的位置 / 问题 / 建议原文与编号 SHALL 逐字保持不变，SHALL NOT 改写、删除或重排。
+- **幂等**：同一 Warning 下已存在同一 `<change-name>` 的解决说明时跳过，不重复追加；不同 change 解决同一 Warning 时按归档先后追加多行。
+- **失败容错**：锚点无法解析（节名非法、序号越界、目标文件缺失 / 不可读）或追加写入失败（磁盘、权限、文件被占用等）时，逐条跳过并如实报告原因，SHALL NOT 猜测性匹配、SHALL NOT 改写其他条目、SHALL NOT 阻断归档；其余条目照常处理。
+- **落库**：回写只改工作区文件，SHALL NOT 单独 commit；解决说明随下面的既有 `git add -- openspec/` 一并进入归档 commit，SHALL NOT 新增独立提交或独立归档步骤。
+- **无状态**：回写 SHALL NOT 引入 open/closed 状态字段、状态流转或关闭接口——解决说明只是追加留痕。
+
 ## 提交归档改动
 
 归档会把 `openspec/changes/<change-name>/` 移动到 `openspec/changes/archive/`，并可能同步更新 `openspec/specs/`。提交涉及的全部文件：

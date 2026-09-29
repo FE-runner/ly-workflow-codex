@@ -97,6 +97,10 @@ describe('codex template set', () => {
       'review-plan.md': '## 方案审查',
       'review-code.md': '## 代码审查',
     }
+    const anchors: Record<string, string> = {
+      'review-plan.md': '#方案审查#',
+      'review-code.md': '#代码审查#',
+    }
     for (const [name, section] of Object.entries(sections)) {
       const content = readFileSync(join(SKILLS_TEMPLATES_DIR, name), 'utf-8')
       // 写入 change 目录下的审查未修项快照，并按本命令负责的节写入
@@ -114,7 +118,31 @@ describe('codex template set', () => {
       expect(content, name).toContain('两条执行者路径')
       // 该轮发现原文按执行者取值（main 路径无 subagent 也要记录）
       expect(content, name).toContain('该轮发现原文')
+      // 条目连续编号，支撑 #<节名>#<序号> 解决说明锚点
+      expect(content, name).toContain('连续编号')
+      expect(content, name).toContain(anchors[name])
     }
+  })
+
+  it('templates declare and write back review-findings resolution notes', () => {
+    const propose = readFileSync(join(SKILLS_TEMPLATES_DIR, 'propose.md'), 'utf-8')
+    expect(propose).toContain('## 解决的审查未修项')
+    expect(propose).toContain('#方案审查#')
+    expect(propose).toContain('#代码审查#')
+    expect(propose).toContain('已归档快照')
+    expect(propose).toContain('SHALL NOT 直接改写历史快照')
+
+    const archive = readFileSync(join(SKILLS_TEMPLATES_DIR, 'archive.md'), 'utf-8')
+    expect(archive).toContain('回写审查未修项解决说明')
+    expect(archive).toContain('- 解决：')
+    expect(archive).toContain('（归档于')
+    expect(archive).toContain('已归档快照')
+    expect(archive).toContain('幂等')
+    expect(archive).toContain('SHALL NOT 阻断归档')
+    expect(archive).toContain('SHALL NOT 引入 open/closed 状态字段')
+
+    const explore = readFileSync(join(SKILLS_TEMPLATES_DIR, 'explore.md'), 'utf-8')
+    expect(explore).toContain('已标注解决')
   })
 
   it('explore template asks before listing review-findings snapshots', () => {
