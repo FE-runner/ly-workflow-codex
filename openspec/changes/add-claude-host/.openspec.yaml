@@ -1,0 +1,8 @@
+schema: spec-driven
+created: 2026-09-29
+
+lyx:
+  isolation: worktree
+  sourceBranch: main
+  developmentBranch: add-claude-host
+  worktreePath: /Users/ly/.ly/worktrees/ly-workflow-codex/add-claude-host
