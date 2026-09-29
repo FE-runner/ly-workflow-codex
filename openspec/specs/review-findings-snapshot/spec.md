@@ -2,7 +2,7 @@
 
 ## Purpose
 
-定义 change 目录下 `review-findings.md` 审查未修项快照的完整生命周期：审查关卡循环结束时按节写入、随归档 commit 落库、`@lyx-explore` 先询问后列出。它是只读留痕（供事后回看某次审查提出过哪些未处理的 Warning），不承担跟踪或关闭职责。
+定义 change 目录下 `review-findings.md` 审查未修项快照的完整生命周期：审查关卡循环结束时按节写入、随归档 commit 落库、后续 change 可在已归档快照上追加解决说明、`@lyx-explore` 先询问后列出。它是快照式留痕（供事后回看某次审查提出过哪些未处理的 Warning 及其后续解决情况），允许追加式解决说明，但不承担状态跟踪或自动关闭职责。
 
 ## Requirements
 

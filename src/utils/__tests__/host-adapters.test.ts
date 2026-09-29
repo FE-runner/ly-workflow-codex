@@ -145,6 +145,25 @@ describe('codex template set', () => {
     expect(explore).toContain('已标注解决')
   })
 
+  it('templates pin snapshot minimal structure and write-back lifecycle', () => {
+    const archive = readFileSync(join(SKILLS_TEMPLATES_DIR, 'archive.md'), 'utf-8')
+    // 三段生命周期 + 归档后目录读取，避免"必须在 archive commit 后写"的歧义
+    expect(archive).toContain('三段')
+    expect(archive).toContain('归档后目录')
+    // 旧快照无编号时按顶层条目出现顺序定位
+    expect(archive).toContain('出现顺序')
+    // active 引用与追加写入失败统一归入逐条跳过、不阻断归档
+    expect(archive).toContain('SHALL NOT 阻断归档')
+    expect(archive).toContain('SHALL NOT 改写 active 快照')
+
+    for (const name of ['review-plan.md', 'review-code.md']) {
+      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, name), 'utf-8')
+      expect(content, name).toContain('条目最小结构')
+      expect(content, name).toContain('不计入 Warning 计数')
+      expect(content, name).toContain('不触发编号重排')
+    }
+  })
+
   it('explore template asks before listing review-findings snapshots', () => {
     const content = readFileSync(join(SKILLS_TEMPLATES_DIR, 'explore.md'), 'utf-8')
     expect(content).toContain('review-findings.md')
