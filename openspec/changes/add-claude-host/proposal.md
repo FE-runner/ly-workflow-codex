@@ -6,7 +6,7 @@ ly-workflow-codex 目前是 codex 单宿主：14 个命令模板、角色词、�
 
 ## What Changes
 
-- **新增宿主包结构**：`src/hosts/<id>/` 自包含（适配器、路径常量、配置 schema、模板、角色词）；共享层（现位于 `src/utils/` 的安装、配置读写、前置检查模块）只认适配器接口与宿主注册表，不出现任何宿主名。本次不新增 `src/core/` 物理目录，共享层与宿主包的边界由遍历断言守住。
+- **新增宿主包结构**：`src/hosts/<id>/` 代码侧自包含（适配器、路径常量、配置 schema），模板与角色词/子代理定义留在顶层 `templates/` 下按宿主分层（见 design D15）；共享层（现位于 `src/utils/` 的安装、配置读写、前置检查模块）只认适配器接口与宿主注册表，不出现任何宿主名。本次不新增 `src/core/` 物理目录，共享层与宿主包的边界由遍历断言守住。
 - **BREAKING**：配置改为**每宿主一个配置文件**——`~/.codex/lyx/config.toml`（路径不变）与新增 `~/.claude/lyx/config.toml`；`installedHosts` 字段移除，改为"该宿主的配置文件存在即已安装"；宿主配置段由 `[codexHost]` 归一为 `[host]`（旧键保留兼容读取，下次 init 重写）。
 - **新增 Claude 宿主**：命令安装到 `~/.claude/skills/lyx-*/SKILL.md`，审查与 coding subagent 定义为 `~/.claude/agents/lyx-*.md`（始终安装）；模板中的 `@lyx-*` 在 Claude 侧由渲染期改写为 `/lyx-*`，`@openspec-<skill>` 委托引用改写为 skill 调用 `openspec-<skill>`，模板正文不做条件块。
 - **Claude 侧审查保留，main 为基线**：`review-plan` / `review-code` / `apply` 全部可主 agent 直接执行（复用既有 main 语义：分级产出 + Critical 清零 + 自审最多 2 轮 + 快照留痕）；subagent 路径实现为非 fork 自定义 subagent，走不通时按既有 `[回退] subagent 不可用` 口径降级。
@@ -16,7 +16,7 @@ ly-workflow-codex 目前是 codex 单宿主：14 个命令模板、角色词、�
 - **`uninstall` / `doctor` / `status` / `update` 改为遍历宿主**，支持单宿主卸载；卸载 SHALL NOT 触碰 OpenSpec 自有产物（`.claude/commands/opsx/`、`.claude/skills/openspec-*`）与共用 `~/.ly/worktrees/`。
 - **不改动 Codex 宿主现有行为**（回归边界）；`src/index.ts` 的三个路径公开函数保留无参签名、内部默认 codex 并标注 deprecated。
 - **测试改为遍历宿主**：多宿主共有的行为不变量用一组遍历注册表的断言守护（不做每宿主一份等价断言），并新增多宿主安装、按宿主配置读写与 Claude 宿主专属测试。
-- **打包登记**：`package.json` 的 `files` 字段逐项列举模板与宿主包目录，本次新增的目录必须同步登记，否则发布包缺产物并静默安装失败。
+- **打包登记**：`package.json` 的 `files` 字段逐项列举模板目录（宿主包 TS 代码经 `dist` 发布，无需单独登记），本次新增的模板目录必须同步登记，否则发布包缺产物并静默安装失败。
 - **文档同步**：`README.md`、`README.zh-CN.md`、`CLAUDE.md`、`templates/CLAUDE.md`、`workflow.md`、`AGENTS.md`；`CHANGELOG.md` 按仓库既有约定留到发版。
 
 ## Capabilities
