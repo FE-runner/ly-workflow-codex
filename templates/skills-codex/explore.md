@@ -19,7 +19,7 @@ ls openspec/changes/archive/*/review-findings.md 2>/dev/null
 
 - **无命中** → 不发出询问，直接进入下面的探索流程。
 - **有命中** → SHALL **先询问**用户是否列出（SHALL NOT 直接列出），例如："检测到 N 个 change 留有审查未修项快照（review-findings.md），要列出吗？(y/n)"。
-  - 用户同意 → 按 change 分组展示：change 名 + `## 方案审查` / `## 代码审查` 各自的 Warning 计数 + 其中已标注解决的条数（扫描各节 `- 解决：` 行计数）+ 一行摘要；active 的标注"进行中"，archive 的标注归档日期。用户要细节时再展开原文。
+  - 用户同意 → 按 change 分组展示：change 名 + `## 方案审查` / `## 代码审查` 各自的 Warning 计数 + 其中已标注解决的条数（按 Warning 编号条目统计：该条目下至少有一条解决说明子项则计 1；同一 Warning 有多条解决说明时仍只计 1，SHALL NOT 按 `- 解决：` 行数累加）+ 一行摘要；active 的标注"进行中"，archive 的标注归档日期。用户要细节时再展开原文。
   - 用户拒绝 → 不展示任何快照内容，直接进入探索流程。
 - 个别快照读取失败时 SHALL 跳过该条并如实注明，SHALL NOT 中断扫描或虚构内容。
 - 该询问与列出 SHALL NOT 改变 `$ARGUMENTS` 的原样转发，也不接管 artifact 创建。
