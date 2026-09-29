@@ -147,21 +147,33 @@ describe('codex template set', () => {
 
   it('templates pin snapshot minimal structure and write-back lifecycle', () => {
     const archive = readFileSync(join(SKILLS_TEMPLATES_DIR, 'archive.md'), 'utf-8')
-    // 三段生命周期 + 归档后目录读取，避免"必须在 archive commit 后写"的歧义
-    expect(archive).toContain('三段')
-    expect(archive).toContain('归档后目录')
+    // 冻结口径：只冻结原 Warning 原文与编号，后续仍允许追加解决说明
+    expect(archive).toContain('归档 commit 后**原 Warning 原文与编号冻结**')
+    // 明确从归档后目录读取 proposal.md，而非已不存在的 active 路径
+    expect(archive).toContain('openspec/changes/archive/<日期>-<change-name>/proposal.md')
     // 旧快照无编号时按顶层条目出现顺序定位
-    expect(archive).toContain('出现顺序')
+    expect(archive).toContain('顶层 Warning 条目的出现顺序')
+    // 追加位置不要求原条目已有显式编号
+    expect(archive).toContain('序号仅用于引用与计数，不要求原条目已有显式编号')
     // active 引用与追加写入失败统一归入逐条跳过、不阻断归档
+    expect(archive).toContain('引用 active（未归档）快照、锚点无法解析')
+    expect(archive).toContain('追加写入失败（磁盘错误、权限错误、文件被占用等）')
     expect(archive).toContain('SHALL NOT 阻断归档')
     expect(archive).toContain('SHALL NOT 改写 active 快照')
 
     for (const name of ['review-plan.md', 'review-code.md']) {
       const content = readFileSync(join(SKILLS_TEMPLATES_DIR, name), 'utf-8')
       expect(content, name).toContain('条目最小结构')
+      expect(content, name).toContain('1. [<位置>] — <问题>')
+      expect(content, name).toContain('3 空格缩进')
       expect(content, name).toContain('不计入 Warning 计数')
       expect(content, name).toContain('不触发编号重排')
     }
+
+    const explore = readFileSync(join(SKILLS_TEMPLATES_DIR, 'explore.md'), 'utf-8')
+    expect(explore).toContain('@lyx-explore` 对快照只读展示')
+    expect(explore).toContain('解决说明由 `@lyx-archive` 在归档时追加')
+    expect(explore).not.toContain('它是只读留痕')
   })
 
   it('explore template asks before listing review-findings snapshots', () => {

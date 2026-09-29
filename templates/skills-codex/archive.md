@@ -22,14 +22,14 @@ argument-hint: '[<change-name>]'
 
 ## 回写审查未修项解决说明（SHALL，opsx 归档完成后、提交归档改动之前）
 
-快照生命周期 SHALL 分三段：active（`openspec/changes/<change-name>/`）→ OpenSpec archive 把 change 移入 `openspec/changes/archive/<日期>-<change-name>/` → 归档 commit 后内容冻结。本步骤位于第二段末尾、第三段开始之前——SHALL NOT 被理解为"必须在归档 commit 之后写入"。
+快照生命周期 SHALL 分三段：active（`openspec/changes/<change-name>/`）→ OpenSpec archive 把 change 移入 `openspec/changes/archive/<日期>-<change-name>/` → 归档 commit 后**原 Warning 原文与编号冻结**。冻结后仅允许追加式解决说明（由后续 change 的归档回写追加，见下），SHALL NOT 改写、删除或重排原有条目。本步骤位于第二段末尾、第三段开始之前——SHALL NOT 被理解为"必须在归档 commit 之后写入"。
 
 opsx:archive 成功把本 change 移入归档目录之后、执行下面的"提交归档改动"之前，SHALL 从**归档后目录**读取本 change 的 `proposal.md`（`openspec/changes/archive/<日期>-<change-name>/proposal.md`；SHALL NOT 继续使用已不存在的 `openspec/changes/<change-name>/proposal.md`）中的可选小节 `## 解决的审查未修项`，并按条回写历史快照：
 
 - **触发条件**：仅处理该小节显式列出的引用；没有该小节时跳过本步骤，SHALL NOT 扫描或推断哪条 Warning 被解决（不做自动语义匹配）。
 - **引用格式**：`<归档快照路径>#<节名>#<序号>`，节名仅允许 `方案审查` / `代码审查`，序号为该节 Warning 条目的 1 起连续编号；路径 SHALL 指向已归档快照（`openspec/changes/archive/**/review-findings.md`）。
 - **旧快照定位**：引用没有显式编号的旧快照时，序号按该节内顶层 Warning 条目的出现顺序从 1 起定位；无法唯一解析时按锚点无法解析处理（跳过并如实报告），SHALL NOT 猜测性匹配。
-- **追加内容**：在该 Warning 编号条目之下追加缩进子项 `- 解决：<change-name>（归档于 <YYYY-MM-DD>）— <说明>`；原 Warning 的位置 / 问题 / 建议原文与编号 SHALL 逐字保持不变，SHALL NOT 改写、删除或重排。
+- **追加内容**：在该 Warning 顶层条目之下追加缩进子项 `- 解决：<change-name>（归档于 <YYYY-MM-DD>）— <说明>`（序号仅用于引用与计数，不要求原条目已有显式编号）；原 Warning 的位置 / 问题 / 建议原文与编号 SHALL 逐字保持不变，SHALL NOT 改写、删除或重排。
 - **幂等**：同一 Warning 下已存在同一 `<change-name>` 的解决说明时跳过，不重复追加；不同 change 解决同一 Warning 时按归档先后追加多行。
 - **失败容错**：引用 active（未归档）快照、锚点无法解析（节名非法、序号越界、目标文件缺失 / 不可读）、或锚点有效但追加写入失败（磁盘错误、权限错误、文件被占用等）时，一律逐条跳过并如实报告原因，SHALL NOT 猜测性匹配、SHALL NOT 改写其他条目、SHALL NOT 改写 active 快照、SHALL NOT 阻断归档；其余条目照常处理。
 - **落库**：回写只改工作区文件，SHALL NOT 单独 commit；解决说明随下面的既有 `git add -- openspec/` 一并进入归档 commit，SHALL NOT 新增独立提交或独立归档步骤。

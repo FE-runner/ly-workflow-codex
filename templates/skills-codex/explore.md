@@ -24,7 +24,7 @@ ls openspec/changes/archive/*/review-findings.md 2>/dev/null
 - 个别快照读取失败时 SHALL 跳过该条并如实注明，SHALL NOT 中断扫描或虚构内容。
 - 该询问与列出 SHALL NOT 改变 `$ARGUMENTS` 的原样转发，也不接管 artifact 创建。
 
-快照的格式与生命周期见 `review-findings-snapshot` 能力；它是只读留痕（供回看某次审查提出过哪些未处理的 Warning），不是待办台账。
+快照的格式与生命周期见 `review-findings-snapshot` 能力；它是快照式留痕（`@lyx-explore` 对快照只读展示；供回看某次审查提出过哪些未处理的 Warning），不是待办台账——解决说明由 `@lyx-archive` 在归档时追加。
 
 按 `@openspec-explore skill`（opsx explore 编排 prompt）定义的流程进入探索模式：作为思考伙伴，围绕 `参数` 讨论、调研代码库、澄清需求，保持纯讨论态，不直接创建 change artifact。
 
