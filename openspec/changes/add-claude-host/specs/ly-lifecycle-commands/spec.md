@@ -7,7 +7,7 @@
 
 **OpenSpec 修复命令按宿主（自本 change 起）**：`--tools` 取值 SHALL 按宿主映射（codex 宿主对应 `codex`，claude 宿主对应 `claude`），SHALL NOT 固定为单一宿主；仅对确实缺少项目级技能的宿主执行补齐，SHALL NOT 因补齐一个宿主而重建或清理另一宿主的 OpenSpec 产物。
 
-**本能力其他 Requirement 的配置载体与命令标识按宿主解读（自本 change 起）**：本能力其余 Requirement 正文中出现的 `~/.codex/lyx/config.toml` 与 `[codexHost]` SHALL 按宿主作用域解读（见 `multi-host-install` 与 `subagent-agent-config`）——claude 宿主对应该宿主的配置文件与宿主配置节，字段语义两宿主一致。正文中以 `@lyx-<command>` 形式出现的命令引用 SHALL 视为命令标识，其宿主调用写法由各宿主定义（见 `claude-host`）。
+**本能力其他 Requirement 的配置载体与命令标识按宿主解读（自本 change 起）**：本能力其余 Requirement 正文中出现的 `~/.codex/lyx/config.toml` 与 `[codexHost]` SHALL 按宿主作用域解读（见 `multi-host-install` 与 `subagent-agent-config`）——claude 宿主对应该宿主的配置文件与宿主配置节，字段语义两宿主一致。正文中以 `@lyx-<command>` 形式出现的命令引用 SHALL 视为命令标识，其宿主调用写法由各宿主定义（见 `multi-host-install` 的命令标识约定）。
 
 #### Scenario: 全新项目, 既无 AGENTS.md 也无 openspec/ 目录
 - **WHEN** 用户在既无 AGENTS.md 也无 `openspec/` 目录的项目中运行 `/ly:init`

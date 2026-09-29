@@ -22,7 +22,7 @@
 
 在 Claude 宿主产出的产物中，lyx 命令的调用写法 SHALL 渲染为该宿主的调用语法（`/lyx-<command>`）；codex 宿主 SHALL 保持既有写法（`@lyx-<command>`）。该差异 SHALL 在安装期渲染阶段落实，SHALL NOT 通过在模板正文内嵌宿主条件块或维护双份正文实现。
 
-本仓库 spec 正文中以 `@lyx-<command>` 形式出现的命令引用 SHALL 视为**命令标识**而非字面调用串；命令标识的宿主调用写法由本 Requirement 定义，SHALL NOT 因某宿主使用不同前缀而要求改写既有 spec 的命令引用。
+模板中委托 OpenSpec 的 `@openspec-<skill>` 引用在 Claude 宿主产物中 SHALL 改写为调用同名 skill（`openspec-<skill>`），SHALL NOT 改写为 OpenSpec 生成的 `/opsx:<cmd>` 命令——委托语义是读取该 skill 并按其流程执行，且依赖前置检查只校验 skill 的可发现性。codex 宿主保持既有写法。命令标识约定见 `multi-host-install`。
 
 #### Scenario: Claude 产物使用斜杠前缀
 
@@ -33,6 +33,11 @@
 
 - **WHEN** lyx 安装 codex 宿主并渲染命令模板
 - **THEN** 模板正文中的 lyx 命令引用与调用示例保持 `@lyx-<command>`，与本次改造前一致
+
+#### Scenario: Claude 产物中 OpenSpec 委托改写为 skill 调用
+
+- **WHEN** lyx 安装 Claude 宿主并渲染 propose / explore / archive 模板
+- **THEN** 产物中不残留 `@openspec-` 前缀，委托处以调用 `openspec-<skill>` skill 的写法呈现，不引用 `/opsx:*` 命令
 
 #### Scenario: 共享正文不含宿主分支
 
@@ -62,6 +67,8 @@ Claude 宿主的方案审查、代码审查与实施环节 SHALL 在未显式配
 
 显式配置子代理执行者时，Claude 宿主 SHALL 以非 fork 的独立子代理执行审查与实施，并在后续轮次复用同一子代理。子代理不可用、spawn 失败或复用失败时，SHALL 输出显式状态标记 `[回退] subagent 不可用: <原始报错>` 并回退为主 agent 执行，SHALL NOT 视为流程失败。Claude 侧子代理定义 SHALL 默认继承会话模型，并 SHALL NOT 为该子代理启用 worktree 隔离（实施改动须留在主检出以便主会话统一提交）。
 
+子代理定义 SHALL 随 Claude 宿主安装而始终安装，SHALL NOT 按执行者取值增删；执行者字段只决定审查与实施环节是否使用这些定义。执行者字段 SHALL 由安装向导的执行者选择（main / subagent）与交互菜单的同一开关显式设定，写入 `~/.claude/lyx/config.toml` 的宿主配置节。审查子代理定义的工具集 SHALL 包含完成审查所需的 Bash（review-code 读取 git diff 与未跟踪清单、review-plan 运行 `openspec validate`），并 SHALL 在定义正文中把 Bash 用途限定为只读的 `git` 与 `openspec` 命令；SHALL NOT 仅提供文件读取类工具而使子代理路径无法执行审查。
+
 #### Scenario: 配置子代理后走独立子代理
 
 - **WHEN** Claude 宿主显式配置子代理执行者，用户运行审查
@@ -76,6 +83,16 @@ Claude 宿主的方案审查、代码审查与实施环节 SHALL 在未显式配
 
 - **WHEN** Claude 宿主以子代理执行实施环节
 - **THEN** 改动落在主检出，子代理不自行提交，改动清单与结果回传主会话
+
+#### Scenario: 子代理定义不随执行者取值增删
+
+- **WHEN** 用户安装 Claude 宿主时选择执行者为 `main`，之后经菜单切换为 `subagent`
+- **THEN** 安装时已存在 `lyx-*` 子代理定义，切换后直接使用，无需重装或重渲定义
+
+#### Scenario: 审查子代理可执行只读命令
+
+- **WHEN** 检查已安装的 Claude 审查子代理定义
+- **THEN** 其工具集包含 Bash，正文限定 Bash 仅用于只读的 `git` 与 `openspec` 命令
 
 #### Scenario: 跨轮复用同一子代理
 

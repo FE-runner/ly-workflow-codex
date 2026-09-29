@@ -22,20 +22,20 @@
 ## 4. Claude 宿主包
 
 - [ ] 4.1 新建 `src/hosts/claude/`（适配器、路径常量、配置 schema、子代理定义目录、模板目录）；验证 `pnpm typecheck` 通过且注册表可枚举到该宿主。
-- [ ] 4.2 在该宿主适配器的渲染阶段实现命令前缀改写（`@lyx-` → `/lyx-`）；验证渲染快照断言：claude 产物用斜杠前缀、codex 产物保持原前缀。
-- [ ] 4.3 新增 Claude 侧审查与实施子代理定义：只读审查工具集、默认继承会话模型与推理档、明确不启用 worktree 隔离；验证定义文件 frontmatter 合法且断言覆盖上述三条。
-- [ ] 4.4 把 `review-plan.md` / `review-code.md` / `apply.md` / `propose.md` 中的宿主分歧段落抽成宿主片段，由渲染阶段注入，其中含 codex 角色词绝对路径（该路径不得进入 Claude 产物，Claude 侧角色设定来自子代理定义正文）；验证 codex 侧产物与迁移前逐字一致（逐文件比对），且 Claude 产物中 `rg` 检索不到 codex 角色词路径。
+- [ ] 4.2 在该宿主适配器的渲染阶段实现命令前缀改写（`@lyx-` → `/lyx-`）；同时把 `@openspec-<skill>` 委托引用改写为 skill 调用 `openspec-<skill>`；验证渲染快照断言：claude 产物用斜杠前缀且不残留 `@openspec-`、codex 产物保持原写法。
+- [ ] 4.3 新增 Claude 侧审查与实施子代理定义（始终安装，不随执行者取值增删）：审查定义工具集为 Read / Grep / Glob / Bash 且正文限定 Bash 仅用于只读 `git` / `openspec` 命令、默认继承会话模型与推理档、明确不启用 worktree 隔离；验证定义文件 frontmatter 合法且断言覆盖上述各条（含审查定义包含 Bash、正文含只读用途限定）。
+- [ ] 4.4 把 `review-plan.md` / `review-code.md` / `apply.md` / `propose.md` 中的宿主分歧段落抽成宿主片段，由渲染阶段注入，其中含 codex 角色词绝对路径（该路径不得进入 Claude 产物，Claude 侧角色设定来自子代理定义正文）；并把 `changelog.md:19`、`release.md:19` 的"告诉 Codex"改为宿主中立写法；验证 codex 侧产物除这两处措辞外与迁移前逐字一致（逐文件比对），且 Claude 产物中 `rg` 检索不到 codex 角色词路径与 "Codex" 字样。
 
 ## 5. init 向导与 CLI
 
 - [ ] 5.1 `lycx init` 增加宿主多选步骤，默认勾选由各宿主适配器暴露的探测目录决定（共享 CLI 不硬编码任何宿主目录）；验证 `init` / `menu` 测试覆盖默认勾选与取消其一，且断言共享层无宿主专属路径字面量。
-- [ ] 5.2 非交互路径（`--skip-prompt`）以磁盘上已存在的宿主配置文件集合为安装集合；验证 `update` 测试覆盖"只有 claude 配置时不擅自创建 codex"。
-- [ ] 5.3 Claude 侧向导不采集 provider 与模型、不写入宿主 provider 配置（子代理默认继承），并在摘要中如实呈现；验证断言：claude 路径不产生 provider 写入动作。
+- [ ] 5.2 非交互路径（`--skip-prompt`）以磁盘上已存在的宿主配置文件集合为安装集合；集合为空时按适配器探测目录决定、一个都探测不到时安装 codex；验证测试覆盖"只有 claude 配置时不擅自创建 codex"、"全新环境 `init --skip-prompt` 仍安装 codex"、"全新环境仅存在 `~/.claude` 时安装 claude"。
+- [ ] 5.3 Claude 侧向导只采集执行者二连（main / subagent），不采集 provider、模型与推理档、不写入宿主 provider 配置（子代理默认继承），菜单提供同一执行者开关，并在摘要中如实呈现；验证断言：claude 路径不产生 provider 写入动作、执行者取值写入 `~/.claude/lyx/config.toml` 的宿主配置节。
 - [ ] 5.4 更新中英文文案与 CLI help（宿主选择、分宿主安装结果、配置路径展示）；验证 `pnpm typecheck` 通过且文案断言覆盖两种语言。
 
 ## 6. OpenSpec 集成按宿主
 
-- [ ] 6.1 `src/utils/preflight.ts` 的技能扫描根改为按已安装宿主从各适配器取（共享 preflight 不硬编码宿主技能根，补 claude 侧项目级与全局技能根）；验证 `preflight` 测试覆盖"仅 claude 宿主已安装时判为就绪而非缺失"、"无任何宿主配置时取全部已注册宿主"。
+- [ ] 6.1 `src/utils/preflight.ts` 的技能扫描根改为按已安装宿主从各适配器取（共享 preflight 不硬编码宿主技能根，补 claude 侧项目级与全局技能根）；多宿主时按宿主分行输出并以最差状态为整体状态；验证 `preflight` 测试覆盖"仅 claude 宿主已安装时判为就绪而非缺失"、"无任何宿主配置时取全部已注册宿主"、"codex `project-ready` + claude `missing` 时整体 `missing` 且修复只针对 claude"。
 - [ ] 6.2 项目级修复命令由固定 `--tools codex` 改为按缺失技能的宿主执行 `openspec init --tools <宿主>`（必要时以 `openspec update --force` 刷新）；验证 `preflight` 测试断言修复命令取值随宿主变化。
 - [ ] 6.3 `lycx openspec inspect` / `ensure` 接收宿主集合入参并以宿主集合为扫描与修复依据；验证 CLI 层测试覆盖两宿主与单宿主两种调用。
 - [ ] 6.4 项目初始化模板按宿主渲染：claude 宿主下额外产出导入 `AGENTS.md` 的 `CLAUDE.md`，提交文件清单与汇总同步；验证模板断言覆盖 claude 侧产出规则与 codex 侧无该产出。

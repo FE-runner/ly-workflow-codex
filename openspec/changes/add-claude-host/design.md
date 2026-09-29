@@ -8,7 +8,7 @@
 - `package-meta.ts` 的 `LY_DIR` / `CONFIG_FILE` / `PROMPTS_DIR` / `AGENTS_SKILLS_DIR` 是单例常量，被 `config.ts` / `installer.ts` / `preflight.ts` / `doctor.ts` / `menu.ts` / `update.ts` 直接引用。
 - `src/index.ts` 对外导出 `getConfigPath()` / `getLyDir()` / `getLyPromptsDir()` 三个无参函数，是公开 API 面。
 - `package.json` 的 `files` 字段逐项列举模板目录（`templates/prompts/codex/`、`templates/skills-codex/`），不随目录新增自动扩展。
-- 模板层宿主分歧面很小：仅 `review-plan.md` / `review-code.md` / `apply.md` / `propose.md` 四个文件含宿主专属内容（约 20 处）；`@lyx-` 交叉引用散落在 14 个文件。
+- 模板层宿主分歧面很小：`review-plan.md` / `review-code.md` / `apply.md` / `propose.md` 四个文件含宿主能力相关段落（约 20 处，按 `~/.codex`、`codexHost`、`fork_context`、`send_input` 等能力特征检索）；另有 `changelog.md:19`、`release.md:19` 两处裸"Codex"字样；`@lyx-` 交叉引用散落在 14 个文件；`@openspec-<skill>` 委托引用在 `explore.md`（2 处）、`archive.md`、`propose.md` 共 4 处。`$ARGUMENTS` 两宿主通用，不属分歧。
 - 实测（本次调查）：`openspec init --tools <claude|codex|agents|all|none>` 已支持按宿主投放——codex 落到 `.agents/skills/openspec-*` 并写 `.agents/skills/.openspec-target`，claude 落到 `.claude/skills/openspec-*` 并额外产出 `.claude/commands/opsx/*.md`；在已有 codex root 的项目里追加 `openspec init --tools claude` 可行，`openspec update --force` 保留双 target；但 `openspec/config.yaml` 不记录 tools，无法反推宿主。
 
 ## Goals / Non-Goals
@@ -33,7 +33,7 @@
 每个宿主包内含适配器实现、路径常量、配置 schema、模板与角色词/子代理定义；注册表是唯一登记处。共享层指现位于 `src/utils/` 的安装、配置读写与前置检查模块，本次不把它们物理迁移到新目录——物理迁移会牵动 `src/commands/*` 的导入面，收益低于成本；边界改由"共享层不出现宿主名与宿主路径"的遍历断言守住，越界即测试失败。替代方案"共享模板目录 + 内联宿主条件块"被否：那会让每个分歧模板都知道所有宿主是谁，加宿主时改动扩散到共享文件——这正是用户明确要避免的耦合。替代方案"每宿主复制一整套模板目录"也被否：14 个文件的正文立刻开始漂移，共享正文会失去单源。
 
 **D2：模板共享正文 + 宿主片段隔离，命令前缀用渲染期改写。**
-14 个模板正文共享；仅 4 个文件含宿主分歧段落，抽成宿主片段由渲染阶段注入。`@lyx-` → `/lyx-` 的前缀差异由 Claude 适配器的 `renderTemplate` 做全局改写，模板一个字不改。替代方案"模板里写 `{{LYX_CMD_PREFIX}}` 变量"也可行且更显式，但要在 14 个文件里批量改正文；渲染期改写零正文改动，成本更低，代价是这条差异对读模板的人不显式——因此把它写进宿主包 README 与设计文档留痕。
+14 个模板正文共享；4 个文件的宿主分歧段落抽成宿主片段由渲染阶段注入，`changelog.md` / `release.md` 的"告诉 Codex"改为宿主中立写法（如"告诉助手"，codex 产物随之变化属可接受的措辞调整，逐字比对以此为唯一例外）。`@lyx-` → `/lyx-` 的前缀差异由 Claude 适配器的 `renderTemplate` 做全局改写；`@openspec-<skill>` 在 Claude 侧改写为 skill 调用 `openspec-<skill>`——不改写为 `/opsx:<cmd>`，因为模板语义是"读取该 skill 并按其流程执行"，且 preflight 只检查 skill，`.claude/commands/opsx/*` 缺失时无兜底。替代方案"模板里写 `{{LYX_CMD_PREFIX}}` 变量"也可行且更显式，但要在 14 个文件里批量改正文；渲染期改写零正文改动，成本更低，代价是这条差异对读模板的人不显式——因此把它写进宿主包 README 与设计文档留痕。
 
 **D3：每宿主一个自包含配置文件，"已安装"由文件存在判定。**
 路径：`~/.codex/lyx/config.toml`（不变）与 `~/.claude/lyx/config.toml`（新增）。`installedHosts` 字段删除，`listInstalledHosts()` 改为扫描各宿主配置文件是否存在。该设计使**部分卸载**成为天然行为（删该宿主配置与产物即可），并让 `general.version` 按宿主分别记录，`update` 可只刷新落后的宿主。替代方案"单配置 + `[codexHost]`/`[claudeHost]` 并列"被否：共享状态耦合度更高，且部分卸载要小心维护共享字段。
@@ -42,9 +42,10 @@
 文件本身已经表达宿主作用域，节名再带宿主名属于重复；归一后 codex 与 claude 的字段语义完全一致。迁移代价是读取时兼容历史 `[codexHost]` 节并在下次 init 重写——实现为一次解析回退，不做独立迁移命令。替代方案"沿用 `[codexHost]`/`[claudeHost]`"改动更小，但语义重复且会让"新增宿主"继续引入新节名。
 
 **D5：宿主选择显式化，非交互复用已安装集合。**
-交互 `lycx init` 增加一次多选（默认按 `~/.codex` / `~/.claude` 存在性勾选）；`--skip-prompt` 以磁盘上已存在的宿主配置文件集合为安装集合，不新增必填参数。替代方案"纯探测、不询问"被否：隐式行为在多机/CI 场景不可预期；替代方案"每宿主一个子命令（`lycx init claude`）"被否：改变既有 CLI 形态且与 `update` 的复用逻辑冲突。
+交互 `lycx init` 增加一次多选（默认按 `~/.codex` / `~/.claude` 存在性勾选）；`--skip-prompt` 以磁盘上已存在的宿主配置文件集合为安装集合，不新增必填参数；该集合为空（全新环境/CI）时按各适配器探测目录决定，一个都探测不到时安装 codex——否则现有的 `init --skip-prompt` 会在新机器上什么都不装，违反"Codex 行为不变"。替代方案"纯探测、不询问"被否：隐式行为在多机/CI 场景不可预期；替代方案"每宿主一个子命令（`lycx init claude`）"被否：改变既有 CLI 形态且与 `update` 的复用逻辑冲突。
 
 **D6：Claude 侧审查以 main 为基线，子代理为可选增强。**
+Claude 向导保留执行者二连（main / subagent）作为显式开关，菜单提供同一开关；模型与推理档不采集。子代理定义**始终安装**（`model: inherit`），执行者只决定是否使用它们，切换执行者不需要重渲定义。审查子代理需要 Bash（review-code 取 `git diff` 与未跟踪清单、review-plan 跑 `openspec validate`），因此工具集为 Read / Grep / Glob / Bash，并在定义正文中把 Bash 用途限定为只读的 `git` 与 `openspec` 命令——frontmatter 能否按子命令硬限制不作承诺，约束以正文与断言为准。
 main 路径复用既有语义（分级产出、Critical 清零准出、自审最多 2 轮、快照留痕），不因宿主不同降级。子代理路径以非 fork 自定义子代理实现：宿主默认给非 fork 子代理全新隔离上下文，天然满足既有"非 fork"契约；跨轮复用走宿主的子代理续跑能力。模型与推理档在 Claude 侧写进子代理定义（安装期渲染），未配置时以"继承会话"为默认；这是对宿主能力差异的适配，不是行为降级。替代方案"Claude 侧只做 main、不实现子代理"被否：用户明确表示子代理走得通就可以有；替代方案"用宿主的 fork 子代理"被否：会带入父会话历史，违反既有的软上下文经 change 目录到达的契约。
 
 **D7：Claude 侧禁止子代理 worktree 隔离。**
@@ -79,7 +80,7 @@ proposal 承诺了"角色词来源按宿主"，因此 `ly-review-gates` 的 delt
 - [preflight 把单宿主用户误判为 `missing`] → 扫描根按已安装宿主展开，并加"仅 claude 宿主已安装"的断言；`global-only` 仍按 WARN 继续，不阻断。
 - [多宿主共有行为在两侧漂移] → 用遍历宿主的单组断言守护共有不变量；共享正文单源，宿主差异只在渲染阶段产生。
 - [改动面大（core + 两个宿主包 + 6 份文档 + 多组测试）] → 任务按层次拆分，先做 core 解耦并保持 codex 行为不变（可用既有测试证明），再新增 Claude 宿主包；codex 路径的回归由既有测试与同一组断言覆盖。
-- [Claude 侧子代理定义数量增加触发宿主的子代理描述总量告警] → 该宿主现有的 5 个代理已在本 change 前置动作中移除，本次只新增 lyx 前缀的少量定义，且描述保持精简。
+- [Claude 侧子代理定义数量增加触发宿主的子代理描述总量告警] → 本次只新增 lyx 前缀的少量定义且描述保持精简；用户侧其它代理的数量不在本包控制范围内（本机已由用户自行移除 5 个，见 context.md，但这不是本 change 的保障）。
 
 ## Migration Plan
 
@@ -90,4 +91,4 @@ proposal 承诺了"角色词来源按宿主"，因此 `ly-review-gates` 的 delt
 
 ## Open Questions
 
-- 是否额外提供 `--hosts codex,claude` 命令行覆盖参数：当前设计可从配置文件推断，非必需；若后续出现"配置缺失但想预装"的场景，再加不改变本设计。
+- 是否额外提供 `--hosts codex,claude` 命令行覆盖参数：全新环境的非交互默认已由 D5 的探测兜底覆盖，非必需；若后续出现"想在无探测目录时预装指定宿主"的场景，再加不改变本设计。

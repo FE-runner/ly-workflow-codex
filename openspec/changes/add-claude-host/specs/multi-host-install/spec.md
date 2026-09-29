@@ -63,7 +63,7 @@ lyx 的安装、卸载与安装后校验 SHALL 经宿主注册表与适配器接
 
 ### Requirement: 宿主选择安装
 
-`lycx init` 交互模式 SHALL 显式询问本次安装哪些宿主，并按磁盘上是否存在 `~/.codex` 与 `~/.claude` 给出默认勾选。非交互模式（`--skip-prompt`）SHALL 以磁盘上已存在的宿主配置文件集合为安装集合重装，SHALL NOT 因此新增必填参数。仅选择部分宿主时，SHALL NOT 改动未选择宿主的配置文件与产物。
+`lycx init` 交互模式 SHALL 显式询问本次安装哪些宿主，并按磁盘上是否存在 `~/.codex` 与 `~/.claude` 给出默认勾选。非交互模式（`--skip-prompt`）SHALL 以磁盘上已存在的宿主配置文件集合为安装集合重装，SHALL NOT 因此新增必填参数。该集合为空（不存在任何宿主配置文件）时，安装集合 SHALL 由各宿主适配器的探测目录决定（`~/.codex` 存在即含 codex、`~/.claude` 存在即含 claude）；一个都探测不到时 SHALL 安装 codex 宿主，以保持改造前全新环境下 `init --skip-prompt` 的行为，SHALL NOT 以空集合结束安装。仅选择部分宿主时，SHALL NOT 改动未选择宿主的配置文件与产物。
 
 #### Scenario: 按磁盘现状给出默认勾选
 
@@ -74,6 +74,16 @@ lyx 的安装、卸载与安装后校验 SHALL 经宿主注册表与适配器接
 
 - **WHEN** 用户运行 `lycx update`（内部以 `--skip-prompt` 重装），磁盘上只有 claude 宿主的配置文件
 - **THEN** 只重装 claude 宿主，不因缺少显式参数而报错，也不擅自创建 codex 宿主
+
+#### Scenario: 全新环境非交互安装不为空
+
+- **WHEN** 磁盘上不存在任何宿主配置文件，也不存在 `~/.codex` 与 `~/.claude`，用户运行 `lycx init --skip-prompt`
+- **THEN** 安装 codex 宿主，行为与改造前一致，SHALL NOT 以"未选择任何宿主"结束
+
+#### Scenario: 全新环境非交互安装按探测目录
+
+- **WHEN** 磁盘上不存在任何宿主配置文件，仅存在 `~/.claude`，用户运行 `lycx init --skip-prompt`
+- **THEN** 只安装 claude 宿主
 
 #### Scenario: 部分安装不影响另一宿主
 
@@ -100,6 +110,15 @@ lyx 的安装、卸载与安装后校验 SHALL 经宿主注册表与适配器接
 
 - **WHEN** 用户以显式选择或显式参数指明只对某个宿主执行卸载、体检、状态或更新
 - **THEN** 只有该宿主被处理，另一宿主不出现在结果中也不被改动；未指定宿主时对全部已安装宿主处理
+
+### Requirement: spec 中的命令引用视为命令标识
+
+本仓库 spec 正文中以 `@lyx-<command>` 形式出现的命令引用 SHALL 视为**命令标识**而非字面调用串；各宿主的实际调用写法由该宿主定义（claude 宿主见 `claude-host` 的「命令调用前缀按宿主渲染」）。SHALL NOT 因某宿主使用不同前缀而要求改写既有 spec 的命令引用。
+
+#### Scenario: 既有 spec 引用无需改写
+
+- **WHEN** 新增一个调用前缀不同于 `@lyx-` 的宿主
+- **THEN** 既有 spec 中的 `@lyx-<command>` 引用保持原样，按命令标识解读
 
 ### Requirement: 发布包完整性
 
