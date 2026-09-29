@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.1] - 2026-09-29
+
+本版补齐"审查未修项快照"的闭环：历史 Warning 被后续 change 解决后，可在新 change 的 `proposal.md` 声明锚点，由 `@lyx-archive` 向已归档快照追加解决说明——原文不改、幂等、锚点失败不阻断归档。
+
+### Added
+
+- `ly-propose-flow`：`proposal.md` 新增可选小节 `## 解决的审查未修项`，以 `<归档快照路径>#<节名>#<序号>` 引用历史 Warning 并附一句解决说明
+- `review-findings-snapshot`：新增「追加式解决说明」能力——`@lyx-archive` 归档时向已归档快照对应 Warning 条目追加 `- 解决：<change-name>（归档于 <日期>）— <说明>`；只允许引用已归档快照，同 change 幂等，锚点解析失败逐条跳过且不阻断归档
+- `@lyx-explore` 列出快照时显示各节"已标注解决 N 条"（按 Warning 条目计，不按解决说明行数累加）
+
+### Changed
+
+- `review-findings.md` 两节内 Warning 条目改为连续编号，支撑稳定锚点；快照仍不引入 open/closed 状态字段，解决说明只增不改
+- `@lyx-archive` 的解决说明回写复用既有 `git add -- openspec/` 与归档 commit，不新增独立提交或归档步骤
+- README / CLAUDE.md 同步解决说明行为摘要
+
+### Fixed
+
+- `@lyx-explore` 解决计数口径改为按 Warning 条目统计，避免同一 Warning 被多个 change 解决时重复计入
+
 ## [0.6.0] - 2026-09-23
 
 本版新增"审查未修项快照"：审查产生的未修复 Warning 不再随对话消失——按节写入 change 目录下的 `review-findings.md`，随归档落库，并可由 `@lyx-explore` 先询问后列出。
