@@ -16,6 +16,8 @@
 
 **宿主机制差异按宿主落实（自本 change 起）**：非 fork 与跨轮复用两条契约在各宿主按其实际能力落实，语义不变——claude 宿主的普通子代理天然运行在独立的全新上下文中（满足非 fork 契约），跨轮复用走该宿主的子代理续跑能力；正文中列举的宿主专有语义（如某宿主的 fork 上下文参数名）仅作该宿主的实现说明，SHALL NOT 被解读为其他宿主的必填参数。宿主在交互模式下默认以后台方式运行子代理时，等待语义按 `ly-review-gates` 的宿主条款解读。
 
+**向导与体检 Requirement 的宿主适用范围（自本 change 起）**：本能力中描述安装向导采集与体检展示的 Requirement，其适用范围 SHALL 按宿主区分——codex 宿主沿用既有采集与展示口径（含 provider 提供方选择与 Codex 现状检测）；claude 宿主按本 delta 的 ADDED Requirement「Claude 宿主的子代理字段采集与体检边界」执行。两套口径之间的差异以该 ADDED Requirement 为准，SHALL NOT 被解读为同一宿主同时适用两套互相矛盾的要求；claude 宿主不适用的采集步骤 SHALL NOT 被判定为缺失或失败。
+
 #### Scenario: 仅配置 reviewModel，未配置新字段
 - **WHEN** 用户只配置审查模型，未配置 `codingModel` / `reviewExecutor` / `codingExecutor`
 - **THEN** 两个执行者均视为未配置（等价 `main`），审查与实施由主 agent 直接执行；审查模型因执行者为 `main` 不生效，`lycx doctor` 输出 WARN

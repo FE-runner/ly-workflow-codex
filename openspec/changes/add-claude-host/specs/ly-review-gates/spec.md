@@ -6,6 +6,10 @@
 
 **配置载体与等待语义按宿主（自本 change 起）**：执行者字段 SHALL 从当前宿主的宿主作用域配置读取（见 `multi-host-install` 与 `subagent-agent-config`）——codex 宿主为 `~/.codex/lyx/config.toml` 的宿主配置节，claude 宿主为 `~/.claude/lyx/config.toml` 的宿主配置节；本 Requirement 及本能力其他 Requirement 正文中出现的 `~/.codex/lyx/config.toml` 与 `[codexHost]` SHALL 按上述宿主作用域解读，字段语义在两个宿主一致。子代理路径下"同轮同步等待"的表述 SHALL 按宿主能力如实落实：宿主能把结果在同一回合内返回时，主会话 SHALL 在本轮内等待并消费结果；宿主在交互模式下默认以后台方式运行子代理时，「审查 subagent 轮内纪律」中的"同轮 wait" SHALL 解读为"子代理结果必须被消费并如实报告"，SHALL NOT 声称其为本轮内同步阻塞，也 SHALL NOT 以自然语言描述代替实际的子代理调用与结果消费。
 
+**审查角色提示词来源按宿主（自本 change 起）**：审查子代理的角色提示词来源 SHALL 按宿主解析——codex 宿主沿用既有的角色词文件（TASK 指示子代理读取该角色词的绝对路径）；claude 宿主 SHALL 使用该宿主的子代理定义自带的系统提示词（定义正文即角色设定），SHALL NOT 在该宿主下要求子代理读取 codex 侧的角色词路径。共享模板中的 codex 角色词绝对路径 SHALL 归入 codex 宿主片段或由渲染阶段注入，SHALL NOT 出现在 Claude 宿主的产物中。
+
+**子代理生命周期按宿主（自本 change 起）**：「审查 subagent 轮内纪律」中的"消费完即关闭"与"SHALL NOT 假设 subagent 跨用户回合存活"两条 SHALL 按本 Requirement 的跨轮复用契约重解释：单轮结果消费完毕但后续仍可能复用时，SHALL NOT 提前关闭该子代理；关闭时机 SHALL 为整个审查循环结束、或已确定不再复用该子代理之时。"不假设跨用户回合存活"SHALL 解读为"SHALL NOT 依赖子代理跨用户回合可用"，与"同一命令执行内的跨轮复用"不冲突；复用失效时仍按既有回退口径重新 spawn。
+
 **执行者解析**：`@lyx-review-plan` / `@lyx-review-code` SHALL 读取当前宿主的 `reviewExecutor`（未配置、空白或非法取值等价 `"main"`）决定本轮审查的执行者。审查范围判定、基线锚定、未跟踪清单采集（含 `review-findings.md` 审查未修项快照的排除，见 `review-findings-snapshot`）、Critical / Warning / Info 分级输出、`openspec validate` 这些与执行者无关的规则 SHALL 在两条路径下保持一致。`review-findings.md` SHALL NOT 被当作可挑错的审查对象或修复对象，且 SHALL 从审查命令的未跟踪（`??`）清单中排除——避免它既被当作审查对象、又被 review-plan / apply / review-code 的中间 commit 提前纳入；该排除 SHALL 在 `main` 与 `subagent` 两条路径下同样生效。
 
 **main 路径（默认）**：
@@ -59,3 +63,11 @@
 #### Scenario: 交互模式下不冒充同轮同步等待
 - **WHEN** 在宿主交互模式下以子代理路径执行审查，且该宿主默认以后台方式运行子代理
 - **THEN** 报告如实描述等待方式（结果被消费并如实报告），SHALL NOT 出现"本轮内同步等待完成"一类与宿主实际行为不符的表述
+
+#### Scenario: Claude 产物不引用 codex 角色词路径
+- **WHEN** 安装 claude 宿主并检查其审查命令产物与子代理定义
+- **THEN** 产物中不出现 codex 侧角色词文件的绝对路径，角色设定来自该宿主的子代理定义正文
+
+#### Scenario: 跨轮复用期间不提前关闭子代理
+- **WHEN** 首轮审查完成、主会话修复后仍需进入第 2 轮复用同一子代理
+- **THEN** 首轮结果消费后不关闭该子代理，复用其续跑能力；循环结束或确认不再复用时才关闭，SHALL NOT 因"消费完即关闭"而丢失复用能力

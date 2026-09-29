@@ -6,7 +6,7 @@ ly-workflow-codex 目前是 codex 单宿主：14 个命令模板、角色词、�
 
 ## What Changes
 
-- **新增宿主包结构**：`src/hosts/<id>/` 自包含（适配器、路径常量、配置 schema、模板、角色词）；`src/core/` 只认适配器接口与宿主注册表，不出现任何宿主名。
+- **新增宿主包结构**：`src/hosts/<id>/` 自包含（适配器、路径常量、配置 schema、模板、角色词）；共享层（现位于 `src/utils/` 的安装、配置读写、前置检查模块）只认适配器接口与宿主注册表，不出现任何宿主名。本次不新增 `src/core/` 物理目录，共享层与宿主包的边界由遍历断言守住。
 - **BREAKING**：配置改为**每宿主一个配置文件**——`~/.codex/lyx/config.toml`（路径不变）与新增 `~/.claude/lyx/config.toml`；`installedHosts` 字段移除，改为"该宿主的配置文件存在即已安装"；宿主配置段由 `[codexHost]` 归一为 `[host]`（旧键保留兼容读取，下次 init 重写）。
 - **新增 Claude 宿主**：命令安装到 `~/.claude/skills/lyx-*/SKILL.md`，审查与 coding subagent 定义为 `~/.claude/agents/lyx-*.md`；模板中的 `@lyx-*` 在 Claude 侧由渲染期改写为 `/lyx-*`，模板正文不做条件块。
 - **Claude 侧审查保留，main 为基线**：`review-plan` / `review-code` / `apply` 全部可主 agent 直接执行（复用既有 main 语义：分级产出 + Critical 清零 + 自审最多 2 轮 + 快照留痕）；subagent 路径实现为非 fork 自定义 subagent，走不通时按既有 `[回退] subagent 不可用` 口径降级。
@@ -37,7 +37,7 @@ ly-workflow-codex 目前是 codex 单宿主：14 个命令模板、角色词、�
 
 ## Impact
 
-- **代码**：`src/core/*`（installer / installer-template / config / preflight 的宿主化）、新增 `src/hosts/{codex,claude}/*` 与宿主注册表、`src/commands/{init,doctor,menu,update}.ts`、`src/types/*`、`src/index.ts`、`src/i18n/index.ts`。
+- **代码**：共享层（`src/utils/` 下的 installer / installer-template / config / preflight）宿主化、新增 `src/hosts/{codex,claude}/*` 与宿主注册表、`src/commands/{init,doctor,menu,update}.ts`、`src/types/*`、`src/index.ts`、`src/i18n/index.ts`。
 - **模板**：`templates/` 重组为共享正文 + 宿主包；`review-plan.md` / `review-code.md` / `apply.md` / `propose.md` 四个文件含宿主分歧段落（共 20 处）需隔离；14 个文件含 `@lyx-*` 交叉引用（渲染期改写，不动正文）。
 - **配置**：每宿主配置文件；`[codexHost]` → `[host]` 兼容读取与重写；`installedHosts` 移除。
 - **打包**：`package.json` 的 `files` 字段现仅列 `templates/prompts/codex/` 与 `templates/skills-codex/`，新增模板目录必须同步登记，否则发布包缺模板并静默安装失败。
