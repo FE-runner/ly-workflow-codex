@@ -1,0 +1,1 @@
+仅暂存本次初始化产生的文件（`AGENTS.md`、`openspec/`），不用 `git add -A`。提交信息按 `@lyx-commit` 正文规范写完整 message，不追加 `Change-Stage` / `Change-Name` trailer。若无可提交内容（两者均已存在且未变化）或 `git commit` 失败，跳过提交，在汇总中如实报告，不中断步骤 4。

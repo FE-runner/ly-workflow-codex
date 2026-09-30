@@ -41,7 +41,7 @@ argument-hint: '<需求描述>'
     6. **baseline 失败** → 报告失败摘要并询问用户"仍继续 / 放弃"：**仍继续** → 同会话 cd 进 worktree 继续编排（失败摘要作为已知风险带入后续流程，按本步 7/8 执行）；**放弃** → 保留已创建的 worktree 与分支（不自动清理，需要时用 `@lyx-worktree remove` 显式删除），打印携带失败摘要的兜底续接命令（同 7 的格式），会话结束，change 尚未生成。
     7. 打印**兜底续接命令**（绝对路径 + shell 安全转义）——正常路径不使用，仅当本会话意外死亡（崩溃、终端关闭等）时，用于在新 worktree 中恢复：
        ```
-       cd ~/.ly/worktrees/<项目名>/<开发分支名> && codex "继续 在隔离 worktree 中 @lyx-propose <同一需求>"
+       {{HOST_FRAGMENT:resume-command}}
        ```
     8. **同一会话续跑（不结束会话）**——当前会话直接 `cd` 进新 worktree 并继续本编排（worktree 先于 change 创建的时序不变，change 尚未生成）：
        1. 以绝对路径 `cd "$HOME/.ly/worktrees/<项目名>/<开发分支名>"` 切换工作目录。
@@ -164,7 +164,7 @@ lyx:
 
 **全程无隔离方式询问、不自动 archive。**
 
-**执行者语义（自 switchable-executor-flow 起）**：流水线每一步的主体按配置决定，不由本模板写死——review-plan / review-code 按 `[codexHost] reviewExecutor`（`main` = 主 agent 直接审查，默认；`subagent` = spawn 审查 subagent），apply 按 `[codexHost] codingExecutor`（`main` = 主 agent 直接实施，默认；`subagent` = spawn coding subagent）。**慢验证（测试 / 类型检查 / 构建）SHALL NOT 在流水线内的审查循环执行**——统一由 `@lyx-archive` 的归档前完整验证关卡执行一次。
+**执行者语义（自 switchable-executor-flow 起）**：流水线每一步的主体按配置决定，不由本模板写死——review-plan / review-code 按 `[host] reviewExecutor`（`main` = 主 agent 直接审查，默认；`subagent` = spawn 审查 subagent），apply 按 `[host] codingExecutor`（`main` = 主 agent 直接实施，默认；`subagent` = spawn coding subagent）。**慢验证（测试 / 类型检查 / 构建）SHALL NOT 在流水线内的审查循环执行**——统一由 `@lyx-archive` 的归档前完整验证关卡执行一次。
 
 1. 自动执行 `@lyx-review-plan <change-name>` 编排流程（完整指示见 `@lyx-review-plan skill 的指示`，按其指示逐轮执行审查-修复循环；审查对象为 propose 阶段 commit（带 `Change-Stage: propose` trailer），清零时由循环统一提交修复）。
    - Critical 清零 → 进入下一步。

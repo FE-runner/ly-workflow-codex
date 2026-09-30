@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultConfig, mergeCodexHostConfig, readLyConfig, sanitizeCodexHostExtras, sanitizeInstalledHosts, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, sanitizeSpawnableModels, SPAWNABLE_MODELS_DEFAULT, writeLyConfig } from '../config'
+import { SPAWNABLE_MODELS_DEFAULT } from '../../hosts/codex/schema'
+import { createDefaultConfig, getConfigPath, getHostConfigPath, getHostLyDir, getLyDir, listInstalledHosts, mergeCodexHostConfig, readLyConfig, sanitizeCodexHostExtras, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, sanitizeSpawnableModels, writeLyConfig } from '../config'
 
 // 模块顶层常量（CONFIG_FILE / LY_DIR 等）在 import 时基于 homedir() 求值，
 // 因此 hoisted 阶段就创建固定临时 home，再 mock homedir() 指向它——
@@ -29,7 +30,7 @@ afterAll(() => {
   rmSync(osMocks.home, { recursive: true, force: true })
 })
 
-describe('createDefaultConfig (codex 单宿主)', () => {
+describe('createDefaultConfig (codex 宿主配置文件)', () => {
   const baseOptions = {
     language: 'zh-CN' as const,
     installedWorkflows: ['init-project', 'commit'],
@@ -56,29 +57,9 @@ describe('createDefaultConfig (codex 单宿主)', () => {
     expect(config.workflows.installed).toEqual(['init-project', 'commit'])
   })
 
-  it('defaults installedHosts to [codex]', () => {
-    const config = createDefaultConfig(baseOptions)
-    expect(config.installedHosts).toEqual(['codex'])
-  })
-
-  it('persists installedHosts for codex-only installs', () => {
-    const config = createDefaultConfig({ ...baseOptions, installedHosts: ['codex'] })
-    expect(config.installedHosts).toEqual(['codex'])
-  })
-
-  it('accepts legacy dual-host values when reading old configs', () => {
-    const config = createDefaultConfig({ ...baseOptions, installedHosts: ['claude', 'codex'] })
-    expect(config.installedHosts).toEqual(['claude', 'codex'])
-  })
-
-  it('filters invalid hosts out of installedHosts and falls back to [codex]', () => {
-    const config = createDefaultConfig({ ...baseOptions, installedHosts: ['gemini', 42] as any })
-    expect(config.installedHosts).toEqual(['codex'])
-  })
-
-  it('falls back to [codex] when installedHosts is empty', () => {
-    const config = createDefaultConfig({ ...baseOptions, installedHosts: [] })
-    expect(config.installedHosts).toEqual(['codex'])
+  it('does not persist an installed-hosts field (installed = config file exists)', () => {
+    const config = createDefaultConfig(baseOptions) as any
+    expect(config.installedHosts).toBeUndefined()
   })
 
   it('points all path constants into the new ~/.codex/lyx location', () => {
@@ -102,70 +83,70 @@ describe('createDefaultConfig (codex 单宿主)', () => {
 
   it('omits codexHost when reviewModel not provided', () => {
     const config = createDefaultConfig(baseOptions)
-    expect(config.codexHost).toBeUndefined()
+    expect(config.host).toBeUndefined()
   })
 
   it('stores codexHost.reviewModel when provided', () => {
-    const config = createDefaultConfig({ ...baseOptions, codexHost: { reviewModel: 'gpt-5.1-codex' } })
-    expect(config.codexHost?.reviewModel).toBe('gpt-5.1-codex')
+    const config = createDefaultConfig({ ...baseOptions, host: { reviewModel: 'gpt-5.1-codex' } })
+    expect(config.host?.reviewModel).toBe('gpt-5.1-codex')
   })
 
   it('stores reviewExecutor / codingExecutor and models when provided (direct pass-through)', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewExecutor: 'subagent', codingExecutor: 'subagent', reviewModel: 'a', codingModel: 'c' },
+      host: { reviewExecutor: 'subagent', codingExecutor: 'subagent', reviewModel: 'a', codingModel: 'c' },
     })
-    expect(config.codexHost?.reviewExecutor).toBe('subagent')
-    expect(config.codexHost?.codingExecutor).toBe('subagent')
-    expect(config.codexHost?.reviewModel).toBe('a')
-    expect(config.codexHost?.codingModel).toBe('c')
+    expect(config.host?.reviewExecutor).toBe('subagent')
+    expect(config.host?.codingExecutor).toBe('subagent')
+    expect(config.host?.reviewModel).toBe('a')
+    expect(config.host?.codingModel).toBe('c')
   })
 
   it('stores reviewExecutor alone without requiring models', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewExecutor: 'subagent' },
+      host: { reviewExecutor: 'subagent' },
     })
-    expect(config.codexHost?.reviewExecutor).toBe('subagent')
-    expect(config.codexHost?.reviewModel).toBeUndefined()
-    expect(config.codexHost?.codingExecutor).toBeUndefined()
+    expect(config.host?.reviewExecutor).toBe('subagent')
+    expect(config.host?.reviewModel).toBeUndefined()
+    expect(config.host?.codingExecutor).toBeUndefined()
   })
 
   it('treats invalid executor values as unset', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewExecutor: 'auto' as never },
+      host: { reviewExecutor: 'auto' as never },
     })
-    expect(config.codexHost?.reviewExecutor).toBeUndefined()
+    expect(config.host?.reviewExecutor).toBeUndefined()
   })
 
   it('keeps out-of-list existing values as-is (custom pass-through)', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewModel: 'list-model', codingModel: ' custom ' },
+      host: { reviewModel: 'list-model', codingModel: ' custom ' },
     })
-    expect(config.codexHost?.reviewModel).toBe('list-model')
-    expect(config.codexHost?.codingModel).toBe('custom')
+    expect(config.host?.reviewModel).toBe('list-model')
+    expect(config.host?.codingModel).toBe('custom')
   })
 
   it('treats blank model fields as unset (fall back to session model)', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewModel: 'a', codingModel: '' },
+      host: { reviewModel: 'a', codingModel: '' },
     })
-    expect(config.codexHost?.reviewModel).toBe('a')
-    expect(config.codexHost?.codingModel).toBeUndefined()
+    expect(config.host?.reviewModel).toBe('a')
+    expect(config.host?.codingModel).toBeUndefined()
   })
 
   it('omits codexHost when reviewModel is blank', () => {
-    const config = createDefaultConfig({ ...baseOptions, codexHost: { reviewModel: '  ' } })
-    expect(config.codexHost).toBeUndefined()
+    const config = createDefaultConfig({ ...baseOptions, host: { reviewModel: '  ' } })
+    expect(config.host).toBeUndefined()
   })
 
   it('stores both reasoning effort fields when provided', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: {
+      host: {
         reviewExecutor: 'subagent',
         codingExecutor: 'subagent',
         reviewModel: 'glm-5.3-flash',
@@ -174,35 +155,35 @@ describe('createDefaultConfig (codex 单宿主)', () => {
         codingReasoningEffort: 'max',
       },
     })
-    expect(config.codexHost?.reviewReasoningEffort).toBe('low')
-    expect(config.codexHost?.codingReasoningEffort).toBe('max')
+    expect(config.host?.reviewReasoningEffort).toBe('low')
+    expect(config.host?.codingReasoningEffort).toBe('max')
   })
 
   it('stores a reasoning effort field even when the corresponding model is blank', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewReasoningEffort: 'low' },
+      host: { reviewReasoningEffort: 'low' },
     })
-    expect(config.codexHost).toEqual({ reviewReasoningEffort: 'low' })
+    expect(config.host).toEqual({ reviewReasoningEffort: 'low' })
   })
 
   it('trims reasoning effort fields and omits blank values', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: {
+      host: {
         reviewModel: 'glm-5.3-flash',
         reviewReasoningEffort: ' low ',
         codingReasoningEffort: '',
       },
     })
-    expect(config.codexHost?.reviewReasoningEffort).toBe('low')
-    expect(config.codexHost?.codingReasoningEffort).toBeUndefined()
+    expect(config.host?.reviewReasoningEffort).toBe('low')
+    expect(config.host?.codingReasoningEffort).toBeUndefined()
   })
 
   it('keeps reasoning effort fields alongside other codexHost fields', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: {
+      host: {
         reviewExecutor: 'subagent',
         reviewModel: 'glm-5.3-flash',
         codingModel: 'deepseek-v4.1-flash',
@@ -210,25 +191,13 @@ describe('createDefaultConfig (codex 单宿主)', () => {
         spawnableModels: ['glm-5.3-flash'],
       },
     })
-    expect(config.codexHost).toEqual({
+    expect(config.host).toEqual({
       reviewExecutor: 'subagent',
       reviewModel: 'glm-5.3-flash',
       codingModel: 'deepseek-v4.1-flash',
       reviewReasoningEffort: 'low',
       spawnableModels: ['glm-5.3-flash'],
     })
-  })
-})
-
-describe('sanitizeInstalledHosts', () => {
-  it('filters invalid entries and dedupes', () => {
-    expect(sanitizeInstalledHosts(['claude', 'codex', 'claude'])).toEqual(['claude', 'codex'])
-    expect(sanitizeInstalledHosts(['gemini', 42, undefined])).toEqual([])
-    expect(sanitizeInstalledHosts(undefined)).toEqual([])
-  })
-
-  it('keeps codex', () => {
-    expect(sanitizeInstalledHosts(['codex'])).toEqual(['codex'])
   })
 })
 
@@ -329,12 +298,12 @@ describe('sanitizeCodexHostExtras', () => {
     const config = createDefaultConfig({
       language: 'zh-CN',
       installedWorkflows: ['propose'],
-      codexHost: { ...extras, reviewModel: 'glm-5.3-flash' },
+      host: { ...extras, reviewModel: 'glm-5.3-flash' },
     })
     await writeLyConfig(config)
 
     const readBack = await readLyConfig()
-    expect(readBack?.codexHost).toEqual({
+    expect(readBack?.host).toEqual({
       ...extras,
       reviewModel: 'glm-5.3-flash',
     })
@@ -396,7 +365,7 @@ describe('mergeCodexHostConfig (configure-subagent-reasoning-effort)', () => {
   })
 })
 
-describe('SPAWNABLE_MODELS_DEFAULT / sanitizeSpawnableModels (codex-model-config)', () => {
+describe('sPAWNABLE_MODELS_DEFAULT / sanitizeSpawnableModels (codex-model-config)', () => {
   it('defines the built-in default as the five OpenAI models', () => {
     expect(SPAWNABLE_MODELS_DEFAULT).toEqual([
       'gpt-6-astra',
@@ -429,7 +398,6 @@ describe('SPAWNABLE_MODELS_DEFAULT / sanitizeSpawnableModels (codex-model-config
     expect(sanitizeSpawnableModels(['', '  '])).toEqual({ state: 'empty', models: [] })
     expect(sanitizeSpawnableModels([42, null])).toEqual({ state: 'empty', models: [] })
   })
-
 })
 
 describe('createDefaultConfig spawnableModels 透传保全 (codex-model-config)', () => {
@@ -441,9 +409,9 @@ describe('createDefaultConfig spawnableModels 透传保全 (codex-model-config)'
   it('passes through spawnableModels alongside the executor and model fields', () => {
     const config = createDefaultConfig({
       ...baseOptions,
-      codexHost: { reviewExecutor: 'subagent', reviewModel: 'a', codingModel: 'c', spawnableModels: ['glm-5.3-flash'] },
+      host: { reviewExecutor: 'subagent', reviewModel: 'a', codingModel: 'c', spawnableModels: ['glm-5.3-flash'] },
     })
-    expect(config.codexHost).toEqual({
+    expect(config.host).toEqual({
       reviewExecutor: 'subagent',
       reviewModel: 'a',
       codingModel: 'c',
@@ -452,13 +420,13 @@ describe('createDefaultConfig spawnableModels 透传保全 (codex-model-config)'
   })
 
   it('preserves spawnableModels even when all model fields are blank', () => {
-    const config = createDefaultConfig({ ...baseOptions, codexHost: { spawnableModels: [] } })
-    expect(config.codexHost?.spawnableModels).toEqual([])
+    const config = createDefaultConfig({ ...baseOptions, host: { spawnableModels: [] } })
+    expect(config.host?.spawnableModels).toEqual([])
   })
 
   it('omits codexHost when nothing (including spawnableModels) is provided', () => {
     const config = createDefaultConfig(baseOptions)
-    expect(config.codexHost).toBeUndefined()
+    expect(config.host).toBeUndefined()
   })
 })
 
@@ -467,7 +435,7 @@ describe('readLyConfig / writeLyConfig', () => {
     const config = createDefaultConfig({
       language: 'en',
       installedWorkflows: ['propose'],
-      codexHost: { reviewModel: 'gpt-5.1', spawnableModels: ['gpt-5.6-luna'] },
+      host: { reviewModel: 'gpt-5.1', spawnableModels: ['gpt-5.6-luna'] },
     })
     await writeLyConfig(config)
 
@@ -476,9 +444,9 @@ describe('readLyConfig / writeLyConfig', () => {
     expect(readBack?.general?.version).toBe(config.general.version)
     expect(readBack?.general?.language).toBe('en')
     expect(readBack?.workflows?.installed).toEqual(['propose'])
-    expect(readBack?.codexHost?.reviewModel).toBe('gpt-5.1')
-    expect(readBack?.codexHost?.spawnableModels).toEqual(['gpt-5.6-luna'])
-    expect(readBack?.installedHosts).toEqual(['codex'])
+    expect(readBack?.host?.reviewModel).toBe('gpt-5.1')
+    expect(readBack?.host?.spawnableModels).toEqual(['gpt-5.6-luna'])
+    expect((readBack as any)?.installedHosts).toBeUndefined()
   })
 
   it('returns null when no config file exists', async () => {
@@ -519,5 +487,101 @@ describe('readLyConfig / writeLyConfig', () => {
 
     expect(readFileSync(legacyFile, 'utf-8')).toBe(legacyContent)
     expect(existsSync(join(osMocks.home, '.codex', 'lyx', 'config.toml'))).toBe(true)
+  })
+})
+
+describe('per-host config files (add-claude-host)', () => {
+  const codexFile = () => join(osMocks.home, '.codex', 'lyx', 'config.toml')
+  const claudeLyDir = () => join(osMocks.home, '.claude-test', 'lyx')
+
+  it('resolves config paths per host', () => {
+    expect(getHostConfigPath('codex').replace(/\\/g, '/')).toBe(`${osMocks.home}/.codex/lyx/config.toml`)
+    expect(getHostConfigPath('codex', { lyDir: claudeLyDir() })).toBe(join(claudeLyDir(), 'config.toml'))
+  })
+
+  it('keeps legacy no-arg path functions pointing to the codex host', () => {
+    expect(getConfigPath()).toBe(getHostConfigPath('codex'))
+    expect(getLyDir()).toBe(getHostLyDir('codex'))
+  })
+
+  it('writes two host locations without overwriting each other', async () => {
+    await writeLyConfig(createDefaultConfig({ language: 'zh-CN', installedWorkflows: ['propose'], host: { reviewExecutor: 'subagent' } }))
+    await writeLyConfig(
+      createDefaultConfig({ language: 'en', installedWorkflows: ['commit'], host: { codingExecutor: 'subagent' } }),
+      'codex',
+      { lyDir: claudeLyDir() },
+    )
+    const a = await readLyConfig()
+    const b = await readLyConfig('codex', { lyDir: claudeLyDir() })
+    expect(a?.general.language).toBe('zh-CN')
+    expect(a?.host?.reviewExecutor).toBe('subagent')
+    expect(a?.host?.codingExecutor).toBeUndefined()
+    expect(b?.general.language).toBe('en')
+    expect(b?.host?.codingExecutor).toBe('subagent')
+    expect(b?.host?.reviewExecutor).toBeUndefined()
+    rmSync(join(osMocks.home, '.claude-test'), { recursive: true, force: true })
+  })
+
+  it('reads the legacy [codexHost] section as [host] and rewrites it normalized', async () => {
+    mkdirSync(join(osMocks.home, '.codex', 'lyx'), { recursive: true })
+    writeFileSync(codexFile(), [
+      'general = { version = "0.6.1", language = "zh-CN" }',
+      'workflows = { installed = ["propose"] }',
+      '[codexHost]',
+      'reviewExecutor = "subagent"',
+      'reviewModel = "glm-5.3-flash"',
+      'reviewReasoningEffort = "high"',
+      'codingExecutor = "main"',
+    ].join('\n'))
+
+    const legacy = await readLyConfig()
+    expect(legacy?.host).toEqual({
+      reviewExecutor: 'subagent',
+      reviewModel: 'glm-5.3-flash',
+      reviewReasoningEffort: 'high',
+      codingExecutor: 'main',
+    })
+    expect((legacy as any).codexHost).toBeUndefined()
+
+    await writeLyConfig(legacy!)
+    const content = readFileSync(codexFile(), 'utf-8')
+    expect(content).toContain('[host]')
+    expect(content).not.toContain('[codexHost]')
+    const rewritten = await readLyConfig()
+    expect(rewritten?.host).toEqual(legacy?.host)
+  })
+
+  it('prefers [host] over a stale legacy section when both exist', async () => {
+    mkdirSync(join(osMocks.home, '.codex', 'lyx'), { recursive: true })
+    writeFileSync(codexFile(), [
+      'general = { version = "0.6.1", language = "zh-CN" }',
+      '[host]',
+      'reviewModel = "new"',
+      '[codexHost]',
+      'reviewModel = "old"',
+    ].join('\n'))
+    const config = await readLyConfig()
+    expect(config?.host?.reviewModel).toBe('new')
+    expect((config as any).codexHost).toBeUndefined()
+  })
+
+  it('ignores a persisted installedHosts field; disk config files are authoritative', async () => {
+    mkdirSync(join(osMocks.home, '.codex', 'lyx'), { recursive: true })
+    writeFileSync(codexFile(), [
+      'installedHosts = ["codex", "claude"]',
+      'general = { version = "0.6.1", language = "zh-CN" }',
+    ].join('\n'))
+
+    const config = await readLyConfig()
+    expect((config as any).installedHosts).toBeUndefined()
+    // 历史字段声称装了 claude，但磁盘上只有 codex 的配置文件 → 以磁盘为准
+    expect(await listInstalledHosts()).toEqual(['codex'])
+
+    await writeLyConfig(config!)
+    expect(readFileSync(codexFile(), 'utf-8')).not.toContain('installedHosts')
+  })
+
+  it('lists no installed hosts when no config file exists', async () => {
+    expect(await listInstalledHosts()).toEqual([])
   })
 })

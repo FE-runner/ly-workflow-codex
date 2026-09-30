@@ -1,64 +1,95 @@
-import type { ExecutorKind, LyConfig, SupportedLang } from '../types'
+import type { ExecutorKind, HostSection, LyConfig, SupportedLang } from '../types'
 import type { HostId } from './host-adapters'
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import { parse, stringify } from 'smol-toml'
 import { version as packageVersion } from '../../package.json'
-import { CONFIG_FILE, LY_DIR, PROMPTS_DIR } from './package-meta'
+import { DEFAULT_HOST, getAdapter, listRegisteredHosts } from './host-adapters'
 
-export const LY_PROMPTS_DIR = PROMPTS_DIR
+// ═══════════════════════════════════════════════════════
+// 每宿主一个配置文件：<宿主 lyDir>/config.toml；"已安装"由该文件存在判定
+// ═══════════════════════════════════════════════════════
 
+/** 配置文件名（位于各宿主的私有目录下） */
+export const CONFIG_FILE_NAME = 'config.toml'
+
+/** 读写配置时可注入的路径覆盖（测试用） */
+export interface HostConfigLocation {
+  /** 宿主私有目录（缺省取适配器默认值） */
+  lyDir?: string
+}
+
+export function getHostLyDir(host: HostId, location: HostConfigLocation = {}): string {
+  return location.lyDir ?? getAdapter(host).defaultPaths().lyDir
+}
+
+export function getHostConfigPath(host: HostId, location: HostConfigLocation = {}): string {
+  return join(getHostLyDir(host, location), CONFIG_FILE_NAME)
+}
+
+export function getHostPromptsDir(host: HostId): string {
+  return getAdapter(host).defaultPaths().promptsDir
+}
+
+/** @deprecated 使用 getHostPromptsDir(host)；无参形态固定指向默认宿主（codex） */
 export function getLyPromptsDir(): string {
-  return LY_PROMPTS_DIR
+  return getHostPromptsDir(DEFAULT_HOST)
 }
 
+/** @deprecated 使用 getHostLyDir(host)；无参形态固定指向默认宿主（codex） */
 export function getLyDir(): string {
-  return LY_DIR
+  return getHostLyDir(DEFAULT_HOST)
 }
 
+/** @deprecated 使用 getHostConfigPath(host)；无参形态固定指向默认宿主（codex） */
 export function getConfigPath(): string {
-  return CONFIG_FILE
+  return getHostConfigPath(DEFAULT_HOST)
 }
 
 /**
- * 内置默认 spawn 可用模型清单（当前环境实证值）：声明 Codex 宿主显式 spawn 子代理可用的模型，
- * `[codexHost] spawnableModels` 未配置、空白或清洗后为空时回退此清单。可用列表随环境漂移，
- * 用户可按实测维护 `spawnableModels` 覆盖（doctor/init 以"用户配置或内置默认"为唯一候选/校验来源）。
+ * 已安装宿主：扫描各已注册宿主的配置文件是否存在（不再依赖任何持久化的宿主集合字段）。
+ * locations 供测试注入各宿主的 lyDir。
  */
-export const SPAWNABLE_MODELS_DEFAULT = [
-  'gpt-6-astra',
-  'gpt-5.6-sol',
-  'gpt-5.6-terra',
-  'gpt-5.6-luna',
-  'gpt-5.5',
-] as const
-
-// ── installedHosts（兼容旧配置：持久化已安装宿主集合）──
-// codex 单宿主下恒为 ['codex']，此处保留清洗逻辑以兼容旧配置读取。
-
-export function isValidInstalledHost(value: unknown): value is HostId {
-  return value === 'codex' || value === 'claude'
+export async function listInstalledHosts(locations: Partial<Record<HostId, HostConfigLocation>> = {}): Promise<HostId[]> {
+  const installed: HostId[] = []
+  for (const host of listRegisteredHosts()) {
+    if (await fs.pathExists(getHostConfigPath(host, locations[host])))
+      installed.push(host)
+  }
+  return installed
 }
 
-/** 清洗 installedHosts：过滤非法值 + 去重；空集返回 [] */
-export function sanitizeInstalledHosts(value: unknown): HostId[] {
-  const arr = Array.isArray(value) ? value : []
-  return [...new Set(arr.filter(isValidInstalledHost))]
+export async function ensureLyDir(host: HostId = DEFAULT_HOST, location: HostConfigLocation = {}): Promise<void> {
+  await fs.ensureDir(getHostLyDir(host, location))
 }
 
-export async function ensureLyDir(): Promise<void> {
-  await fs.ensureDir(LY_DIR)
+/**
+ * 解析后的原始配置 → 运行时配置：
+ * - 宿主配置节归一为 [host]；[host] 缺失时按适配器声明的历史节名（如 [codexHost]）兼容读取
+ * - 历史字段一律丢弃，不进入运行时配置、也不随写入持久化：
+ *   各历史节名、installedHosts（"已安装"改由配置文件存在判定）、routing / performance
+ */
+export function normalizeLyConfig(parsed: Record<string, unknown>, host: HostId): LyConfig {
+  const legacySections = getAdapter(host).legacyConfigSections ?? []
+  if (parsed.host === undefined) {
+    const legacy = legacySections.find(key => parsed[key] !== undefined)
+    if (legacy)
+      parsed.host = parsed[legacy]
+  }
+  for (const key of legacySections)
+    delete parsed[key]
+  delete parsed.installedHosts
+  delete parsed.routing
+  delete parsed.performance
+  return parsed as unknown as LyConfig
 }
 
-export async function readLyConfig(): Promise<LyConfig | null> {
+export async function readLyConfig(host: HostId = DEFAULT_HOST, location: HostConfigLocation = {}): Promise<LyConfig | null> {
   try {
-    if (await fs.pathExists(CONFIG_FILE)) {
-      const content = await fs.readFile(CONFIG_FILE, 'utf-8')
-      const parsed = parse(content) as Record<string, unknown>
-      // 旧版字段安全忽略：routing/performance 等已废弃字段不进入运行时配置，也不随写入持久化
-      delete parsed.routing
-      delete parsed.performance
-      return parsed as unknown as LyConfig
+    const file = getHostConfigPath(host, location)
+    if (await fs.pathExists(file)) {
+      const parsed = parse(await fs.readFile(file, 'utf-8')) as Record<string, unknown>
+      return normalizeLyConfig(parsed, host)
     }
   }
   catch {
@@ -67,27 +98,21 @@ export async function readLyConfig(): Promise<LyConfig | null> {
   return null
 }
 
-export async function writeLyConfig(config: LyConfig): Promise<void> {
-  await ensureLyDir()
-  const content = stringify(config as any)
-  await fs.writeFile(CONFIG_FILE, content, 'utf-8')
+export async function writeLyConfig(config: LyConfig, host: HostId = DEFAULT_HOST, location: HostConfigLocation = {}): Promise<void> {
+  await ensureLyDir(host, location)
+  // 写入前同样归一：调用方即使带着历史字段也不会被写回
+  const normalized = normalizeLyConfig({ ...(config as unknown as Record<string, unknown>) }, host)
+  await fs.writeFile(getHostConfigPath(host, location), stringify(normalized as any), 'utf-8')
 }
 
 export function createDefaultConfig(options: {
   language: SupportedLang
   installedWorkflows: string[]
-  codexHost?: {
-    reviewExecutor?: ExecutorKind
-    codingExecutor?: ExecutorKind
-    reviewModel?: string
-    codingModel?: string
-    reviewReasoningEffort?: string
-    codingReasoningEffort?: string
-    spawnableModels?: string[]
-  }
-  /** 已安装宿主集合（兼容旧配置；codex 单宿主缺省 ['codex']） */
-  installedHosts?: HostId[]
+  /** 目标宿主（决定 paths 取值）；缺省为默认宿主 */
+  hostId?: HostId
+  host?: HostSection
 }): LyConfig {
+  const paths = getAdapter(options.hostId ?? DEFAULT_HOST).defaultPaths()
   const config: LyConfig = {
     general: {
       version: packageVersion,
@@ -97,26 +122,23 @@ export function createDefaultConfig(options: {
     workflows: {
       installed: options.installedWorkflows,
     },
-    installedHosts: sanitizeInstalledHosts(options.installedHosts).length > 0
-      ? sanitizeInstalledHosts(options.installedHosts)
-      : ['codex'],
     paths: {
-      commands: PROMPTS_DIR,
-      prompts: LY_PROMPTS_DIR,
-      backup: join(LY_DIR, 'backup'),
+      commands: paths.promptsDir,
+      prompts: paths.promptsDir,
+      backup: join(paths.lyDir, 'backup'),
     },
   }
-  const reviewExecutor = sanitizeExecutor(options.codexHost?.reviewExecutor)
-  const codingExecutor = sanitizeExecutor(options.codexHost?.codingExecutor)
-  const reviewModel = sanitizeReviewModel(options.codexHost?.reviewModel)
+  const reviewExecutor = sanitizeExecutor(options.host?.reviewExecutor)
+  const codingExecutor = sanitizeExecutor(options.host?.codingExecutor)
+  const reviewModel = sanitizeReviewModel(options.host?.reviewModel)
   // 模型字段统一仅 trim（sanitizeReviewModel 与 sanitizeModelField 同口径）、空白视为未配置
-  // （回退当前会话模型）：不再拼进 shell 命令串，由模板指示 + 宿主 spawn 能力落实
-  const codingModel = sanitizeModelField(options.codexHost?.codingModel)
-  const reviewReasoningEffort = sanitizeReasoningEffort(options.codexHost?.reviewReasoningEffort)
-  const codingReasoningEffort = sanitizeReasoningEffort(options.codexHost?.codingReasoningEffort)
+  // （回退当前会话模型）：不再拼进 shell 命令串，由模板指示 + 宿主能力落实
+  const codingModel = sanitizeModelField(options.host?.codingModel)
+  const reviewReasoningEffort = sanitizeReasoningEffort(options.host?.reviewReasoningEffort)
+  const codingReasoningEffort = sanitizeReasoningEffort(options.host?.codingReasoningEffort)
   // spawnableModels 透传并保全：不改写、不静默丢弃存量值（含格式非法的存量形态由 doctor WARN 暴露），
   // 避免"重装即丢失非法值、下次 doctor 不再告警"掩盖配置问题
-  const spawnableModels = options.codexHost?.spawnableModels
+  const spawnableModels = options.host?.spawnableModels
   if (
     reviewExecutor
     || codingExecutor
@@ -126,7 +148,7 @@ export function createDefaultConfig(options: {
     || codingReasoningEffort
     || spawnableModels !== undefined
   ) {
-    config.codexHost = {
+    config.host = {
       ...(reviewExecutor ? { reviewExecutor } : {}),
       ...(codingExecutor ? { codingExecutor } : {}),
       ...(reviewModel ? { reviewModel } : {}),
@@ -189,8 +211,8 @@ export function sanitizeReasoningEffort(value: unknown): string | undefined {
   return cleaned === '' ? undefined : cleaned
 }
 
-export type CodexHostExtras = Pick<
-  NonNullable<LyConfig['codexHost']>,
+export type HostExtras = Pick<
+  HostSection,
   'reviewExecutor' | 'codingExecutor' | 'codingModel' | 'reviewReasoningEffort' | 'codingReasoningEffort' | 'spawnableModels'
 >
 
@@ -198,15 +220,15 @@ export type CodexHostExtras = Pick<
  * 清洗并返回 init/menu 编辑 reviewModel 时需要保留的 codexHost 其余字段。
  * spawnableModels 按原形态透传（含格式非法或显式空数组），避免重写时静默丢失。
  */
-export function sanitizeCodexHostExtras(codexHost: LyConfig['codexHost']): CodexHostExtras {
-  if (!codexHost)
+export function sanitizeHostExtras(hostSection: LyConfig['host']): HostExtras {
+  if (!hostSection)
     return {}
 
-  const reviewExecutor = sanitizeExecutor(codexHost.reviewExecutor)
-  const codingExecutor = sanitizeExecutor(codexHost.codingExecutor)
-  const codingModel = sanitizeModelField(codexHost.codingModel)
-  const reviewReasoningEffort = sanitizeReasoningEffort(codexHost.reviewReasoningEffort)
-  const codingReasoningEffort = sanitizeReasoningEffort(codexHost.codingReasoningEffort)
+  const reviewExecutor = sanitizeExecutor(hostSection.reviewExecutor)
+  const codingExecutor = sanitizeExecutor(hostSection.codingExecutor)
+  const codingModel = sanitizeModelField(hostSection.codingModel)
+  const reviewReasoningEffort = sanitizeReasoningEffort(hostSection.reviewReasoningEffort)
+  const codingReasoningEffort = sanitizeReasoningEffort(hostSection.codingReasoningEffort)
 
   return {
     ...(reviewExecutor ? { reviewExecutor } : {}),
@@ -214,12 +236,12 @@ export function sanitizeCodexHostExtras(codexHost: LyConfig['codexHost']): Codex
     ...(codingModel ? { codingModel } : {}),
     ...(reviewReasoningEffort ? { reviewReasoningEffort } : {}),
     ...(codingReasoningEffort ? { codingReasoningEffort } : {}),
-    ...(codexHost.spawnableModels !== undefined ? { spawnableModels: codexHost.spawnableModels } : {}),
+    ...(hostSection.spawnableModels !== undefined ? { spawnableModels: hostSection.spawnableModels } : {}),
   }
 }
 
 /** init/menu 写回 codexHost 时的字段覆盖集合；key 存在即视为权威值，undefined 表示清除该字段 */
-export interface CodexHostOverride {
+export interface HostOverride {
   reviewExecutor?: ExecutorKind
   codingExecutor?: ExecutorKind
   reviewModel?: string
@@ -234,11 +256,11 @@ export interface CodexHostOverride {
  * - override 中不存在的 key 保留既有值（供 menu 只编辑 review 字段时保留 coding）；
  * - spawnableModels 始终按既有原形态透传，不做清洗或丢弃。
  */
-export function mergeCodexHostConfig(
-  existing: LyConfig['codexHost'],
-  override: CodexHostOverride = {},
-): LyConfig['codexHost'] {
-  const has = (key: keyof CodexHostOverride): boolean =>
+export function mergeHostConfig(
+  existing: LyConfig['host'],
+  override: HostOverride = {},
+): LyConfig['host'] {
+  const has = (key: keyof HostOverride): boolean =>
     Object.prototype.hasOwnProperty.call(override, key)
 
   const reviewExecutor = sanitizeExecutor(has('reviewExecutor') ? override.reviewExecutor : existing?.reviewExecutor)
@@ -248,7 +270,7 @@ export function mergeCodexHostConfig(
   const reviewReasoningEffort = sanitizeReasoningEffort(has('reviewReasoningEffort') ? override.reviewReasoningEffort : existing?.reviewReasoningEffort)
   const codingReasoningEffort = sanitizeReasoningEffort(has('codingReasoningEffort') ? override.codingReasoningEffort : existing?.codingReasoningEffort)
 
-  const merged: NonNullable<LyConfig['codexHost']> = {
+  const merged: HostSection = {
     ...(reviewExecutor ? { reviewExecutor } : {}),
     ...(codingExecutor ? { codingExecutor } : {}),
     ...(reviewModel ? { reviewModel } : {}),
@@ -296,3 +318,8 @@ export function sanitizeSpawnableModels(value: unknown): SpawnableModelsSanitize
     return { state: 'empty', models: [] }
   return { state: 'ok', models }
 }
+
+/** @deprecated 使用 sanitizeHostExtras */
+export const sanitizeCodexHostExtras = sanitizeHostExtras
+/** @deprecated 使用 mergeHostConfig */
+export const mergeCodexHostConfig = mergeHostConfig

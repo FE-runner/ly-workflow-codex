@@ -33,3 +33,20 @@
 ## 受影响文件（实施范围）
 
 见 `tasks.md` 分组；change 内不重复列清单。
+
+## 实施决策（apply 阶段回写）
+
+- 模板物理布局：共享正文 `templates/skills/`，宿主差异在 `templates/hosts/<id>/fragments/<命令>/<片段>.md`，正文以 `{{HOST_FRAGMENT:<片段>}}` 占位；另有 `{{LYX_CONFIG_FILE}}` / `{{HOST_ID}}` 两个宿主变量。片段缺失时安装抛错，不静默留空；两宿主片段集合由测试断言一致。
+- codex 产物相对改造前的**有意差异**（其余逐字一致，已对比基线验证）：`[codexHost]` → `[host]`（配置节归一的直接结果）；changelog / release 的"告诉 Codex"→"告诉助手"；`@lyx-init` 的 ensure 命令带 `--host codex`（按当前宿主补齐，不牵连另一宿主）。
+- 方案遗漏、已补：`propose.md` 兜底续接命令写死 `codex "…"`，已抽为宿主片段（claude 侧为 `claude "…"`）。
+- Claude 侧改写：`@lyx-` → `/lyx-`；`@openspec-<skill>` → `openspec-<skill>`（不改为 `/opsx:*`）；各模板"调用方式"说明行改写为 slash 语法并注明 openspec skill 经 Skill 工具调用。
+- Claude 子代理定义正文取自 codex 角色词（清单与输出格式照搬），去掉 "Codex Role" 标题，READ-ONLY sandbox 换为"只读 + Bash 仅限只读 git/openspec"，`WORKDIR` 改为仓库根目录。frontmatter 的 `tools` 不能按子命令硬限制，约束落在正文。
+- codex 专属的 `codex-provider.ts` / `legacy-cleanup.ts` 随宿主包迁入 `src/hosts/codex/`（留在 `src/utils` 会违反"共享层不出现宿主路径"）；codex 专属卸载逻辑（旧 `ly-*` 残留、`prompts/codex/`、legacy cleanup）迁入适配器新增的 `uninstallExtras` 钩子。
+- `installWorkflows` / `uninstallWorkflows` 的测试注入参数改为 `hostPaths: { <host>: {...} }`（原 `promptsDir` / `codexSkillsDir` / `lyPromptsDir` / `lyDir` 移除）；公开 API `LyConfig.codexHost` → `LyConfig.host`、`installedHosts` 移除（proposal 已标 BREAKING），`mergeCodexHostConfig` / `sanitizeCodexHostExtras` 保留为 deprecated 别名。
+- `lycx init --init-openspec` 的写入型修复从前置检查挪到宿主确认之后执行（只针对所选宿主）；ensure 的补齐顺序改为先 `openspec init --tools <缺失宿主>`、仍缺再 `openspec update --force`（与 spec 表述一致）。
+- 测试稳定性：preflight 测试 mock 了 `listInstalledHosts`，不再受本机真实安装状态影响；模板断言改为先经宿主渲染（`src/test-utils/render.ts`）再断言。
+- 运维命令：体检项 / 偏差检测 / update 备份清单由适配器提供（`doctorChecks` / `definitionDrift` / `backupList`），命令层只遍历宿主；codex 的子代理模型体检（`assessSubagentModelConfig`）迁入 `src/hosts/codex/doctor.ts`，`commands/doctor.ts` 保留再导出。
+- update 按宿主决策：版本落后 → 整体重装（`init --force --skip-prompt --host <宿主>`）；版本一致但子代理定义与配置偏差 → 本地按当前配置重渲染、不联网；否则跳过。`init` 新增 `--host`（非交互时限定宿主，交互时作默认勾选）。
+- uninstall 未指定宿主且一个都没安装时回退兜底宿主（codex），以保留"清理旧版本残留"的改造前行为。
+- 注册表改为惰性求值（getter / 函数）：宿主包 → 共享配置读写 → 注册表存在模块循环，模块求值期直接取值会拿到未初始化的适配器。
+- lint：仓库基线本就有 72 个 eslint 错误（改造前 HEAD 实测），本 change 只保证改动过的 `src/` 文件 lint 干净；`package.json` 的 `files` 排序告警为既存问题，未处理。

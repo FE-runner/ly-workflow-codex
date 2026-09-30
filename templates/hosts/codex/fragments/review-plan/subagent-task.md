@@ -1,0 +1,1 @@
+4. **TASK 范围点名（只审 change 范围）**：审查 subagent 的任务点名"只审该 change 的下列产物"，SHALL NOT 超出点名范围作业。TASK 先指示读取 ROLE_FILE（`~/.codex/lyx/prompts/codex/plan-reviewer.md`，角色词内容不重写），再列出路径清单（步骤 2 枚举的 artifact + delta spec；若步骤 2 检测到基线 spec 引用，同时说明基线路径仅作审查上下文、不属于修复对象）。**首轮只传路径清单，不拼贴文件全文**——审查 subagent 具备自主读取文件的能力，需要实际内容时自行读取。

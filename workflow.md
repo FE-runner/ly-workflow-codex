@@ -1,6 +1,8 @@
 # ly-workflow-codex 工作流程图
 
-> Codex 单 Agent 编排：同一会话内 propose / review / apply；审查与实施主体由 `~/.codex/lyx/config.toml` 的 `[codexHost] reviewExecutor` / `codingExecutor` 决定（未配置等价 `main` = 主 agent 直接执行；`subagent` = spawn 独立子代理）。慢验证（测试 / 类型检查 / 构建）统一由 `@lyx-archive` 的归档前关卡执行一次，审查循环不再重复执行。
+> 多宿主（Codex / Claude Code）单 Agent 编排：同一会话内 propose / review / apply，两个宿主共享同一套流程。审查与实施主体由**当前宿主**配置文件（codex：`~/.codex/lyx/config.toml`；claude：`~/.claude/lyx/config.toml`）的 `[host] reviewExecutor` / `codingExecutor` 决定（未配置等价 `main` = 主 agent 直接执行；`subagent` = 独立子代理：codex 经宿主 spawn，claude 经 `Agent` 工具调用 `~/.claude/agents/lyx-*` 自定义子代理）。慢验证（测试 / 类型检查 / 构建）统一由归档前关卡执行一次，审查循环不再重复执行。
+>
+> 图中以 `@lyx-<command>` 书写的是**命令标识**：codex 下调用写法即 `@lyx-<command>`，Claude Code 下为 `/lyx-<command>`。Claude Code 交互模式默认以后台运行子代理，图中"等待子代理"在该宿主下的语义是"收到完成通知后消费结果并如实报告"，而非本轮内同步阻塞。
 
 ## 1. @lyx-propose（编排入口）
 
@@ -57,7 +59,7 @@ flowchart TD
     M5 -->|否| M1
     M5 -->|是| MStop["停止,转人工"]
 
-    RExec -->|subagent| S1["spawn 1 个审查 subagent<br/>非 fork + TASK(context.md 路径)"]
+    RExec -->|subagent| S1["调用 1 个审查子代理<br/>(codex: spawn / claude: Agent 工具)<br/>非 fork + TASK(context.md 路径)"]
     S1 --> S2["产出 Critical/Warning/Info"]
     S2 --> S3{"Critical > 0?"}
     S3 -->|否| SDone["正常清零,统一提交修复"]
@@ -66,7 +68,7 @@ flowchart TD
     S5 --> S6["openspec validate"]
     S6 --> S7{"命中终止条件?"}
     S7 -->|熔断/驳回硬线/5 轮上限| SStop["停止,转人工"]
-    S7 -->|否| S8["send_input 复用同一子代理<br/>(失败则重新 spawn)"]
+    S7 -->|否| S8["复用同一子代理<br/>(codex: send_input / claude: SendMessage)<br/>失败则重新调用"]
     S8 --> S2
 ```
 
@@ -83,7 +85,7 @@ flowchart TD
     AExec -->|main（默认）| AM1["主 agent 直接读 tasks.md<br/>逐任务实施 + 验证 + 勾选"]
     AM1 --> AM2["主 agent 自记录改动清单"]
 
-    AExec -->|subagent| AS1["spawn coding subagent<br/>非 fork + TASK(context.md 路径)"]
+    AExec -->|subagent| AS1["调用 coding 子代理<br/>(codex: spawn / claude: lyx-implementer)<br/>非 fork + TASK(context.md 路径)"]
     AS1 --> AS2["逐任务实施 + 验证 + 勾选"]
     AS2 --> AS3["回传改动清单,不 commit"]
     AS3 --> AS4["主 agent 比对快照<br/>partial apply 检测"]

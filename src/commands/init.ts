@@ -1,16 +1,18 @@
-import type { ExecutorKind, InitOptions, SupportedLang } from '../types'
-import type { CodexModelProvider } from '../utils/codex-provider'
+import type { CodexModelProvider } from '../hosts/codex/provider'
+import type { ExecutorKind, InitOptions, InstallResult, LyConfig, SupportedLang } from '../types'
+import type { HostId } from '../utils/host-adapters'
 import ansis from 'ansis'
 import fs from 'fs-extra'
 import inquirer from 'inquirer'
 import ora from 'ora'
 import { version as packageVersion } from '../../package.json'
+import { codexConfigPath, listModelProviders, readCodexConfigToml, readCodexCurrentModel, readModelsJson, sanitizeProviderName, upsertModelProvider } from '../hosts/codex/provider'
 import { i18n, initI18n } from '../i18n'
-import { codexConfigPath, listModelProviders, readCodexConfigToml, readCodexCurrentModel, readModelsJson, sanitizeProviderName, upsertModelProvider } from '../utils/codex-provider'
 import {
   createDefaultConfig,
-  ensureLyDir,
-  mergeCodexHostConfig,
+  getHostConfigPath,
+  listInstalledHosts,
+  mergeHostConfig,
   readLyConfig,
   sanitizeExecutor,
   sanitizeModelField,
@@ -18,6 +20,8 @@ import {
   sanitizeReviewModel,
   writeLyConfig,
 } from '../utils/config'
+import { getAdapter, listRegisteredHosts } from '../utils/host-adapters'
+import { defaultInteractiveHosts, detectHosts, parseHostList, resolveNonInteractiveHosts } from '../utils/host-selection'
 import { getCoreCommandIds, installWorkflows } from '../utils/installer'
 import {
   buildModelFieldChoices,
@@ -124,7 +128,7 @@ async function pickModelField(input: {
       message: i18n.t('init:model.customPrompt'),
     }])
     const model = custom?.trim()
-    return model ? model : undefined
+    return model || undefined
   }
   return typeof pick === 'string' ? pick.trim() : undefined
 }
@@ -324,16 +328,53 @@ async function collectCodexHostConfig(options: {
   return collected
 }
 
-/** 配置摘要（交互与非交互共用）：host + 执行者字段 + 模型字段 + 命令数 */
-function printSummary(input: { models: CodexHostCollected, commandCount: number }): void {
-  const { models, commandCount } = input
+/**
+ * claude 宿主侧交互采集：只采集执行者二连（main / subagent）。
+ * SHALL NOT 采集模型与推理档（子代理定义默认 model: inherit），SHALL NOT 采集或写入
+ * Claude Code 自身的 provider / settings 配置；既有模型与推理档（手改配置得到的）原样保留。
+ */
+async function collectClaudeHostConfig(options: { defaults: CodexHostCollected }): Promise<CodexHostCollected> {
+  console.log()
+  console.log(ansis.cyan.bold(`  ${i18n.t('init:executor.title')}`))
+  console.log()
+  console.log(ansis.gray(`  ${i18n.t('init:claude.executorHint')}`))
+  console.log()
+
+  const collected: CodexHostCollected = { ...options.defaults }
+  for (const field of EXECUTOR_FIELDS) {
+    collected[field.key] = await pickExecutorField({ field, current: options.defaults[field.key] })
+  }
+  return collected
+}
+
+/** 交互选择本次安装的宿主（默认勾选 = 已安装 ∪ 探测到；至少选一个） */
+async function pickHosts(defaults: HostId[]): Promise<HostId[]> {
+  const { hosts } = await inquirer.prompt([{
+    type: 'checkbox',
+    name: 'hosts',
+    message: i18n.t('init:hostSelect.prompt'),
+    choices: listRegisteredHosts().map(host => ({
+      name: `${host} ${ansis.gray(`— ${i18n.t(`init:hostSelect.desc.${host}`)}`)}`,
+      value: host,
+      checked: defaults.includes(host),
+    })),
+    validate: (value: unknown[]) => value.length > 0 || i18n.t('init:hostSelect.required'),
+  }])
+  return hosts as HostId[]
+}
+
+/** 配置摘要（交互与非交互共用）：宿主 + 执行者字段 + 模型字段 + 命令数 */
+function printSummary(input: { host: HostId, models: CodexHostCollected, commandCount: number }): void {
+  const { host, models, commandCount } = input
+  // claude 宿主：模型/推理档写入子代理定义，未配置即 model: inherit（继承当前会话），不算"未配置"
+  const inheritsByDefinition = host === 'claude'
   const executorLabel = (kind: ExecutorKind | undefined): string =>
     kind === 'subagent'
       ? ansis.green(i18n.t('init:summary.executorSubagent'))
       : ansis.gray(i18n.t('init:summary.executorMain'))
   const modelLabel = (value: string | undefined, effective: boolean): string => {
     if (!value)
-      return ansis.gray(i18n.t('init:host.reviewModelUnset'))
+      return ansis.gray(i18n.t(inheritsByDefinition ? 'init:claude.modelInherit' : 'init:host.reviewModelUnset'))
     if (!effective)
       return ansis.yellow(i18n.t('init:summary.modelIneffective', { model: value }))
     return ansis.green(value)
@@ -354,13 +395,15 @@ function printSummary(input: { models: CodexHostCollected, commandCount: number 
   console.log(ansis.yellow('━'.repeat(50)))
   console.log(ansis.bold(`  ${i18n.t('init:summary.title')}`))
   console.log()
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.host'))}  ${ansis.green('codex')}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.host'))}  ${ansis.green(host)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewExecutor'))}  ${executorLabel(models.reviewExecutor)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingExecutor'))}  ${executorLabel(models.codingExecutor)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))}  ${modelLabel(models.reviewModel, reviewEffective)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))}  ${modelLabel(models.codingModel, codingEffective)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewReasoningEffort'))}  ${reasoningLabel(models.reviewReasoningEffort, reviewEffective)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingReasoningEffort'))}  ${reasoningLabel(models.codingReasoningEffort, codingEffective)}`)
+  if (inheritsByDefinition)
+    console.log(ansis.gray(`  ${i18n.t('init:claude.noProviderNote')}`))
   console.log(`  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(commandCount.toString())}`)
   console.log(ansis.yellow('━'.repeat(50)))
   console.log()
@@ -369,14 +412,22 @@ function printSummary(input: { models: CodexHostCollected, commandCount: number 
 export async function init(options: InitOptions = {}): Promise<void> {
   console.log()
   console.log(ansis.cyan.bold(`  ${PACKAGE_NAME} v${packageVersion}`))
-  console.log(ansis.gray(`  Codex 单 Agent 开发工作流`))
+  console.log(ansis.gray(`  ${i18n.t('init:tagline')}`))
   console.log()
 
   // ═══════════════════════════════════════════════════════
-  // Step 0: Language selection (FIRST interactive step)
+  // Step 0: 现状（已安装宿主 = 配置文件存在；探测宿主 = 宿主目录存在）
   // ═══════════════════════════════════════════════════════
-  const existingConfig = await readLyConfig()
-  const savedLang = existingConfig?.general?.language
+  const installedHosts = await listInstalledHosts()
+  const detectedHosts = await detectHosts()
+  const existingConfigs = new Map<HostId, LyConfig | null>()
+  for (const host of listRegisteredHosts())
+    existingConfigs.set(host, await readLyConfig(host))
+
+  // ═══════════════════════════════════════════════════════
+  // Step 1: Language selection (FIRST interactive step)
+  // ═══════════════════════════════════════════════════════
+  const savedLang = [...existingConfigs.values()].find(c => c?.general?.language)?.general.language
   let language: SupportedLang = savedLang ?? 'zh-CN'
 
   if (!options.skipPrompt) {
@@ -410,30 +461,43 @@ export async function init(options: InitOptions = {}): Promise<void> {
     await initI18n(language)
   }
 
+  // ═══════════════════════════════════════════════════════
+  // Step 2: 宿主集合（交互 = 多选；非交互 = 已安装 → 探测 → 兜底）
+  // ═══════════════════════════════════════════════════════
+  const explicitHosts = parseHostList(options.host)
+  const hosts = options.skipPrompt
+    ? explicitHosts ?? resolveNonInteractiveHosts({ installed: installedHosts, detected: detectedHosts })
+    : await pickHosts(explicitHosts ?? defaultInteractiveHosts({ installed: installedHosts, detected: detectedHosts }))
+
   const selectedWorkflows = getCoreCommandIds()
-  // 既有配置中的执行者与模型字段作为交互/非交互默认值（空白等价未配置；保真写回不丢）
-  const defaultCollected: CodexHostCollected = {
-    reviewExecutor: sanitizeExecutor(existingConfig?.codexHost?.reviewExecutor),
-    codingExecutor: sanitizeExecutor(existingConfig?.codexHost?.codingExecutor),
-    reviewModel: sanitizeReviewModel(existingConfig?.codexHost?.reviewModel),
-    codingModel: sanitizeModelField(existingConfig?.codexHost?.codingModel),
-    reviewReasoningEffort: sanitizeReasoningEffort(existingConfig?.codexHost?.reviewReasoningEffort),
-    codingReasoningEffort: sanitizeReasoningEffort(existingConfig?.codexHost?.codingReasoningEffort),
+
+  // ═══════════════════════════════════════════════════════
+  // Step 3: 逐宿主采集（既有配置作为默认值；空白等价未配置；保真写回不丢）
+  // ═══════════════════════════════════════════════════════
+  const collectedByHost = new Map<HostId, CodexHostCollected>()
+  for (const host of hosts) {
+    const existing = existingConfigs.get(host)?.host
+    const defaults: CodexHostCollected = {
+      reviewExecutor: sanitizeExecutor(existing?.reviewExecutor),
+      codingExecutor: sanitizeExecutor(existing?.codingExecutor),
+      reviewModel: sanitizeReviewModel(existing?.reviewModel),
+      codingModel: sanitizeModelField(existing?.codingModel),
+      reviewReasoningEffort: sanitizeReasoningEffort(existing?.reviewReasoningEffort),
+      codingReasoningEffort: sanitizeReasoningEffort(existing?.codingReasoningEffort),
+    }
+    let collected = { ...defaults }
+    if (!options.skipPrompt) {
+      console.log()
+      console.log(ansis.magenta.bold(`  ▶ ${i18n.t('init:hostSelect.configuring', { host })}`))
+      collected = host === 'claude'
+        ? await collectClaudeHostConfig({ defaults })
+        : await collectCodexHostConfig({ defaults })
+    }
+    collectedByHost.set(host, collected)
+    printSummary({ host, models: collected, commandCount: selectedWorkflows.length })
   }
-  // 执行者候选固定为 main / subagent；模型候选 = 留空 + 自定义输入 + 既有值。
-  // agent 模型需额外配置，能否 spawn 由宿主实际能力决定（详见模板与 lycx doctor 提示）
-  let collectedModels: CodexHostCollected = { ...defaultCollected }
 
-  // ═══════════════════════════════════════════════════════
-  // Interactive flow（codex 单宿主）
-  // ═══════════════════════════════════════════════════════
   if (!options.skipPrompt) {
-    // ── API 提供方 → Codex 现状检测 → 执行者二连 → 模型采集 ──
-    collectedModels = await collectCodexHostConfig({ defaults: defaultCollected })
-
-    // ── 摘要 ──
-    printSummary({ models: collectedModels, commandCount: selectedWorkflows.length })
-
     const { confirm } = await inquirer.prompt([{
       type: 'confirm',
       name: 'confirm',
@@ -445,81 +509,100 @@ export async function init(options: InitOptions = {}): Promise<void> {
       return
     }
   }
-  else {
-    // non-interactive：打印最小摘要行（保留既有字段默认）
-    printSummary({ models: collectedModels, commandCount: selectedWorkflows.length })
-  }
 
   // ═══════════════════════════════════════════════════════
-  // Install
+  // Step 4: 逐宿主安装（只处理所选宿主；未选宿主的配置与产物不动）
   // ═══════════════════════════════════════════════════════
   const spinner = ora(i18n.t('init:installing')).start()
 
   try {
-    await ensureLyDir()
+    const results: Array<{ host: HostId, result: InstallResult }> = []
+    for (const host of hosts) {
+      const collected = collectedByHost.get(host)!
+      const hostSection = mergeHostConfig(existingConfigs.get(host)?.host, {
+        reviewExecutor: collected.reviewExecutor,
+        codingExecutor: collected.codingExecutor,
+        reviewModel: collected.reviewModel,
+        codingModel: collected.codingModel,
+        reviewReasoningEffort: collected.reviewReasoningEffort,
+        codingReasoningEffort: collected.codingReasoningEffort,
+      })
+      const config = createDefaultConfig({
+        language,
+        installedWorkflows: selectedWorkflows,
+        hostId: host,
+        host: hostSection,
+      })
 
-    const config = createDefaultConfig({
-      language,
-      installedWorkflows: selectedWorkflows,
-      codexHost: mergeCodexHostConfig(existingConfig?.codexHost, {
-        reviewExecutor: collectedModels.reviewExecutor,
-        codingExecutor: collectedModels.codingExecutor,
-        reviewModel: collectedModels.reviewModel,
-        codingModel: collectedModels.codingModel,
-        reviewReasoningEffort: collectedModels.reviewReasoningEffort,
-        codingReasoningEffort: collectedModels.codingReasoningEffort,
-      }),
-      installedHosts: ['codex'],
-    })
+      // Save config FIRST - ensure it's created even if installation fails
+      await writeLyConfig(config, host)
 
-    // Save config FIRST - ensure it's created even if installation fails
-    await writeLyConfig(config)
-
-    // Install codex host commands + shared role prompts
-    const result = await installWorkflows(selectedWorkflows, '', options.force, {
-      reviewModel: collectedModels.reviewModel,
-    })
+      const result = await installWorkflows(selectedWorkflows, '', options.force, {
+        hosts: [host],
+        hostConfig: { [host]: hostSection ?? {} },
+      })
+      results.push({ host, result })
+    }
 
     spinner.succeed(ansis.green(i18n.t('init:installSuccess')))
 
-    // Show result summary
-    if (!result.success || result.errors.length > 0) {
-      if (result.errors.length > 0) {
+    for (const { host, result } of results) {
+      const paths = getAdapter(host).defaultPaths()
+      console.log()
+      console.log(ansis.magenta.bold(`  [${host}]`))
+
+      if (!result.success || result.errors.length > 0) {
         result.errors.forEach((error) => {
           console.log(`    ${ansis.red('✗')} ${error}`)
         })
+        if (!result.success) {
+          console.log()
+          console.log(ansis.yellow('  尝试修复 / Try to fix:'))
+          console.log(ansis.cyan(`    npx ${PACKAGE_NAME}@latest init --force`))
+          console.log(ansis.gray(`    If still failing, report an issue at ${'https://github.com/FE-runner/ly-workflow-codex/issues'}`))
+        }
       }
-      if (!result.success) {
-        console.log()
-        console.log(ansis.yellow('  尝试修复 / Try to fix:'))
-        console.log(ansis.cyan(`    npx ${PACKAGE_NAME}@latest init --force`))
-        console.log(ansis.gray(`    If still failing, report an issue at ${'https://github.com/FE-runner/ly-workflow-codex/issues'}`))
-      }
-    }
 
-    console.log()
-    console.log(`  ${ansis.cyan(i18n.t('init:installedCommands'))}`)
-    for (const cmd of result.installedCommands) {
-      console.log(`    ${ansis.green('✓')} lyx-${cmd} ${ansis.gray('→ ~/.agents/skills/')}`)
-    }
-    if (result.installedPrompts.length > 0) {
-      console.log()
-      console.log(`  ${ansis.cyan(i18n.t('init:installedPrompts'))}`)
-      for (const name of result.installedPrompts) {
-        console.log(`    ${ansis.green('✓')} ${name} ${ansis.gray('→ ~/.codex/lyx/prompts/')}`)
+      const prefix = getAdapter(host).commandPrefix
+      console.log(`  ${ansis.cyan(i18n.t('init:installedCommands'))}`)
+      for (const cmd of result.installedCommands) {
+        console.log(`    ${ansis.green('✓')} ${prefix}lyx-${cmd} ${ansis.gray(`→ ${paths.skillsDir}`)}`)
       }
+      if (result.installedPrompts.length > 0) {
+        console.log(`  ${ansis.cyan(i18n.t('init:installedPrompts'))}`)
+        for (const name of result.installedPrompts) {
+          console.log(`    ${ansis.green('✓')} ${name}`)
+        }
+      }
+      console.log(ansis.gray(`    Config: ${getHostConfigPath(host)}`))
     }
 
     // codex 侧残留清理（旧包写入的 AGENTS.md 区块 / config.toml 旧区块 / 旧 agents）— 非阻断
-    try {
-      const { cleanupLegacyArtifacts, reportCleanupResult } = await import('../utils/legacy-cleanup')
-      reportCleanupResult(await cleanupLegacyArtifacts())
+    if (hosts.includes('codex')) {
+      try {
+        const { cleanupLegacyArtifacts, reportCleanupResult } = await import('../hosts/codex/legacy-cleanup')
+        reportCleanupResult(await cleanupLegacyArtifacts())
+      }
+      catch { /* non-blocking */ }
     }
-    catch { /* non-blocking */ }
+
+    // 宿主已确认（配置文件已产生）：此时才允许执行项目级 OpenSpec 写入型修复
+    if (options.initOpenspec) {
+      try {
+        const { ensureOpenspec, confirmOpenspecCliInstall, printOpenspecInspection } = await import('../utils/preflight')
+        const ensured = await ensureOpenspec({
+          hosts,
+          allowWrite: true,
+          yes: options.skipPrompt,
+          confirmInstall: () => confirmOpenspecCliInstall(options.skipPrompt),
+        })
+        printOpenspecInspection(ensured.inspection)
+      }
+      catch { /* non-blocking */ }
+    }
 
     console.log()
     console.log(ansis.green(`  ✓ ${i18n.t('init:installSuccess')}`))
-    console.log(ansis.gray(`    Config: ~/.codex/lyx/config.toml`))
     console.log()
   }
   catch (error) {

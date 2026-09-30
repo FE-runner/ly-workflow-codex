@@ -18,6 +18,7 @@ const zhCN = {
       unavailableList: '以下命令依赖 openspec，当前不可用：{{list}}',
       unaffectedNote: '@lyx-apply、@lyx-review-code 仅依赖项目内 change 目录结构；Git 工具链与质量关卡技能不受影响',
       skillsMissing: 'OpenSpec skills 缺失：{{list}}——运行 @lyx-init 或修复后重试',
+      repairHint: '建议修复命令：{{cmd}}（或 lycx init --init-openspec）',
       skillsGlobalOnly: 'OpenSpec skills 仅全局可用，命令可继续但未固化到当前项目（WARN）',
       skillsUnknown: '无法读取 OpenSpec workflow profile，skills 状态未知（WARN）',
       skillsMissingCodex: 'codex 宿主缺少 openspec-* skills——运行 openspec init 安装到 ~/.agents/skills/ 或项目 .agents/skills/',
@@ -59,6 +60,8 @@ const zhCN = {
   },
   cli: {
     help: {
+      banner: 'ly-workflow-codex — 多宿主（Codex / Claude Code）单 Agent 工作流 + OpenSpec 审查关卡',
+      hostOption: '只作用于指定宿主（逗号分隔：codex,claude；缺省 = 全部已安装宿主）',
       commands: '命令',
       commandDescriptions: {
         showMenu: '显示交互式菜单（默认）',
@@ -90,6 +93,21 @@ const zhCN = {
     },
   },
   init: {
+    tagline: '多宿主（Codex / Claude Code）单 Agent 开发工作流',
+    hostSelect: {
+      prompt: '选择要安装的宿主（空格勾选，默认按 ~/.codex / ~/.claude 是否存在勾选）',
+      required: '至少选择一个宿主',
+      configuring: '配置 {{host}} 宿主',
+      desc: {
+        codex: 'Codex：~/.agents/skills/lyx-* + ~/.codex/lyx/',
+        claude: 'Claude Code：~/.claude/skills/lyx-* + ~/.claude/agents/lyx-* + ~/.claude/lyx/',
+      },
+    },
+    claude: {
+      executorHint: 'Claude Code 侧只采集执行者：模型与推理档不采集，子代理定义默认 model: inherit（继承当前会话）；不写入 Claude Code 自身的 provider / settings 配置。',
+      modelInherit: '继承当前会话（子代理定义 model: inherit）',
+      noProviderNote: '不采集 / 不写入 Claude Code 的 provider 配置；子代理定义安装到 ~/.claude/agents/lyx-*.md',
+    },
     selectLanguage: '选择语言 / Select language',
     host: {
       reviewModelPrompt: '审查 agent A 模型（留空 = 默认继承当前会话模型；agent B / coding 模型请运行 lycx init 配置）——agent 模型需额外配置，能否 spawn 由环境决定',
@@ -120,8 +138,8 @@ const zhCN = {
       registeredLabel: 'models.json 注册模型',
       registeredModels: '{{count}} 个（仅展示；实测其内容 ≠ spawn 可用列表，不作为候选）',
       notDetected: '未检测到',
-      reasoningHint: '提示：部分第三方模型（如 glm-5.3-flash）默认推理参数不可用，需在 [codexHost] 的 reviewReasoningEffort / codingReasoningEffort 中显式覆盖对应档位（如 low）。本向导会在对应执行者为 subagent 时采集"不覆盖 / 覆盖档位"，取值不做枚举强校验，相关报错如实展示即可。',
-      spawnableHint: 'agent 模型需额外配置（不做清单强校验）：能否 spawn 由环境实际能力决定。验证示例：对话中让 Codex 用目标模型 spawn 一个子代理执行简单任务（如回复 ok），报错含 Unknown model ... Available models: ... 即当前不支持；[codexHost] spawnableModels 仅作提示参考，可手改 ~/.codex/lyx/config.toml',
+      reasoningHint: '提示：部分第三方模型（如 glm-5.3-flash）默认推理参数不可用，需在 [host] 的 reviewReasoningEffort / codingReasoningEffort 中显式覆盖对应档位（如 low）。本向导会在对应执行者为 subagent 时采集"不覆盖 / 覆盖档位"，取值不做枚举强校验，相关报错如实展示即可。',
+      spawnableHint: 'agent 模型需额外配置（不做清单强校验）：能否 spawn 由环境实际能力决定。验证示例：对话中让 Codex 用目标模型 spawn 一个子代理执行简单任务（如回复 ok），报错含 Unknown model ... Available models: ... 即当前不支持；[host] spawnableModels 仅作提示参考，可手改 ~/.codex/lyx/config.toml',
     },
     selectWorkflows: '选择要安装的工作流（可多选）',
     confirmInstall: '确认安装以上配置？',
@@ -185,6 +203,16 @@ const zhCN = {
     },
   },
   doctor: {
+    claude: {
+      label: 'Claude 子代理配置',
+      agentsMissing: '缺失 {{list}}（{{dir}}/）——运行 lycx init --force 重装',
+      modelInherit: '{{agent}}: model=inherit（继承当前会话）',
+      modelSpecified: '{{agent}}: model={{model}}（已指定）',
+      drift: '配置与已安装子代理定义不一致（{{list}}）——运行 lycx update 或 lycx init --force 重新渲染',
+    },
+    hostGroup: '宿主 {{host}}',
+    noHostInstalled: '未发现任何已安装宿主（~/.codex/lyx/config.toml、~/.claude/lyx/config.toml 均不存在）——运行 lycx init 安装',
+    configMissing: '配置缺失（{{path}}）',
     modelConfig: {
       label: 'Codex 子代理模型配置',
       okUnset: '{{key}} 未配置（回退当前会话模型）',
@@ -203,6 +231,9 @@ const zhCN = {
     },
   },
   update: {
+    rerendering: '[{{host}}] 定义与配置不一致（{{list}}），按当前配置重新渲染...',
+    rerenderDone: '[{{host}}] 已按当前配置重新渲染',
+    driftDetected: '定义与配置不一致：{{list}}',
     checking: '检查更新...',
     checkingLatest: '正在检查最新版本...',
     cannotConnect: '无法连接到 npm registry，请检查网络连接',
@@ -243,6 +274,11 @@ const zhCN = {
     error: '更新失败: {{error}}',
   },
   menu: {
+    hostPick: {
+      update: '选择要更新的宿主',
+      config: '选择要配置的宿主',
+      uninstall: '选择要卸载的宿主（未勾选的宿主不受影响）',
+    },
     title: '主菜单',
     options: {
       init: '初始化 ly-workflow-codex',
@@ -294,6 +330,7 @@ const en: typeof zhCN = {
       unavailableList: 'These commands depend on openspec and are currently unavailable: {{list}}',
       unaffectedNote: '@lyx-apply and @lyx-review-code only need the in-project change directory; Git tools and quality-gate skills are unaffected',
       skillsMissing: 'OpenSpec skills missing: {{list}} — run @lyx-init or repair and retry',
+      repairHint: 'Suggested repair: {{cmd}} (or lycx init --init-openspec)',
       skillsGlobalOnly: 'OpenSpec skills are available only globally; commands can continue but are not pinned to this project (WARN)',
       skillsUnknown: 'Unable to read the OpenSpec workflow profile; skills status is unknown (WARN)',
       skillsMissingCodex: 'codex host is missing the openspec-* skills — run openspec init to install them into ~/.agents/skills/ or the project .agents/skills/',
@@ -335,6 +372,8 @@ const en: typeof zhCN = {
   },
   cli: {
     help: {
+      banner: 'ly-workflow-codex — multi-host (Codex / Claude Code) single-agent workflow + OpenSpec review gates',
+      hostOption: 'Only act on the given hosts (comma-separated: codex,claude; default = all installed hosts)',
       commands: 'Commands',
       commandDescriptions: {
         showMenu: 'Show interactive menu (default)',
@@ -366,6 +405,21 @@ const en: typeof zhCN = {
     },
   },
   init: {
+    tagline: 'Multi-host (Codex / Claude Code) single-agent development workflow',
+    hostSelect: {
+      prompt: 'Select hosts to install (space to toggle; defaults follow whether ~/.codex / ~/.claude exist)',
+      required: 'Select at least one host',
+      configuring: 'Configuring the {{host}} host',
+      desc: {
+        codex: 'Codex: ~/.agents/skills/lyx-* + ~/.codex/lyx/',
+        claude: 'Claude Code: ~/.claude/skills/lyx-* + ~/.claude/agents/lyx-* + ~/.claude/lyx/',
+      },
+    },
+    claude: {
+      executorHint: 'Claude Code only asks for executors: models and reasoning effort are not collected — subagent definitions default to model: inherit (current session); Claude Code\'s own provider / settings are never written.',
+      modelInherit: 'inherits the session (subagent definition model: inherit)',
+      noProviderNote: 'Claude Code provider config is not collected or written; subagent definitions go to ~/.claude/agents/lyx-*.md',
+    },
     selectLanguage: 'Select language / 选择语言',
     host: {
       reviewModelPrompt: 'Review agent A model (empty = inherit the current session model; agent B / coding models can be configured via lycx init) — agent models need extra setup: spawn support depends on the environment',
@@ -396,8 +450,8 @@ const en: typeof zhCN = {
       registeredLabel: 'models.json registered models',
       registeredModels: '{{count}} (display only; its content ≠ the spawn-available list, not used as candidates)',
       notDetected: 'not detected',
-      reasoningHint: 'Note: some third-party models (e.g. glm-5.3-flash) cannot spawn with the default reasoning parameters. Explicitly override the matching reviewReasoningEffort / codingReasoningEffort field under [codexHost] (for example low). When the corresponding executor is subagent, this wizard collects "do not override / override with a tier"; values are not enum-validated and related errors are shown as-is.',
-      spawnableHint: 'Agent models need extra setup (no list-based validation): spawn support depends on the environment. Verification sample: ask Codex in a conversation to spawn a subagent with the target model for a trivial task (e.g. reply ok); an error containing Unknown model ... Available models: ... means it is not currently supported. [codexHost] spawnableModels is reference-only; you may hand-edit ~/.codex/lyx/config.toml',
+      reasoningHint: 'Note: some third-party models (e.g. glm-5.3-flash) cannot spawn with the default reasoning parameters. Explicitly override the matching reviewReasoningEffort / codingReasoningEffort field under [host] (for example low). When the corresponding executor is subagent, this wizard collects "do not override / override with a tier"; values are not enum-validated and related errors are shown as-is.',
+      spawnableHint: 'Agent models need extra setup (no list-based validation): spawn support depends on the environment. Verification sample: ask Codex in a conversation to spawn a subagent with the target model for a trivial task (e.g. reply ok); an error containing Unknown model ... Available models: ... means it is not currently supported. [host] spawnableModels is reference-only; you may hand-edit ~/.codex/lyx/config.toml',
     },
     selectWorkflows: 'Select workflows to install (multi-select)',
     confirmInstall: 'Confirm installation with above configuration?',
@@ -461,6 +515,16 @@ const en: typeof zhCN = {
     },
   },
   doctor: {
+    claude: {
+      label: 'Claude subagent config',
+      agentsMissing: 'missing {{list}} ({{dir}}/) — run lycx init --force to reinstall',
+      modelInherit: '{{agent}}: model=inherit (current session)',
+      modelSpecified: '{{agent}}: model={{model}} (specified)',
+      drift: 'config differs from the installed subagent definitions ({{list}}) — run lycx update or lycx init --force to re-render',
+    },
+    hostGroup: 'Host {{host}}',
+    noHostInstalled: 'No installed host found (neither ~/.codex/lyx/config.toml nor ~/.claude/lyx/config.toml exists) — run lycx init',
+    configMissing: 'config missing ({{path}})',
     modelConfig: {
       label: 'Codex subagent model config',
       okUnset: '{{key}} unset (falls back to the current session model)',
@@ -479,6 +543,9 @@ const en: typeof zhCN = {
     },
   },
   update: {
+    rerendering: '[{{host}}] definitions differ from config ({{list}}); re-rendering with the current config...',
+    rerenderDone: '[{{host}}] re-rendered with the current config',
+    driftDetected: 'definitions differ from config: {{list}}',
     checking: 'Checking for updates...',
     checkingLatest: 'Checking latest version...',
     cannotConnect: 'Cannot connect to npm registry, please check your network',
@@ -519,6 +586,11 @@ const en: typeof zhCN = {
     error: 'Update failed: {{error}}',
   },
   menu: {
+    hostPick: {
+      update: 'Select hosts to update',
+      config: 'Select the host to configure',
+      uninstall: 'Select hosts to uninstall (unselected hosts are untouched)',
+    },
     title: 'Main Menu',
     options: {
       init: 'Initialize ly-workflow-codex',

@@ -1,0 +1,1 @@
+1. **非 fork 调用**：审查子代理 SHALL 以 `Agent` 工具调用自定义子代理 `lyx-plan-reviewer`（`subagent_type: "lyx-plan-reviewer"`）——该宿主的自定义子代理运行在全新的独立上下文中，只携带本次 prompt（TASK），不携带父会话对话历史，天然满足非 fork 契约。SHALL NOT 使用会继承父会话历史的 fork 模式。

@@ -1,23 +1,25 @@
 import type { CAC } from 'cac'
+import type { OpenspecCommandOptions } from './commands/openspec'
 import type { CliOptions } from './types'
-import { homedir } from 'node:os'
+import type { HostId } from './utils/host-adapters'
 import ansis from 'ansis'
 import inquirer from 'inquirer'
-import { join } from 'pathe'
 import { version } from '../package.json'
 import { doctor, status } from './commands/doctor'
 import { init } from './commands/init'
 import { showMainMenu } from './commands/menu'
+import { runOpenspecCommand } from './commands/openspec'
+import { describeUninstallTargets, printUninstallResult, resolveUninstallHosts, runUninstall } from './commands/uninstall'
 import { i18n, initI18n } from './i18n'
 import { readLyConfig } from './utils/config'
-import { uninstallWorkflows } from './utils/installer'
+import { parseHostList } from './utils/host-selection'
 import { BIN_NAME, PACKAGE_NAME } from './utils/package-meta'
-import { checkExternalDeps, confirmOpenspecCliInstall, ensureOpenspec, inspectOpenspec, printOpenspecInspection } from './utils/preflight'
+import { checkExternalDeps } from './utils/preflight'
 
 function customizeHelp(sections: any[]): any[] {
   sections.unshift({
     title: '',
-    body: ansis.cyan.bold(`ly-workflow-codex — Codex 单 Agent 工作流 + OpenSpec 双审查关卡 v${version}`),
+    body: ansis.cyan.bold(`${i18n.t('cli:help.banner')} v${version}`),
   })
 
   sections.push({
@@ -29,7 +31,7 @@ function customizeHelp(sections: any[]): any[] {
       `  ${ansis.cyan(`${BIN_NAME} status`)}       Show installation overview`,
       `  ${ansis.cyan(`${BIN_NAME} openspec inspect`)}  Inspect OpenSpec dependency state`,
       `  ${ansis.cyan(`${BIN_NAME} openspec ensure`)}   Ensure OpenSpec CLI/skills/root`,
-      `  ${ansis.cyan(`${BIN_NAME} uninstall`)}    Uninstall ${PACKAGE_NAME} (non-interactive)`,
+      `  ${ansis.cyan(`${BIN_NAME} uninstall`)}    Uninstall ${PACKAGE_NAME} (per host)`,
       '',
       ansis.gray(`  ${i18n.t('cli:help.shortcuts')}`),
       `  ${ansis.cyan(`${BIN_NAME} i`)}            ${i18n.t('cli:help.shortcutDescriptions.quickInit')}`,
@@ -49,6 +51,7 @@ function customizeHelp(sections: any[]): any[] {
       `  ${ansis.green('--skip-prompt, -s')}         ${i18n.t('cli:help.optionDescriptions.skipAllPrompts')}`,
       `  ${ansis.green('--workflows, -w')} <list>    ${i18n.t('cli:help.optionDescriptions.workflows')}`,
       `  ${ansis.green('--install-dir, -d')} <path>  ${i18n.t('cli:help.optionDescriptions.installDir')}`,
+      `  ${ansis.green('--host')} <hosts>            ${i18n.t('cli:help.hostOption')}`,
     ].join('\n'),
   })
 
@@ -69,6 +72,18 @@ function customizeHelp(sections: any[]): any[] {
   })
 
   return sections
+}
+
+/** 解析 --host；非法取值打印错误并设置退出码，返回 null */
+function parseHostsOrExit(value: string | undefined): HostId[] | undefined | null {
+  try {
+    return parseHostList(value)
+  }
+  catch (error) {
+    console.error(ansis.red(error instanceof Error ? error.message : String(error)))
+    process.exitCode = 1
+    return null
+  }
 }
 
 export async function setupCommands(cli: CAC): Promise<void> {
@@ -103,6 +118,7 @@ export async function setupCommands(cli: CAC): Promise<void> {
     .option('--workflows, -w <workflows>', i18n.t('cli:help.optionDescriptions.workflows'))
     .option('--install-dir, -d <path>', i18n.t('cli:help.optionDescriptions.installDir'))
     .option('--init-openspec', i18n.t('cli:help.optionDescriptions.initOpenspec'))
+    .option('--host <hosts>', i18n.t('cli:help.hostOption'))
     .action(async (options: CliOptions) => {
       if (options.lang) {
         await initI18n(options.lang)
@@ -111,58 +127,51 @@ export async function setupCommands(cli: CAC): Promise<void> {
       await init(options)
     })
 
-  // OpenSpec dependency inspection / repair
+  // OpenSpec dependency inspection / repair (按宿主)
   cli
     .command('openspec <action>', 'Inspect or ensure OpenSpec dependencies')
     .option('--json', 'Output JSON')
     .option('--yes, -y', 'Skip confirmation')
-    .action(async (action: string, options: { json?: boolean; yes?: boolean }) => {
-      if (action === 'inspect') {
-        const result = await inspectOpenspec()
-        if (options.json)
-          console.log(JSON.stringify(result, null, 2))
-        else
-          printOpenspecInspection(result)
-        return
-      }
-
-      if (action === 'ensure') {
-        const result = await ensureOpenspec({
-          yes: options.yes,
-          confirmInstall: () => confirmOpenspecCliInstall(),
-        })
-        if (options.json)
-          console.log(JSON.stringify(result, null, 2))
-        else
-          printOpenspecInspection(result.inspection)
-        return
-      }
-
-      console.error(ansis.red(`未知 openspec 子命令: ${action}`))
-      process.exitCode = 1
+    .option('--host <hosts>', i18n.t('cli:help.hostOption'))
+    .action(async (action: string, options: OpenspecCommandOptions) => {
+      await runOpenspecCommand(action, options)
     })
 
-  // Doctor: environment health check
+  // Doctor: environment health check（按宿主分组）
   cli
     .command('doctor', 'Check ly-workflow-codex installation health')
-    .action(async () => { await doctor() })
+    .option('--host <hosts>', i18n.t('cli:help.hostOption'))
+    .action(async (options: { host?: string }) => {
+      const hosts = parseHostsOrExit(options.host)
+      if (hosts !== null)
+        await doctor({ hosts })
+    })
 
-  // Status: show current installation overview
+  // Status: show current installation overview（按宿主分组）
   cli
     .command('status', 'Show ly-workflow-codex installation status')
-    .action(async () => { await status() })
+    .option('--host <hosts>', i18n.t('cli:help.hostOption'))
+    .action(async (options: { host?: string }) => {
+      const hosts = parseHostsOrExit(options.host)
+      if (hosts !== null)
+        await status({ hosts })
+    })
 
-  // Uninstall ly-workflow-codex (codex host)
+  // Uninstall ly-workflow-codex（按宿主；OpenSpec 自有产物与共用 ~/.ly/worktrees/ 不动）
   cli
-    .command('uninstall', 'Uninstall ly-workflow-codex workflows (~/.agents/skills/lyx-*, ~/.codex/lyx/)')
+    .command('uninstall', 'Uninstall ly-workflow-codex (per host; --host to limit, default = all installed hosts)')
     .option('--yes, -y', 'Skip confirmation')
-    .action(async (options: { yes?: boolean }) => {
-      const installDir = join(homedir(), '.codex')
+    .option('--host <hosts>', i18n.t('cli:help.hostOption'))
+    .action(async (options: { yes?: boolean, host?: string }) => {
+      const explicit = parseHostsOrExit(options.host)
+      if (explicit === null)
+        return
+      const hosts = await resolveUninstallHosts(explicit)
       if (!options.yes) {
         const { confirm } = await inquirer.prompt([{
           type: 'confirm',
           name: 'confirm',
-          message: `确定要卸载 ${PACKAGE_NAME} 吗？将移除 ~/.agents/skills/lyx-*（含旧 ~/.agents/skills/ly-* 与 ~/.codex/prompts/ly-*.md 残留）与 ~/.codex/lyx/（配置 config.toml、角色词 prompts/、worktrees）；若 ~/.codex/lyx/worktrees/ 下存在未清理的实际 git worktree，该子目录会被保留并提示需先手动清理。`,
+          message: `确定要卸载 ${PACKAGE_NAME} 吗？将移除：\n${describeUninstallTargets(hosts).map(l => `    ${l}`).join('\n')}\n  （OpenSpec 自有产物与共用的 ~/.ly/worktrees/ 不会被删除）`,
           default: false,
         }])
         if (!confirm) {
@@ -170,21 +179,14 @@ export async function setupCommands(cli: CAC): Promise<void> {
           return
         }
       }
-      const result = await uninstallWorkflows(installDir)
-      if (result.success) {
-        console.log(ansis.green(`✓ ${PACKAGE_NAME} uninstalled`))
-        if (result.removedSkills.length > 0)
-          console.log(ansis.gray(`  lyx-* skills: ${result.removedSkills.length} removed`))
-        if (result.removedLegacyPrompts.length > 0)
-          console.log(ansis.gray(`  Legacy ~/.codex/prompts residue: ${result.removedLegacyPrompts.length} removed`))
-        if (result.removedPrompts)
-          console.log(ansis.gray('  Prompts (~/.codex/lyx/prompts/codex/): removed'))
-      }
-      else {
+      const result = await runUninstall(hosts)
+      if (result.success)
+        console.log(ansis.green(`✓ ${PACKAGE_NAME} uninstalled (${hosts.join(', ')})`))
+      else
         console.error(ansis.red('✗ Uninstall failed'))
-        for (const err of result.errors) console.error(ansis.gray(`  ${err}`))
+      printUninstallResult(result)
+      if (!result.success)
         process.exitCode = 1
-      }
     })
 
   cli.help(sections => customizeHelp(sections))

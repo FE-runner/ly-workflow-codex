@@ -1,10 +1,12 @@
-import { mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import fs from 'fs-extra'
 import { afterAll, describe, expect, it } from 'vitest'
-import { ADAPTERS, renderCodexTemplate } from '../host-adapters'
+import { renderCodexTemplate } from '../../hosts/codex/adapter'
+import { renderHostCommand } from '../../test-utils/render'
+import { ADAPTERS, getAdapter, listRegisteredHosts } from '../host-adapters'
 import { getAllCommandIds, getWorkflowById, installWorkflows, uninstallWorkflows } from '../installer'
 
 /** 在指定目录初始化一个最小 git 仓库（uninstall worktree 存活检测测试用） */
@@ -39,13 +41,19 @@ function findPackageRoot(): string {
 }
 
 const PACKAGE_ROOT = findPackageRoot()
-const SKILLS_TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'skills-codex')
+const SKILLS_TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'skills')
 
 // ─────────────────────────────────────────────────────────────
-// A. codex 模板集完整性（14 个单 Agent 版模板）
+// A. 跨宿主不变量：同一组断言对注册表中的每个宿主执行一遍（8.1）
+//    新增宿主自动纳入覆盖；任一宿主缺失不变量即失败
 // ─────────────────────────────────────────────────────────────
-describe('codex template set', () => {
-  it('has exactly the 14 core commands as templates', () => {
+describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
+  /** 按该宿主渲染后的命令产物（与安装期同一渲染链） */
+  const read = (file: string) => renderHostCommand(host, file.replace('.md', ''))
+  /** 断言文本中的命令标识按宿主前缀改写（@lyx-<cmd> 是命令标识，见 multi-host-install） */
+  const t = (text: string) => text.replace(/@lyx-/g, `${getAdapter(host).commandPrefix}lyx-`)
+
+  it('has exactly the 14 core commands as shared templates', () => {
     const files = readdirSync(SKILLS_TEMPLATES_DIR).filter(f => f.endsWith('.md'))
     const codexCommands = getAllCommandIds()
       .flatMap(id => getWorkflowById(id)!.commands)
@@ -53,9 +61,9 @@ describe('codex template set', () => {
     expect(files.length).toBe(14)
   })
 
-  it('every codex template has argument-hint frontmatter', () => {
+  it('every template has argument-hint frontmatter', () => {
     for (const file of readdirSync(SKILLS_TEMPLATES_DIR).filter(f => f.endsWith('.md'))) {
-      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
+      const content = read(file)
       expect(content.startsWith('---\n'), file).toBe(true)
       expect(content, file).toMatch(/^argument-hint: '/m)
       expect(content, file).toMatch(/^description: '/m)
@@ -64,7 +72,7 @@ describe('codex template set', () => {
 
   it('review templates render single-reviewer non-fork subagent orchestration (no exec residue)', () => {
     for (const name of ['review-plan.md', 'review-code.md']) {
-      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, name), 'utf-8')
+      const content = read(name)
       // 单审查 subagent（非 fork）编排指示
       expect(content).toMatch(/1 个审查 subagent|单审查 subagent/)
       expect(content).toContain('非 fork')
@@ -76,7 +84,6 @@ describe('codex template set', () => {
       expect(content).not.toContain('reviewModelB')
       expect(content).not.toContain('reviewReasoningEffortB')
       expect(content).not.toContain('codingModel') // review 模板不引用实施模型
-      expect(content).toMatch(/~\/\.codex\/lyx\/prompts\/codex\/(plan-reviewer|reviewer)\.md/)
       // 不再走 codex exec 独立子会话
       expect(content).not.toContain('codex exec')
       expect(content).not.toContain('CODEAGENT_EOF')
@@ -102,7 +109,7 @@ describe('codex template set', () => {
       'review-code.md': '#代码审查#',
     }
     for (const [name, section] of Object.entries(sections)) {
-      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, name), 'utf-8')
+      const content = read(name)
       // 写入 change 目录下的审查未修项快照，并按本命令负责的节写入
       expect(content, name).toContain('review-findings.md')
       expect(content, name).toContain(section)
@@ -125,14 +132,14 @@ describe('codex template set', () => {
   })
 
   it('templates declare and write back review-findings resolution notes', () => {
-    const propose = readFileSync(join(SKILLS_TEMPLATES_DIR, 'propose.md'), 'utf-8')
+    const propose = read('propose.md')
     expect(propose).toContain('## 解决的审查未修项')
     expect(propose).toContain('#方案审查#')
     expect(propose).toContain('#代码审查#')
     expect(propose).toContain('已归档快照')
     expect(propose).toContain('SHALL NOT 直接改写历史快照')
 
-    const archive = readFileSync(join(SKILLS_TEMPLATES_DIR, 'archive.md'), 'utf-8')
+    const archive = read('archive.md')
     expect(archive).toContain('回写审查未修项解决说明')
     expect(archive).toContain('- 解决：')
     expect(archive).toContain('（归档于')
@@ -141,12 +148,12 @@ describe('codex template set', () => {
     expect(archive).toContain('SHALL NOT 阻断归档')
     expect(archive).toContain('SHALL NOT 引入 open/closed 状态字段')
 
-    const explore = readFileSync(join(SKILLS_TEMPLATES_DIR, 'explore.md'), 'utf-8')
+    const explore = read('explore.md')
     expect(explore).toContain('已标注解决')
   })
 
   it('templates pin snapshot minimal structure and write-back lifecycle', () => {
-    const archive = readFileSync(join(SKILLS_TEMPLATES_DIR, 'archive.md'), 'utf-8')
+    const archive = read('archive.md')
     // 冻结口径：只冻结原 Warning 原文与编号，后续仍允许追加解决说明
     expect(archive).toContain('归档 commit 后**原 Warning 原文与编号冻结**')
     // 明确从归档后目录读取 proposal.md，而非已不存在的 active 路径
@@ -162,7 +169,7 @@ describe('codex template set', () => {
     expect(archive).toContain('SHALL NOT 改写 active 快照')
 
     for (const name of ['review-plan.md', 'review-code.md']) {
-      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, name), 'utf-8')
+      const content = read(name)
       expect(content, name).toContain('条目最小结构')
       expect(content, name).toContain('1. [<位置>] — <问题>')
       expect(content, name).toContain('3 空格缩进')
@@ -170,14 +177,14 @@ describe('codex template set', () => {
       expect(content, name).toContain('不触发编号重排')
     }
 
-    const explore = readFileSync(join(SKILLS_TEMPLATES_DIR, 'explore.md'), 'utf-8')
-    expect(explore).toContain('@lyx-explore` 对快照只读展示')
-    expect(explore).toContain('解决说明由 `@lyx-archive` 在归档时追加')
+    const explore = read('explore.md')
+    expect(explore).toContain(t('@lyx-explore` 对快照只读展示'))
+    expect(explore).toContain(t('解决说明由 `@lyx-archive` 在归档时追加'))
     expect(explore).not.toContain('它是只读留痕')
   })
 
   it('explore template asks before listing review-findings snapshots', () => {
-    const content = readFileSync(join(SKILLS_TEMPLATES_DIR, 'explore.md'), 'utf-8')
+    const content = read('explore.md')
     expect(content).toContain('review-findings.md')
     expect(content).toContain('先询问')
     expect(content).toContain('SHALL NOT 直接列出')
@@ -189,13 +196,13 @@ describe('codex template set', () => {
   })
 
   it('archive template notes review-findings snapshot rides along with openspec add', () => {
-    const content = readFileSync(join(SKILLS_TEMPLATES_DIR, 'archive.md'), 'utf-8')
+    const content = read('archive.md')
     expect(content).toContain('review-findings.md')
     expect(content).toContain('git add -- openspec/')
   })
 
   it('apply template is coding-subagent implementation (main session commits)', () => {
-    const content = readFileSync(join(SKILLS_TEMPLATES_DIR, 'apply.md'), 'utf-8')
+    const content = read('apply.md')
     expect(content).toContain('coding subagent')
     expect(content).toContain('codingModel')
     expect(content).toContain('非 fork')
@@ -233,43 +240,43 @@ describe('codex template set', () => {
       'worktree.md',
     ]
     for (const file of bodyTemplates) {
-      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
+      const content = read(file)
       expect(content, file).toMatch(/(动机[\s\S]*改动[\s\S]*影响|Motivation[\s\S]*Change[\s\S]*Impact)/)
     }
 
-    const commit = readFileSync(join(SKILLS_TEMPLATES_DIR, 'commit.md'), 'utf-8')
+    const commit = read('commit.md')
     expect(commit).toContain('- 动机：')
     expect(commit).toContain('- Motivation:')
 
     for (const file of ['propose.md', 'apply.md']) {
-      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
+      const content = read(file)
       expect(content, file).toContain('git commit --only -F "$MSG_FILE"')
     }
 
     for (const file of ['propose.md', 'apply.md', 'archive.md', 'review-plan.md', 'review-code.md']) {
-      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
+      const content = read(file)
       expect(content, file).toContain('Change-Stage')
       expect(content, file).toContain('Change-Name: <change-name>')
       expect(content, file).toContain('git rev-parse --git-path COMMIT_EDITMSG')
       expect(content, file).toContain('git commit -F "$MSG_FILE"')
     }
 
-    const publish = readFileSync(join(SKILLS_TEMPLATES_DIR, 'publish.md'), 'utf-8')
+    const publish = read('publish.md')
     expect(publish).toContain('npm version <patch|minor|major> --no-git-tag-version')
     expect(publish).toContain('git tag -a "v<新版本号>" -m "v<新版本号>"')
 
-    const worktree = readFileSync(join(SKILLS_TEMPLATES_DIR, 'worktree.md'), 'utf-8')
+    const worktree = read('worktree.md')
     expect(worktree).toContain('chore(worktree): 忽略 .worktrees 目录')
 
     for (const file of ['init.md', 'release.md', 'changelog.md', 'publish.md', 'worktree.md']) {
-      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
+      const content = read(file)
       expect(content, file).not.toContain('Change-Stage:')
       expect(content, file).not.toContain('Change-Name: <change-name>')
     }
   })
 
   it('propose and archive templates include isolation cleanup metadata flow', () => {
-    const propose = readFileSync(join(SKILLS_TEMPLATES_DIR, 'propose.md'), 'utf-8')
+    const propose = read('propose.md')
     expect(propose).toContain('ISOLATION_SOURCE_BRANCH')
     expect(propose).toContain('DEVELOPMENT_BRANCH')
     expect(propose).toContain('WORKTREE_PATH')
@@ -280,7 +287,7 @@ describe('codex template set', () => {
     expect(propose).toContain('detached HEAD')
     expect(propose).toContain('已保留、未清理')
 
-    const archive = readFileSync(join(SKILLS_TEMPLATES_DIR, 'archive.md'), 'utf-8')
+    const archive = read('archive.md')
     expect(archive).toContain('归档后分支收尾')
     expect(archive).toContain('sourceBranch')
     expect(archive).toContain('developmentBranch')
@@ -296,17 +303,32 @@ describe('codex template set', () => {
     expect(archive).toContain('`targetBranch` SHALL NOT 等于 `developmentBranch`')
     expect(archive.indexOf('展示确认前完成一致性校验')).toBeLessThan(archive.indexOf('### 3. 展示收尾提示'))
 
-    const worktree = readFileSync(join(SKILLS_TEMPLATES_DIR, 'worktree.md'), 'utf-8')
-    expect(worktree).toContain('手动 `@lyx-worktree add` 不强制记录该 metadata')
+    const worktree = read('worktree.md')
+    expect(worktree).toContain(t('手动 `@lyx-worktree add` 不强制记录该 metadata'))
   })
 
-  it('no codex template contains wrapper/lite/routing residue', () => {
+  it('no template contains wrapper/lite/routing residue', () => {
     for (const file of readdirSync(SKILLS_TEMPLATES_DIR).filter(f => f.endsWith('.md'))) {
-      const content = readFileSync(join(SKILLS_TEMPLATES_DIR, file), 'utf-8')
+      const content = read(file)
       expect(content, file).not.toContain('ly-wrapper')
       expect(content, file).not.toContain('{{LITE_MODE_FLAG}}')
       expect(content, file).not.toContain('<!-- LY:IF')
     }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// A2. 宿主专属：角色词来源（codex = ROLE_FILE 绝对路径；claude = 子代理定义，不引用 codex 角色词）
+// ─────────────────────────────────────────────────────────────
+describe('host-specific role prompt source', () => {
+  it('codex review templates point at the ROLE_FILE absolute paths', () => {
+    for (const name of ['review-plan', 'review-code'])
+      expect(renderHostCommand('codex', name)).toMatch(/~\/\.codex\/lyx\/prompts\/codex\/(plan-reviewer|reviewer)\.md/)
+  })
+
+  it('claude review templates never reference codex role prompt paths', () => {
+    for (const name of ['review-plan', 'review-code'])
+      expect(renderHostCommand('claude', name)).not.toContain('prompts/codex')
   })
 })
 
@@ -349,8 +371,7 @@ function makeCtx(overrides: Record<string, unknown> = {}): any {
     installDir: '/tmp/codex',
     force: true,
     templateDir: '/pkg/templates',
-    promptsDir: '/tmp/ly-prompts',
-    codexSkillsDir: '/tmp/codex-skills',
+    paths: { promptsDir: '/tmp/ly-prompts', skillsDir: '/tmp/codex-skills', lyDir: '/tmp/lyx' },
     config: {},
     result: { success: true, installedCommands: [], installedPrompts: [], errors: [], configPath: '' },
     ...overrides,
@@ -360,21 +381,21 @@ function makeCtx(overrides: Record<string, unknown> = {}): any {
 describe('adapters', () => {
   const baseCtx = makeCtx
 
-  it('registry has only the codex adapter', () => {
-    expect(Object.keys(ADAPTERS).sort()).toEqual(['codex'])
+  it('registry lists codex and claude adapters', () => {
+    expect(Object.keys(ADAPTERS).sort()).toEqual(['claude', 'codex'])
   })
 
   it('codex adapter targets codexSkillsDir with ly- prefix', () => {
-    const target = ADAPTERS.codex.promptsTarget(baseCtx())
-    expect(target.sourceDir).toBe('/pkg/templates/skills-codex')
+    const target = ADAPTERS.codex!.promptsTarget(baseCtx())
+    expect(target.sourceDir).toBe('/pkg/templates/skills')
     expect(target.targetDir).toBe('/tmp/codex-skills')
     expect(target.filePrefix).toBe('lyx-')
   })
 
   it('codex adapter verify checks ROLE_FILE targets exist', async () => {
     const ctx = baseCtx()
-    ctx.promptsDir = '/tmp/ly-prompts-missing'
-    await ADAPTERS.codex.verify?.(ctx)
+    ctx.paths.promptsDir = '/tmp/ly-prompts-missing'
+    await ADAPTERS.codex!.verify?.(ctx)
     expect(ctx.result.success).toBe(false)
     expect(ctx.result.errors.length).toBeGreaterThan(0)
   })
@@ -398,7 +419,7 @@ describe('installWorkflows — codex host', () => {
       getAllCommandIds(),
       codexDir,
       true,
-      { promptsDir: lyPromptsDir, codexSkillsDir },
+      { hostPaths: { codex: { promptsDir: lyPromptsDir, skillsDir: codexSkillsDir } } },
     )
     expect(result.success).toBe(true)
     expect(result.errors).toEqual([])
@@ -431,7 +452,7 @@ describe('installWorkflows — codex host', () => {
       getAllCommandIds(),
       codexDir,
       true,
-      { promptsDir: lyPromptsDir, codexSkillsDir, reviewModel: 'gpt-5.1-codex' },
+      { hostPaths: { codex: { promptsDir: lyPromptsDir, skillsDir: codexSkillsDir } }, hostConfig: { codex: { reviewModel: 'gpt-5.1-codex' } } },
     )
     expect(result.success).toBe(true)
     const reviewPlan = readFileSync(join(codexSkillsDir, 'lyx-review-plan', 'SKILL.md'), 'utf-8')
@@ -479,9 +500,7 @@ describe('uninstallWorkflows — codex single host', () => {
   it('removes package-owned artifacts + private config dir, does not touch user prompts', async () => {
     await seed()
     const result = await uninstallWorkflows(codexDir, {
-      lyPromptsDir,
-      codexSkillsDir,
-      lyDir,
+      hostPaths: { codex: { promptsDir: lyPromptsDir, skillsDir: codexSkillsDir, lyDir } },
       legacyCleanupDirs: cleanupDirs,
     })
     expect(result.success).toBe(true)
@@ -499,9 +518,7 @@ describe('uninstallWorkflows — codex single host', () => {
 
   it('succeeds on empty dirs', async () => {
     const result = await uninstallWorkflows(join(base, 'empty'), {
-      lyPromptsDir: join(base, 'no-prompts'),
-      codexSkillsDir: join(base, 'no-codex'),
-      lyDir: join(base, 'no-lyx'),
+      hostPaths: { codex: { promptsDir: join(base, 'no-prompts'), skillsDir: join(base, 'no-codex'), lyDir: join(base, 'no-lyx') } },
       legacyCleanupDirs: cleanupDirs,
     })
     expect(result.success).toBe(true)
@@ -516,9 +533,7 @@ describe('uninstallWorkflows — codex single host', () => {
     addWorktree(mainRepo, join(sharedWorktreesDir, 'proj-shared'), 'wt-shared')
     await seed()
     const result = await uninstallWorkflows(codexDir, {
-      lyPromptsDir,
-      codexSkillsDir,
-      lyDir,
+      hostPaths: { codex: { promptsDir: lyPromptsDir, skillsDir: codexSkillsDir, lyDir } },
       legacyCleanupDirs: cleanupDirs,
     })
     expect(result.success).toBe(true)

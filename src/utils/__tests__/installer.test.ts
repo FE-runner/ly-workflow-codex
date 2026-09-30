@@ -1,9 +1,9 @@
 import { mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import fs from 'fs-extra'
 import { afterAll, describe, expect, it } from 'vitest'
-import { renderCodexTemplate } from '../host-adapters'
+import { renderHostCommand } from '../../test-utils/render'
 import { getAllCommandIds, getWorkflowById, getWorkflowConfigs, injectConfigVariables, installWorkflows } from '../installer'
 
 // Helper: find package root
@@ -22,8 +22,8 @@ function findPackageRoot(): string {
 }
 
 const PACKAGE_ROOT = findPackageRoot()
-// codex 单宿主：实际安装源为 templates/skills-codex/
-const TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'skills-codex')
+// codex 单宿主：实际安装源为 templates/skills/
+const TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'skills')
 
 // ─────────────────────────────────────────────────────────────
 // A. Workflow registry consistency
@@ -169,9 +169,8 @@ describe('template variable completeness', () => {
     const relativePath = file.replace(`${PACKAGE_ROOT}/`, '')
 
     it(`${relativePath}: no unprocessed {{variables}} after full injection`, () => {
-      const content = readFileSync(file, 'utf-8')
-      // codex 模板渲染链：injectConfigVariables → renderCodexTemplate(REVIEW_MODEL 兼容处理)
-      const result = renderCodexTemplate(content, { reviewModel: 'gpt-5.1' })
+      // codex 模板渲染链：宿主片段注入 → injectConfigVariables → renderCodexTemplate(REVIEW_MODEL 兼容处理)
+      const result = renderHostCommand('codex', basename(file, '.md'), { reviewModel: 'gpt-5.1' })
 
       // Find any remaining {{ }} template variables
       const remaining = result.match(/\{\{[A-Z_]+\}\}/g) || []
@@ -190,8 +189,7 @@ describe('template variable completeness', () => {
       ['apply.md', 'coding subagent', ['codingReasoningEffort'], ['reviewReasoningEffort']],
     ]
     for (const [file, marker, reasoningFields, forbiddenFields] of cases) {
-      const content = readFileSync(join(TEMPLATES_DIR, file), 'utf-8')
-      const rendered = renderCodexTemplate(content, { reviewModel: 'gpt-5.1' })
+      const rendered = renderHostCommand('codex', basename(file, '.md'), { reviewModel: 'gpt-5.1' })
       expect(rendered, file).toContain(marker)
       for (const field of reasoningFields) {
         expect(rendered, `${file} missing ${field}`).toContain(field)
@@ -236,7 +234,7 @@ describe('installWorkflows — prompts installation', () => {
       getAllCommandIds(),
       codexDir,
       true,
-      { promptsDir: lyPromptsDir, codexSkillsDir },
+      { hostPaths: { codex: { promptsDir: lyPromptsDir, skillsDir: codexSkillsDir } } },
     )
     expect(result.success).toBe(true)
     expect(result.installedCommands.length).toBe(14)
@@ -250,6 +248,21 @@ describe('installWorkflows — prompts installation', () => {
 
     const codexFiles = readdirSync(join(lyPromptsDir, 'codex')).filter(f => f.endsWith('.md'))
     expect(codexFiles.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('records install results per host and aggregates them', async () => {
+    const result = await installWorkflows(
+      getAllCommandIds(),
+      codexDir,
+      true,
+      { hosts: ['codex'], hostPaths: { codex: { promptsDir: lyPromptsDir, skillsDir: codexSkillsDir } } },
+    )
+    const codex = result.hosts?.codex
+    expect(codex).toBeDefined()
+    expect(codex!.installedCommands).toEqual(result.installedCommands)
+    expect(codex!.installedPrompts).toEqual(result.installedPrompts)
+    expect(codex!.configPath).toBe(codexSkillsDir)
+    expect(result.configPath).toBe(codexSkillsDir)
   })
 })
 
@@ -278,8 +291,7 @@ describe('installWorkflows — non-force skip counting', () => {
     }
 
     const result = await installWorkflows(getAllCommandIds(), codexDir, false, {
-      promptsDir: lyPromptsDir,
-      codexSkillsDir,
+      hostPaths: { codex: { promptsDir: lyPromptsDir, skillsDir: codexSkillsDir } },
     })
 
     expect(result.success).toBe(true)
@@ -294,8 +306,7 @@ describe('installWorkflows — non-force skip counting', () => {
 
   it('force install overwrites existing files and counts all as installed', async () => {
     const result = await installWorkflows(getAllCommandIds(), codexDir, true, {
-      promptsDir: lyPromptsDir,
-      codexSkillsDir,
+      hostPaths: { codex: { promptsDir: lyPromptsDir, skillsDir: codexSkillsDir } },
     })
     expect(result.success).toBe(true)
     expect(result.installedCommands.length).toBe(14)

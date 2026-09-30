@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { SPAWNABLE_MODELS_DEFAULT } from '../config'
+import { SPAWNABLE_MODELS_DEFAULT } from '../../hosts/codex/schema'
+import { renderHostCommand } from '../../test-utils/render'
 import { injectConfigVariables } from '../installer'
 
 // Helper: find package root (mirrors the logic in installer.ts)
@@ -20,14 +21,14 @@ function findPackageRoot(): string {
 }
 
 const PACKAGE_ROOT = findPackageRoot()
-// codex 单宿主：实际命令模板源为 templates/skills-codex/
-const TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'skills-codex')
+// codex 单宿主：实际命令模板源为 templates/skills/
+const TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'skills')
 
 // ─────────────────────────────────────────────────────────────
 // Integration test with real templates
 // ─────────────────────────────────────────────────────────────
 describe('integration: real templates have no MCP placeholders', () => {
-  // Collect all .md files under templates/skills-codex/
+  // Collect all .md files under templates/skills/
   function collectTemplateFiles(dir: string): string[] {
     const files: string[] = []
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -74,7 +75,7 @@ describe('integration: real templates have no MCP placeholders', () => {
 
   it('review-plan / review-code / apply templates carry the agent-model extra-setup hint and no unrendered placeholder', () => {
     for (const file of ['review-plan.md', 'review-code.md', 'apply.md']) {
-      const rendered = injectConfigVariables(readFileSync(join(TEMPLATES_DIR, file), 'utf-8'), {})
+      const rendered = renderHostCommand('codex', file.replace('.md', ''))
       expect(rendered, file).toContain('agent 模型需额外配置')
       expect(rendered, file).toContain('Available models')
       expect(rendered, file).toContain('Unknown model')

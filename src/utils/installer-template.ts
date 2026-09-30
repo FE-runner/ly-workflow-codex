@@ -2,7 +2,6 @@ import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import fs from 'fs-extra'
 import { dirname, join } from 'pathe'
-import { SPAWNABLE_MODELS_DEFAULT } from './config'
 import { ISSUES_URL } from './package-meta'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -45,37 +44,27 @@ function findPackageRoot(startDir: string): string {
 
 export const PACKAGE_ROOT = findPackageRoot(__dirname)
 
-export interface InjectConfig {
-  /** 审查 agent A 模型（历史占位 {{REVIEW_MODEL}} 兼容；codex 单宿主恒渲染 codex） */
-  reviewModel?: string
+/**
+ * 宿主无关的模板变量处理（共享层）：只处理与任何宿主都无关的历史占位符。
+ * 宿主专属的占位符与渲染规则由各宿主适配器的 renderTemplate 负责。
+ * - {{LITE_MODE_FLAG}}：ly-wrapper 已删除，恒剥离为空
+ */
+export function injectSharedVariables(content: string): string {
+  return content.replace(/\{\{LITE_MODE_FLAG\}\}/g, '')
 }
 
 /**
- * Replace template variables in content based on user configuration.
- * codex 单宿主（subagent 多 Agent 模式）：审查/实施模型经"模板指示 + 宿主能力"落实——
- * 模板正文写明各 subagent 取 `codexHost.reviewModel`/`codingModel` 的哪个字段、
- * 未配置回退当前会话模型，无 shell 层模型参数，因此模板不含这些模型的渲染占位符。
- * 此处只处理历史占位符兼容：{{REVIEWER_MODEL}}/{{IMPLEMENTER_MODEL}} 统一渲染为 codex、
- * 实施者条件块折叠、liteMode 标志剥离（Web UI/ly-wrapper 已不存在）。
- *
- * {{SPAWNABLE_MODELS_DEFAULT}}：历史占位符（简化契约后当前模板正文已不再引用，agent 模型
- * 可用性不再做清单预校验）；保留替换机制兼容旧模板/旧安装位，内置默认仅作提示参考文本。
+ * 宿主片段注入（共享层机制，不认识任何具体宿主）：共享模板正文中的
+ * `{{HOST_FRAGMENT:<name>}}` 替换为 `<fragmentsDir>/<command>/<name>.md` 的内容（去掉末尾换行）。
+ * 片段缺失时抛错——宿主差异必须显式提供，SHALL NOT 静默留空。
  */
-export function injectConfigVariables(content: string, _config?: InjectConfig): string {
-  let processed = content
-
-  // Reviewer / implementer 占位符（历史模板兼容）：codex 单宿主统一渲染为 codex
-  processed = processed.replace(/\{\{REVIEWER_MODEL\}\}/g, 'codex')
-  processed = processed.replace(/\{\{IMPLEMENTER_MODEL\}\}/g, 'codex')
-  // 实施者条件块（apply.md 历史形态）：单宿主不区分实施者分支，两个分支都折叠
-  processed = processed.replace(/\n?<!--\s*LY:IF:IMPLEMENTER_EXTERNAL\s*-->[\s\S]*?<!--\s*LY:ENDIF\s*-->\n?/g, '')
-  processed = processed.replace(/\n?<!--\s*LY:IF:IMPLEMENTER_CLAUDE\s*-->[\s\S]*?<!--\s*LY:ENDIF\s*-->\n?/g, '')
-  // Lite mode 标志（ly-wrapper 已删除，恒为空）
-  processed = processed.replace(/\{\{LITE_MODE_FLAG\}\}/g, '')
-  // spawnableModels 内置默认清单文本（仅作后备）
-  processed = processed.replace(/\{\{SPAWNABLE_MODELS_DEFAULT\}\}/g, SPAWNABLE_MODELS_DEFAULT.join(' / '))
-
-  return processed
+export function injectHostFragments(content: string, fragmentsDir: string, command: string): string {
+  return content.replace(/\{\{HOST_FRAGMENT:([\w-]+)\}\}/g, (_match, name: string) => {
+    const file = join(fragmentsDir, command, `${name}.md`)
+    if (!fs.existsSync(file))
+      throw new Error(`Host fragment missing: ${file}`)
+    return fs.readFileSync(file, 'utf-8').replace(/\n+$/, '')
+  })
 }
 
 /**
@@ -92,6 +81,6 @@ export function replaceHomePathsInTemplate(content: string, _installDir: string)
   // PowerShell and CMD also support forward slashes for most commands
   const toForwardSlash = (path: string) => path.replace(/\\/g, '/')
 
-  // codex 单宿主：模板中的 ~/ 展开为用户 home（如 ROLE_FILE: ~/.codex/lyx/prompts/...）
+  // 模板中的 ~/ 展开为用户 home（如角色词绝对路径）
   return content.replace(/~\//g, `${toForwardSlash(homedir())}/`)
 }

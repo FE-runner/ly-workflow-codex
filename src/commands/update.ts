@@ -1,3 +1,4 @@
+import type { HostId } from '../utils/host-adapters'
 import { exec } from 'node:child_process'
 import { homedir } from 'node:os'
 import { promisify } from 'node:util'
@@ -7,24 +8,82 @@ import inquirer from 'inquirer'
 import ora from 'ora'
 import { basename, join } from 'pathe'
 import { i18n } from '../i18n'
-import { readLyConfig } from '../utils/config'
-import { AGENTS_SKILLS_DIR, CODE_PROMPTS_DIR, PACKAGE_NAME } from '../utils/package-meta'
+import { listInstalledHosts, readLyConfig } from '../utils/config'
+import { listPrefixedDirs } from '../utils/fs-helpers'
+import { FALLBACK_HOSTS, getAdapter } from '../utils/host-adapters'
+import { resolveTargetHosts } from '../utils/host-selection'
+import { getCoreCommandIds, installWorkflows } from '../utils/installer'
+import { PACKAGE_NAME } from '../utils/package-meta'
 import { checkForUpdates, compareVersions } from '../utils/version'
 
 const execAsync = promisify(exec)
 
 /**
- * 非交互重装命令串：codex 单宿主，无需透传 --hosts，
- * 直接 `init --force --skip-prompt` 覆盖重装 codex 侧产物。
+ * 非交互重装命令串：`init --force --skip-prompt` 覆盖重装。
+ * 未指定宿主时由 init 按已安装宿主集合重装；指定时透传 `--host` 只重装这些宿主。
  */
-export function buildInitArgs(): string {
-  return 'init --force --skip-prompt'
+export function buildInitArgs(hosts?: HostId[]): string {
+  const base = 'init --force --skip-prompt'
+  return hosts && hosts.length > 0 ? `${base} --host ${hosts.join(',')}` : base
+}
+
+export type HostRefreshAction = 'refresh' | 'rerender' | 'skip'
+
+/**
+ * 单宿主的更新动作：
+ * - 该宿主记录的版本落后于当前包版本 → refresh（整体重装该宿主产物）
+ * - 版本一致但已安装的定义与当前配置有偏差 → rerender（按当前配置重新渲染，不必联网）
+ * - 版本一致且无偏差 → skip
+ */
+export function planHostRefresh(input: { currentVersion: string, localVersion: string, drift: string[] }): HostRefreshAction {
+  if (compareVersions(input.currentVersion, input.localVersion) > 0)
+    return 'refresh'
+  if (input.drift.length > 0)
+    return 'rerender'
+  return 'skip'
+}
+
+interface HostUpdatePlan {
+  host: HostId
+  localVersion: string
+  drift: string[]
+  action: HostRefreshAction
+}
+
+async function buildHostPlans(hosts: HostId[], currentVersion: string): Promise<HostUpdatePlan[]> {
+  const plans: HostUpdatePlan[] = []
+  for (const host of hosts) {
+    const adapter = getAdapter(host)
+    const config = await readLyConfig(host)
+    const localVersion = config?.general?.version || '0.0.0'
+    const drift = adapter.definitionDrift
+      ? await adapter.definitionDrift({ paths: adapter.defaultPaths(), config: config?.host })
+      : []
+    plans.push({ host, localVersion, drift, action: planHostRefresh({ currentVersion, localVersion, drift }) })
+  }
+  return plans
+}
+
+/** 版本一致但定义有偏差：按当前配置本地重渲染该宿主产物（含子代理定义），不下载新包 */
+async function rerenderHosts(plans: HostUpdatePlan[]): Promise<void> {
+  for (const plan of plans) {
+    const config = await readLyConfig(plan.host)
+    const spinner = ora(i18n.t('update:rerendering', { host: plan.host, list: plan.drift.join(', ') })).start()
+    const result = await installWorkflows(getCoreCommandIds(), '', true, {
+      hosts: [plan.host],
+      hostConfig: { [plan.host]: config?.host ?? {} },
+    })
+    if (result.success)
+      spinner.succeed(i18n.t('update:rerenderDone', { host: plan.host }))
+    else
+      spinner.fail(`${i18n.t('update:installFailed')}: ${result.errors.join('; ')}`)
+  }
 }
 
 /**
  * Main update command - checks for updates and installs if available
  */
-export async function update(): Promise<void> {
+export async function update(options: { hosts?: HostId[] } = {}): Promise<void> {
   console.log()
   console.log(ansis.cyan.bold(`🔄 ${i18n.t('update:checking')}`))
   console.log()
@@ -34,10 +93,14 @@ export async function update(): Promise<void> {
   try {
     const { hasUpdate, currentVersion, latestVersion } = await checkForUpdates()
 
-    // Check if local workflow version differs from running version
-    const config = await readLyConfig()
-    const localVersion = config?.general?.version || '0.0.0'
-    const needsWorkflowUpdate = compareVersions(currentVersion, localVersion) > 0
+    // 只处理已安装（或显式指定）的宿主；按宿主分别判断版本落后与定义偏差
+    const hosts = await resolveTargetHosts(options.hosts)
+    const plans = await buildHostPlans(hosts, currentVersion)
+    const refreshHosts = plans.filter(p => p.action === 'refresh').map(p => p.host)
+    const localVersion = plans.length > 0
+      ? plans.map(p => p.localVersion).sort(compareVersions)[0]
+      : '0.0.0'
+    const needsWorkflowUpdate = plans.length === 0 || refreshHosts.length > 0
 
     spinner.stop()
 
@@ -48,10 +111,17 @@ export async function update(): Promise<void> {
 
     console.log(`${i18n.t('update:currentVersion')}: ${ansis.yellow(`v${currentVersion}`)}`)
     console.log(`${i18n.t('update:latestVersion')}: ${ansis.green(`v${latestVersion}`)}`)
-    if (localVersion !== '0.0.0') {
-      console.log(`${i18n.t('update:localWorkflow')}: ${ansis.gray(`v${localVersion}`)}`)
+    for (const plan of plans) {
+      console.log(`${i18n.t('update:localWorkflow')} [${plan.host}]: ${ansis.gray(`v${plan.localVersion}`)}${plan.drift.length > 0 ? ansis.yellow(` (${i18n.t('update:driftDetected', { list: plan.drift.join(', ') })})`) : ''}`)
     }
     console.log()
+
+    // 版本一致、无新包，但有定义偏差：只本地重渲染偏差宿主
+    const rerenderPlans = plans.filter(p => p.action === 'rerender')
+    if (!hasUpdate && !needsWorkflowUpdate && rerenderPlans.length > 0) {
+      await rerenderHosts(rerenderPlans)
+      return
+    }
 
     // Determine effective update status
     const effectiveNeedsUpdate = hasUpdate || needsWorkflowUpdate
@@ -85,7 +155,12 @@ export async function update(): Promise<void> {
 
     // Pass localVersion as fromVersion for accurate display
     const fromVersion = needsWorkflowUpdate ? localVersion : currentVersion
-    await performUpdate(fromVersion, latestVersion || currentVersion, hasUpdate)
+    // 有新包时重装全部目标宿主；仅本地版本落后时只重装落后的宿主（未指定宿主且无已安装宿主时交给 init 决定）
+    const installHosts = hasUpdate ? hosts : refreshHosts
+    await performUpdate(fromVersion, latestVersion || currentVersion, hasUpdate, installHosts)
+    // 同时存在的"版本一致但有偏差"宿主：新包重装已覆盖全部宿主；否则单独本地重渲染
+    if (!hasUpdate && rerenderPlans.length > 0)
+      await rerenderHosts(rerenderPlans)
   }
   catch (error) {
     spinner.stop()
@@ -109,7 +184,7 @@ async function checkIfGlobalInstall(): Promise<boolean> {
 /**
  * Perform the actual update process
  */
-async function performUpdate(fromVersion: string, toVersion: string, isNewVersion: boolean): Promise<void> {
+async function performUpdate(fromVersion: string, toVersion: string, isNewVersion: boolean, hosts: HostId[]): Promise<void> {
   console.log()
   console.log(ansis.yellow.bold(`⚙️  ${i18n.t('update:starting')}`))
   console.log()
@@ -190,56 +265,34 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   }
 
   // ── Atomic update: backup → install → verify → cleanup / rollback ──
-  // Old approach deleted everything BEFORE installing, so if install failed
-  // the user was left with nothing. New approach backs up first, installs new,
-  // verifies, then cleans up backups. On failure, restores from backup.
-
+  // 按宿主备份本包产物（各宿主适配器的 backupList：命令目录、子代理定义、旧安装位残留），
+  // 安装失败时原样恢复；用户自己的内容一律不动。
   const BACKUP_SUFFIX = '.ly-update-bak'
+  const backupHosts = hosts.length > 0 ? hosts : [...FALLBACK_HOSTS]
+  const backedUp: Array<{ original: string, backup: string }> = []
+  const backupDirs: string[] = []
 
-  // codex 单宿主：备份新安装位 ~/.agents/skills/lyx-* skill 目录（含旧 ly-* 开发形态残留），
-  // 以及旧安装位 ~/.codex/prompts/ly-*.md 残留（v0.2.0 前产物，升级清理）。
-  // （角色词 ~/.codex/lyx/prompts/ 与配置 ~/.codex/lyx/config.toml 由 init --force 重装/保留，
-  //   用户自己的 ~/.agents/skills 下非 lyx-/ly- 内容与 ~/.codex/prompts 下非 ly- *.md 一律不动）
-  const codexSkillsDir = AGENTS_SKILLS_DIR
-  const legacyPromptsDir = CODE_PROMPTS_DIR
-  const backupDir = join(codexSkillsDir + BACKUP_SUFFIX)
-
-  // Step 3: Back up existing lyx-* skill dirs (and legacy ly-* residue)
+  // Step 3: Back up existing artifacts of the target hosts
   spinner = ora(i18n.t('update:removingOld')).start()
 
-  const backedUp: string[] = []
   try {
-    if (await fs.pathExists(codexSkillsDir) || await fs.pathExists(legacyPromptsDir)) {
+    for (const host of backupHosts) {
+      const adapter = getAdapter(host)
+      const paths = adapter.defaultPaths()
+      const ctx = { installDir: '', force: false, templateDir: '', paths, config: {}, result: { success: true, installedCommands: [], installedPrompts: [], errors: [], configPath: '' } }
+      const targets = adapter.backupList ? await adapter.backupList(ctx) : await adapter.uninstallList(ctx)
+      if (targets.length === 0)
+        continue
+      const backupDir = `${paths.skillsDir}${BACKUP_SUFFIX}`
       // Clean up leftover backups from previous failed update
-      if (await fs.pathExists(backupDir)) {
+      if (await fs.pathExists(backupDir))
         await fs.remove(backupDir)
-      }
       await fs.ensureDir(backupDir)
-      // 新安装位：~/.agents/skills/lyx-* 目录（含旧 ly-* 开发形态残留，一并备份以便回滚）
-      if (await fs.pathExists(codexSkillsDir)) {
-        const entries = await fs.readdir(codexSkillsDir)
-        for (const entry of entries) {
-          if (!entry.startsWith('lyx-') && !entry.startsWith('ly-'))
-            continue
-          const full = join(codexSkillsDir, entry)
-          if ((await fs.stat(full)).isDirectory()) {
-            await fs.move(full, join(backupDir, entry))
-            backedUp.push(full)
-          }
-        }
-      }
-      // 旧安装位残留：~/.codex/prompts/ly-*.md
-      if (await fs.pathExists(legacyPromptsDir)) {
-        const files = await fs.readdir(legacyPromptsDir)
-        for (const f of files) {
-          if (!f.startsWith('ly-') || !f.endsWith('.md'))
-            continue
-          const full = join(legacyPromptsDir, f)
-          if ((await fs.stat(full)).isFile()) {
-            await fs.move(full, join(backupDir, f))
-            backedUp.push(full)
-          }
-        }
+      backupDirs.push(backupDir)
+      for (const original of targets) {
+        const backup = join(backupDir, basename(original))
+        await fs.move(original, backup)
+        backedUp.push({ original, backup })
       }
     }
     spinner.succeed(i18n.t('update:oldRemoved'))
@@ -247,12 +300,10 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   catch (error) {
     // Backup failed — restore what we moved and abort
     spinner.warn(`Backup failed: ${error}`)
-    for (const file of backedUp) {
-      const backupPath = join(backupDir, basename(file))
+    for (const { original, backup } of backedUp) {
       try {
-        if (await fs.pathExists(backupPath)) {
-          await fs.move(backupPath, file)
-        }
+        if (await fs.pathExists(backup))
+          await fs.move(backup, original)
       }
       catch { /* best-effort restore */ }
     }
@@ -264,8 +315,9 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   spinner = ora(i18n.t('update:installingNew')).start()
 
   let installSuccess = false
+  let verifyHosts: HostId[] = hosts
   try {
-    await execAsync(`npx --yes ${PACKAGE_NAME}@latest ${buildInitArgs()}`, {
+    await execAsync(`npx --yes ${PACKAGE_NAME}@latest ${buildInitArgs(hosts)}`, {
       timeout: 300000, // 5min — install from npm registry may be slow (especially in China)
       env: {
         ...process.env,
@@ -273,34 +325,26 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
       },
     })
 
-    // Step 5: Verify new installation actually produced files
-    let hasInstalled = false
-    if (await fs.pathExists(codexSkillsDir)) {
-      const entries = await fs.readdir(codexSkillsDir)
-      for (const entry of entries) {
-        if (!entry.startsWith('lyx-'))
-          continue
-        try {
-          if ((await fs.stat(join(codexSkillsDir, entry))).isDirectory()) {
-            hasInstalled = true
-            break
-          }
-        }
-        catch { /* race: entry vanished */ }
-      }
+    // Step 5: Verify new installation actually produced files（每个目标宿主都要有 lyx-* 命令）
+    verifyHosts = hosts.length > 0 ? hosts : await listInstalledHosts()
+    let hasInstalled = verifyHosts.length > 0
+    for (const host of verifyHosts) {
+      if ((await listPrefixedDirs(getAdapter(host).defaultPaths().skillsDir, 'lyx-')).length === 0)
+        hasInstalled = false
     }
 
     if (hasInstalled) {
       installSuccess = true
       spinner.succeed(i18n.t('update:installDone'))
 
-      // Read updated config to display installed commands
-      const config = await readLyConfig()
-      if (config?.workflows?.installed) {
-        console.log()
-        console.log(ansis.cyan(i18n.t('update:installed', { count: config.workflows.installed.length })))
-        for (const cmd of config.workflows.installed) {
-          console.log(`  ${ansis.gray('•')} @lyx-${cmd}`)
+      // Read updated config to display installed commands (per host)
+      for (const host of verifyHosts) {
+        const config = await readLyConfig(host)
+        if (config?.workflows?.installed) {
+          console.log()
+          console.log(ansis.cyan(`[${host}] ${i18n.t('update:installed', { count: config.workflows.installed.length })}`))
+          for (const cmd of config.workflows.installed)
+            console.log(`  ${ansis.gray('•')} ${getAdapter(host).commandPrefix}lyx-${cmd}`)
         }
       }
     }
@@ -318,37 +362,40 @@ async function performUpdate(fromVersion: string, toVersion: string, isNewVersio
   // Step 6: Cleanup or rollback
   if (installSuccess) {
     // Success: remove backups
-    try {
-      await fs.remove(backupDir)
+    for (const backupDir of backupDirs) {
+      try {
+        await fs.remove(backupDir)
+      }
+      catch { /* non-critical: stale backup files */ }
     }
-    catch { /* non-critical: stale backup files */ }
 
     // Legacy artifact cleanup (codex-side residue from previous installs) — 非阻断
-    try {
-      const { cleanupLegacyArtifacts, reportCleanupResult } = await import('../utils/legacy-cleanup')
-      reportCleanupResult(await cleanupLegacyArtifacts())
+    if (verifyHosts.includes('codex')) {
+      try {
+        const { cleanupLegacyArtifacts, reportCleanupResult } = await import('../hosts/codex/legacy-cleanup')
+        reportCleanupResult(await cleanupLegacyArtifacts())
+      }
+      catch { /* non-blocking */ }
     }
-    catch { /* non-blocking */ }
   }
   else {
     // Failure: restore from backups so user still has a working installation
     console.log()
     console.log(ansis.yellow.bold('  ⚠ 正在恢复旧版本文件 / Restoring old version files...'))
     let restored = 0
-    for (const file of backedUp) {
-      const backupPath = join(backupDir, basename(file))
+    for (const { original, backup } of backedUp) {
       try {
         // Remove any partial install artifacts
-        if (await fs.pathExists(file)) {
-          await fs.remove(file)
+        if (await fs.pathExists(original)) {
+          await fs.remove(original)
         }
-        if (await fs.pathExists(backupPath)) {
-          await fs.move(backupPath, file)
+        if (await fs.pathExists(backup)) {
+          await fs.move(backup, original)
           restored++
         }
       }
       catch (restoreErr) {
-        console.log(ansis.red(`  Failed to restore ${file}: ${restoreErr}`))
+        console.log(ansis.red(`  Failed to restore ${original}: ${restoreErr}`))
       }
     }
 

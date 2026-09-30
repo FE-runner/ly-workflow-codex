@@ -1,28 +1,20 @@
-import type { ExecutorKind, LyConfig } from '../types'
+import type { HostDoctorCheck, HostId } from '../utils/host-adapters'
 import { execSync } from 'node:child_process'
 import ansis from 'ansis'
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import { version as packageVersion } from '../../package.json'
 import { i18n } from '../i18n'
-import { readCodexCurrentModel } from '../utils/codex-provider'
-import { LY_PROMPTS_DIR, readLyConfig, sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, sanitizeSpawnableModels } from '../utils/config'
-import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
+import { getHostConfigPath, readLyConfig, sanitizeExecutor } from '../utils/config'
+import { listPrefixedDirs } from '../utils/fs-helpers'
+import { getAdapter } from '../utils/host-adapters'
+import { resolveTargetHosts } from '../utils/host-selection'
+import { PACKAGE_NAME } from '../utils/package-meta'
 import { inspectOpenspec } from '../utils/preflight'
 
 const OK = ansis.green('✓')
 const WARN = ansis.yellow('⚠')
 const FAIL = ansis.red('✗')
-
-async function fileExists(p: string): Promise<boolean> {
-  return fs.pathExists(p)
-}
-
-async function dirFiles(p: string): Promise<string[]> {
-  if (!(await fs.pathExists(p)))
-    return []
-  return (await fs.readdir(p)).filter(f => !f.startsWith('.'))
-}
 
 function execSafe(cmd: string): string | null {
   try {
@@ -51,255 +43,97 @@ function buildOpenspecRootDetail(status: string): string {
   return i18n.t('common:doctor.rootNotChecked')
 }
 
-export interface SubagentModelFieldResult {
-  key: string
-  /** 配置值（清洗后）；undefined = 留空 */
-  value?: string
-  status: 'ok' | 'warn'
-  /** 判定原因：'unset' 留空 | 'configured' 已配置且生效 | 'ineffective' 已配置但执行者为 main（不生效） */
-  okKind: 'unset' | 'configured' | 'ineffective'
-  /** 与该模型字段一一对应的推理档字段名 */
-  reasoningEffortKey: string
-  /** 推理档值（清洗后）；undefined = 未配置（不传 reasoning_effort） */
-  reasoningEffort?: string
+export { assessSubagentModelConfig } from '../hosts/codex/doctor'
+export type { SubagentExecutorResult, SubagentModelConfigResult, SubagentModelFieldResult } from '../hosts/codex/doctor'
+
+export interface HostOpsOptions {
+  /** 只作用于指定宿主；缺省 = 全部已安装宿主 */
+  hosts?: HostId[]
 }
 
-export interface SubagentExecutorResult {
-  key: 'reviewExecutor' | 'codingExecutor'
-  /** 解析后的执行者；非法取值按 'main' 处理 */
-  kind: ExecutorKind
-  /** 原值非空但不是合法取值 */
-  invalid: boolean
-  /** 原始配置值（用于 WARN 展示） */
-  rawValue?: string
+const STATUS_ICON: Record<HostDoctorCheck['status'], string> = { ok: OK, warn: WARN, fail: FAIL }
+
+/** 按宿主收集体检项（配置 + 适配器提供的宿主专属体检项），供输出与测试共用 */
+export async function collectHostDoctorChecks(host: HostId): Promise<HostDoctorCheck[]> {
+  const adapter = getAdapter(host)
+  const config = await readLyConfig(host)
+  const checks: HostDoctorCheck[] = [{
+    label: 'config',
+    status: config ? 'ok' : 'warn',
+    detail: config
+      ? `v${config.general?.version || '?'}, lang=${config.general?.language || '?'} (${getHostConfigPath(host)})`
+      : i18n.t('doctor:configMissing', { path: getHostConfigPath(host) }),
+  }]
+  if (adapter.doctorChecks)
+    checks.push(...await adapter.doctorChecks({ paths: adapter.defaultPaths(), config: config?.host }))
+  return checks
 }
 
-export interface SubagentModelConfigResult {
-  /** 总体状态：warn（spawnableModels 形态异常 / 执行者非法 / 模型字段在 main 路径下不生效）> ok */
-  status: 'ok' | 'warn'
-  executors: SubagentExecutorResult[]
-  fields: SubagentModelFieldResult[]
-  /** spawnableModels 字段形态（empty/invalid 时对总体输出 WARN，区别于未配置的静默通过） */
-  spawnState: 'unset' | 'ok' | 'empty' | 'invalid'
-  /** 配置中仍存在的已移除字段名（reviewModelB / reviewReasoningEffortB） */
-  removedFields: string[]
-}
-
-/** 解析执行者字段：合法值直通；未配置/空白 → main；非空非法值 → main + invalid 标记 */
-function resolveExecutor(value: unknown): { kind: ExecutorKind, invalid: boolean } {
-  const cleaned = sanitizeExecutor(value)
-  if (cleaned)
-    return { kind: cleaned, invalid: false }
-  const invalid = typeof value === 'string' && value.trim() !== ''
-  return { kind: 'main', invalid }
-}
-
-/**
- * 子代理模型配置审查（doctor 第 7 项核心判定，独立导出便于单测）：
- * 执行者字段只做提示——main / subagent 均通过；非法取值 WARN 并按 main 处理。
- * 模型与推理档字段在执行者为 subagent 时只做提示不做清单强校验（留空 = 继承当前会话模型，
- * 非空 = 已配置）；执行者为 main 时若对应字段非空则 WARN（该字段不生效）。
- * spawnableModels 字段显式存在但格式非法/清洗后为空 → 总体 WARN。
- * reviewModelB / reviewReasoningEffortB 已移除，存量配置出现时输出提示。
- */
-export function assessSubagentModelConfig(codexHost: LyConfig['codexHost']): SubagentModelConfigResult {
-  const spawn = sanitizeSpawnableModels(codexHost?.spawnableModels)
-
-  const reviewExecutor = resolveExecutor(codexHost?.reviewExecutor)
-  const codingExecutor = resolveExecutor(codexHost?.codingExecutor)
-
-  const buildField = (input: {
-    key: string
-    value?: string
-    reasoningEffortKey: string
-    reasoningEffort?: string
-    executorKind: ExecutorKind
-  }): SubagentModelFieldResult => {
-    const ineffective = input.executorKind === 'main'
-    const hasValue = Boolean(input.value || input.reasoningEffort)
-    return {
-      key: input.key,
-      value: input.value,
-      status: ineffective && hasValue ? 'warn' : 'ok',
-      okKind: hasValue ? (ineffective ? 'ineffective' : 'configured') : 'unset',
-      reasoningEffortKey: input.reasoningEffortKey,
-      reasoningEffort: input.reasoningEffort,
-    }
-  }
-
-  const fields: SubagentModelFieldResult[] = [
-    buildField({
-      key: 'reviewModel',
-      value: sanitizeReviewModel(codexHost?.reviewModel),
-      reasoningEffortKey: 'reviewReasoningEffort',
-      reasoningEffort: sanitizeReasoningEffort(codexHost?.reviewReasoningEffort),
-      executorKind: reviewExecutor.kind,
-    }),
-    buildField({
-      key: 'codingModel',
-      value: sanitizeModelField(codexHost?.codingModel),
-      reasoningEffortKey: 'codingReasoningEffort',
-      reasoningEffort: sanitizeReasoningEffort(codexHost?.codingReasoningEffort),
-      executorKind: codingExecutor.kind,
-    }),
-  ]
-
-  const executors: SubagentExecutorResult[] = [
-    {
-      key: 'reviewExecutor',
-      kind: reviewExecutor.kind,
-      invalid: reviewExecutor.invalid,
-      rawValue: typeof codexHost?.reviewExecutor === 'string' ? codexHost.reviewExecutor : undefined,
-    },
-    {
-      key: 'codingExecutor',
-      kind: codingExecutor.kind,
-      invalid: codingExecutor.invalid,
-      rawValue: typeof codexHost?.codingExecutor === 'string' ? codexHost.codingExecutor : undefined,
-    },
-  ]
-
-  const raw = codexHost as Record<string, unknown> | undefined
-  const removedFields = ['reviewModelB', 'reviewReasoningEffortB'].filter(key => raw?.[key] !== undefined)
-
-  const spawnWarn = spawn.state === 'empty' || spawn.state === 'invalid'
-  const fieldWarn = fields.some(f => f.status === 'warn')
-  const executorWarn = executors.some(e => e.invalid)
-  return {
-    status: spawnWarn || fieldWarn || executorWarn ? 'warn' : 'ok',
-    executors,
-    fields,
-    spawnState: spawn.state,
-    removedFields,
-  }
-}
-
-/** 第 7 项检查详情（单行）：逐字段提示 + spawnableModels 形态 WARN */
-function buildSubagentModelCheckDetail(result: SubagentModelConfigResult): string {
-  const parts: string[] = []
-
-  for (const e of result.executors) {
-    parts.push(e.invalid
-      ? i18n.t('doctor:modelConfig.warnInvalidExecutor', { key: e.key, value: e.rawValue ?? '' })
-      : i18n.t(e.kind === 'main' ? 'doctor:modelConfig.executorMain' : 'doctor:modelConfig.executorSubagent', { key: e.key }))
-  }
-
-  for (const f of result.fields) {
-    const modelPart = f.value
-      ? (f.okKind === 'ineffective'
-          ? i18n.t('doctor:modelConfig.warnIneffective', { key: f.key, model: f.value })
-          : i18n.t('doctor:modelConfig.okConfigured', { key: f.key, model: f.value }))
-      : i18n.t('doctor:modelConfig.okUnset', { key: f.key })
-    const reasoningPart = f.reasoningEffort
-      ? i18n.t('doctor:modelConfig.okReasoningConfigured', { key: f.reasoningEffortKey, effort: f.reasoningEffort })
-      : i18n.t('doctor:modelConfig.okReasoningUnset', { key: f.reasoningEffortKey })
-    parts.push(modelPart, reasoningPart)
-  }
-
-  for (const key of result.removedFields)
-    parts.push(i18n.t('doctor:modelConfig.removedNote', { key }))
-
-  if (result.spawnState === 'empty' || result.spawnState === 'invalid')
-    parts.push(i18n.t('doctor:modelConfig.warnInvalid'))
-  return parts.join('; ')
-}
-
-/** 第 7 项补充提示（附在检查列表后）：agent 模型需额外配置 + 示例验证 prompt */
-function buildSubagentModelHintLines(currentModel?: string): string[] {
-  const lines = [i18n.t('doctor:modelConfig.agentNeedConfig')]
-  if (currentModel)
-    lines.push(i18n.t('doctor:modelConfig.inheritNote', { model: currentModel }))
-  lines.push(i18n.t('doctor:modelConfig.verifyHint'))
-  return lines
-}
-
-export async function doctor(): Promise<void> {
-  const checks: { label: string, status: string, detail: string }[] = []
+export async function doctor(options: HostOpsOptions = {}): Promise<void> {
+  const common: HostDoctorCheck[] = []
 
   // 1. Node version
   const nodeVer = process.version
   const major = Number.parseInt(nodeVer.slice(1))
-  checks.push({
+  common.push({
     label: 'Node.js',
-    status: major >= 20 ? OK : FAIL,
+    status: major >= 20 ? 'ok' : 'fail',
     detail: `${nodeVer}${major < 20 ? ' (requires >=20)' : ''}`,
   })
 
-  // 2. ly-workflow-codex config
-  const config = await readLyConfig()
-  checks.push({
-    label: 'config',
-    status: config ? OK : WARN,
-    detail: config ? `v${config.general?.version || '?'}, lang=${config.general?.language || '?'}` : 'Not found (~/.codex/lyx/config.toml)',
-  })
-
-  // 3. Commands (lyx-* SKILL.md under ~/.agents/skills)
-  const skillsEntries = await dirFiles(AGENTS_SKILLS_DIR)
-  const cmdCount = skillsEntries.filter(f => f.startsWith('lyx-')).length
-  checks.push({
-    label: 'Commands',
-    status: cmdCount > 0 ? OK : FAIL,
-    detail: `${cmdCount} installed (~/.agents/skills/lyx-*/)`,
-  })
-
-  // 4. Role prompts (~/.codex/lyx/prompts/codex/)
-  const roleDir = join(LY_PROMPTS_DIR, 'codex')
-  const roleFiles = (await dirFiles(roleDir)).filter(f => f.endsWith('.md'))
-  checks.push({
-    label: 'Roles',
-    status: roleFiles.length >= 2 ? OK : roleFiles.length > 0 ? WARN : FAIL,
-    detail: roleFiles.length > 0 ? roleFiles.join(', ') : 'None (~/.codex/lyx/prompts/codex/)',
-  })
-
-  // 5. OpenSpec dependency (shared inspector)
-  const openspec = await inspectOpenspec()
-  checks.push({
+  // 2. OpenSpec dependency（按宿主判定 skills；共享检查器）
+  const hosts = await resolveTargetHosts(options.hosts)
+  const openspec = await inspectOpenspec({ hosts: hosts.length > 0 ? hosts : undefined })
+  common.push({
     label: 'OpenSpec CLI',
-    status: openspec.cli.status === 'ok' ? OK : WARN,
+    status: openspec.cli.status === 'ok' ? 'ok' : 'warn',
     detail: openspec.cli.status === 'ok'
       ? `v${openspec.cli.version}`
       : openspec.cli.status === 'unhealthy'
         ? i18n.t('common:doctor.openspecCliUnhealthy')
         : i18n.t('common:doctor.openspecCliMissing'),
   })
-
-  // 6. OpenSpec skills (openspec-* SKILL.md)
-  checks.push({
-    label: 'OpenSpec skills',
-    status: openspec.skills.status === 'project-ready' ? OK : WARN,
-    detail: buildOpenspecSkillsDetail(openspec.skills.status, openspec.skills.missing),
-  })
-
-  // 7. OpenSpec root
-  checks.push({
+  for (const host of openspec.hosts) {
+    const skills = openspec.skills.byHost[host]
+    if (!skills)
+      continue
+    common.push({
+      label: openspec.hosts.length > 1 ? `OpenSpec skills [${host}]` : 'OpenSpec skills',
+      status: skills.status === 'project-ready' ? 'ok' : 'warn',
+      detail: buildOpenspecSkillsDetail(skills.status, skills.missing),
+    })
+  }
+  common.push({
     label: 'OpenSpec root',
-    status: openspec.root.status === 'healthy' ? OK : WARN,
+    status: openspec.root.status === 'healthy' ? 'ok' : 'warn',
     detail: buildOpenspecRootDetail(openspec.root.status),
   })
 
-  // 8. Codex 子代理模型配置（提示型）：三字段留空 = 继承当前会话模型；非空 = 已配置
-  // （agent 模型需额外配置，能否 spawn 由环境实际能力决定，不做清单强校验）。
-  // config 缺失时第 7 项仍按全字段未配置判定 OK（行为可接受）：config 文件缺失已由
-  // 第 1 项 config 检查（WARN）兜底，此处无需重复报错。
-  const currentModel = await readCodexCurrentModel()
-  const modelCheck = assessSubagentModelConfig(config?.codexHost)
-  checks.push({
-    label: i18n.t('doctor:modelConfig.label'),
-    status: modelCheck.status === 'warn' ? WARN : OK,
-    detail: buildSubagentModelCheckDetail(modelCheck),
-  })
+  // 3. 按宿主分组：配置 + 命令产物 + 角色词 / 子代理定义 + 子代理配置
+  const groups: Array<{ host: HostId, checks: HostDoctorCheck[] }> = []
+  for (const host of hosts)
+    groups.push({ host, checks: await collectHostDoctorChecks(host) })
 
   // Output
+  const printCheck = ({ label, status, detail }: HostDoctorCheck) =>
+    console.log(`  ${STATUS_ICON[status]} ${ansis.bold(label.padEnd(24))} ${ansis.gray(detail)}`)
+
   console.log()
   console.log(ansis.cyan.bold(`  ly-workflow-codex Doctor v${packageVersion}`))
   console.log()
-  for (const { label, status, detail } of checks) {
-    console.log(`  ${status} ${ansis.bold(label.padEnd(20))} ${ansis.gray(detail)}`)
+  common.forEach(printCheck)
+  if (hosts.length === 0) {
+    console.log(`  ${WARN} ${ansis.gray(i18n.t('doctor:noHostInstalled'))}`)
   }
-  for (const line of buildSubagentModelHintLines(currentModel))
-    console.log(ansis.gray(`     ${line}`))
+  for (const { host, checks } of groups) {
+    console.log()
+    console.log(ansis.magenta.bold(`  ${i18n.t('doctor:hostGroup', { host })}`))
+    checks.forEach(printCheck)
+    for (const line of checks.flatMap(c => c.hints ?? []))
+      console.log(ansis.gray(`     ${line}`))
+  }
 
-  const failures = checks.filter(c => c.status === FAIL)
+  const failures = [...common, ...groups.flatMap(g => g.checks)].filter(c => c.status === 'fail')
   console.log()
   if (failures.length === 0) {
     console.log(ansis.green('  All checks passed.'))
@@ -310,52 +144,57 @@ export async function doctor(): Promise<void> {
   console.log()
 }
 
-export async function status(): Promise<void> {
-  // Version
-  const config = await readLyConfig()
-  const installedVer = config?.general?.version || 'unknown'
+export async function status(options: HostOpsOptions = {}): Promise<void> {
+  const hosts = await resolveTargetHosts(options.hosts)
   const latestVer = execSafe(`npm view ${PACKAGE_NAME} version`) || 'unknown'
+  const openspec = await inspectOpenspec({ hosts: hosts.length > 0 ? hosts : undefined })
 
-  // Commands (ly-* skills)
-  const cmds = (await dirFiles(AGENTS_SKILLS_DIR)).filter(f => f.startsWith('lyx-'))
+  console.log()
+  console.log(ansis.cyan.bold('  ly-workflow-codex Status'))
+  console.log()
+  if (hosts.length === 0)
+    console.log(`  ${WARN} ${ansis.gray(i18n.t('doctor:noHostInstalled'))}`)
 
-  // Review model
-  const reviewModel = config?.codexHost?.reviewModel || '未配置（回退当前会话模型）'
+  for (const host of hosts) {
+    const adapter = getAdapter(host)
+    const config = await readLyConfig(host)
+    const installedVer = config?.general?.version || 'unknown'
+    const cmds = await listPrefixedDirs(adapter.defaultPaths().skillsDir, 'lyx-')
+    const executor = (key: 'reviewExecutor' | 'codingExecutor') => sanitizeExecutor(config?.host?.[key]) ?? 'main'
+    console.log(ansis.magenta.bold(`  ${i18n.t('doctor:hostGroup', { host })}`))
+    console.log(`  ${ansis.bold('Version')}        ${installedVer}${installedVer !== latestVer ? ansis.yellow(` (latest: ${latestVer})`) : ansis.green(' (up to date)')}`)
+    console.log(`  ${ansis.bold('Commands')}       ${cmds.length} (${adapter.commandPrefix}lyx-*)`)
+    console.log(`  ${ansis.bold('Config')}         ${getHostConfigPath(host)}`)
+    console.log(`  ${ansis.bold('Executors')}      review=${executor('reviewExecutor')}, coding=${executor('codingExecutor')}`)
+    console.log()
+  }
 
-  // Active tasks
+  console.log(`  ${ansis.bold('OpenSpec CLI')}   ${openspec.cli.status === 'ok' ? `v${openspec.cli.version}` : ansis.yellow(i18n.t(openspec.cli.status === 'unhealthy' ? 'common:doctor.openspecCliUnhealthy' : 'common:doctor.openspecCliMissing'))}`)
+  console.log(`  ${ansis.bold('OpenSpec skills')} ${openspec.skills.status === 'project-ready' ? i18n.t('common:doctor.skillsInitialized') : ansis.yellow(buildOpenspecSkillsDetail(openspec.skills.status, openspec.skills.missing))}`)
+  console.log(`  ${ansis.bold('OpenSpec root')}   ${openspec.root.status === 'healthy' ? i18n.t('common:doctor.rootHealthy') : ansis.yellow(buildOpenspecRootDetail(openspec.root.status))}`)
+  console.log(`  ${ansis.bold('Active tasks')}   ${await countActiveTasks()}`)
+  console.log()
+}
+
+/** 当前项目 .ly/tasks 下未完成的任务数（历史任务目录，仅展示） */
+async function countActiveTasks(): Promise<string> {
   let activeTasks = 0
   const tasksDir = join(process.cwd(), '.ly', 'tasks')
-  if (await fileExists(tasksDir)) {
+  if (await fs.pathExists(tasksDir)) {
     for (const d of await fs.readdir(tasksDir)) {
       if (d === 'archive')
         continue
       const taskJson = join(tasksDir, d, 'task.json')
-      if (await fileExists(taskJson)) {
+      if (await fs.pathExists(taskJson)) {
         try {
           const t = await fs.readJSON(taskJson)
           const s = String(t.status || '').toLowerCase()
-          if (!['completed', 'complete', 'done', 'finished', 'archived', 'cancelled', 'closed'].includes(s)) {
+          if (!['completed', 'complete', 'done', 'finished', 'archived', 'cancelled', 'closed'].includes(s))
             activeTasks++
-          }
         }
         catch { /* ignore */ }
       }
     }
   }
-
-  // OpenSpec dependency (shared inspector)
-  const openspec = await inspectOpenspec()
-
-  // Output
-  console.log()
-  console.log(ansis.cyan.bold('  ly-workflow-codex Status'))
-  console.log()
-  console.log(`  ${ansis.bold('Version')}        ${installedVer}${installedVer !== latestVer ? ansis.yellow(` (latest: ${latestVer})`) : ansis.green(' (up to date)')}`)
-  console.log(`  ${ansis.bold('Commands')}       ${cmds.length}`)
-  console.log(`  ${ansis.bold('Review model')}   ${reviewModel}`)
-  console.log(`  ${ansis.bold('OpenSpec CLI')}   ${openspec.cli.status === 'ok' ? `v${openspec.cli.version}` : ansis.yellow(i18n.t(openspec.cli.status === 'unhealthy' ? 'common:doctor.openspecCliUnhealthy' : 'common:doctor.openspecCliMissing'))}`)
-  console.log(`  ${ansis.bold('OpenSpec skills')} ${openspec.skills.status === 'project-ready' ? i18n.t('common:doctor.skillsInitialized') : ansis.yellow(buildOpenspecSkillsDetail(openspec.skills.status, openspec.skills.missing))}`)
-  console.log(`  ${ansis.bold('OpenSpec root')}   ${openspec.root.status === 'healthy' ? i18n.t('common:doctor.rootHealthy') : ansis.yellow(buildOpenspecRootDetail(openspec.root.status))}`)
-  console.log(`  ${ansis.bold('Active tasks')}   ${activeTasks > 0 ? ansis.yellow(String(activeTasks)) : '0'}`)
-  console.log()
+  return activeTasks > 0 ? ansis.yellow(String(activeTasks)) : '0'
 }

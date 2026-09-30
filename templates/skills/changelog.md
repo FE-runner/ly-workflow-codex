@@ -16,7 +16,7 @@ argument-hint: '[<版本号>]'
 @lyx-changelog
 ```
 
-告诉 Codex 要为哪次更新生成 changelog（通常是发版时），自动执行以下步骤。
+告诉助手要为哪次更新生成 changelog（通常是发版时），自动执行以下步骤。
 
 ---
 

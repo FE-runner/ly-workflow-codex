@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'smol-toml'
 import { describe, expect, it } from 'vitest'
-import { listModelProviders, readCodexCurrentModel, readModelsJson, sanitizeProviderName, upsertModelProvider } from '../codex-provider'
+import { listModelProviders, readCodexCurrentModel, readModelsJson, sanitizeProviderName, upsertModelProvider } from '../provider'
 
 /**
  * codex-provider 单测——全部在 mkdtemp 临时目录运行，不触碰真实 ~/.codex。

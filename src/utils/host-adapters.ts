@@ -1,41 +1,52 @@
 import type { InstallResult } from '../types'
-import fs from 'fs-extra'
-import { join } from 'pathe'
-import { LY_PROMPTS_DIR } from './config'
-import { injectConfigVariables } from './installer-template'
-import { AGENTS_SKILLS_DIR } from './package-meta'
+import { claudeAdapter } from '../hosts/claude'
+import { codexAdapter } from '../hosts/codex'
 
 // ═══════════════════════════════════════════════════════
-// HostAdapter — codex 单宿主适配器契约
-// 命令模板安装目标、模板渲染、卸载清单收敛为接口，保留统一形态供未来扩展。
+// HostAdapter — 宿主适配器契约
+// 共享安装流程只认本接口与注册表；宿主专属知识（路径、模板渲染、附加产物、卸载清单）
+// 全部收敛在各宿主的适配器实现里。
 // ═══════════════════════════════════════════════════════
 
-/** 宿主 id（兼容旧配置读取；codex 单宿主只安装 codex） */
+/** 宿主 id */
 export type HostId = 'codex' | 'claude'
 
-/** 宿主无关的模板渲染配置（共享 LyConfig 的相关切片） */
+/** 宿主无关的模板渲染配置（宿主配置节的相关切片） */
 export interface HostAdapterConfig {
-  /** 审查执行者（LyConfig.codexHost.reviewExecutor）；未配置等价 'main'，由模板运行时解析 */
+  /** 审查执行者；未配置等价 'main'，由模板运行时解析 */
   reviewExecutor?: 'main' | 'subagent'
-  /** coding 执行者（LyConfig.codexHost.codingExecutor）；未配置等价 'main'，由模板运行时解析 */
+  /** coding 执行者；未配置等价 'main'，由模板运行时解析 */
   codingExecutor?: 'main' | 'subagent'
-  /** 审查 subagent 模型（LyConfig.codexHost.reviewModel）；仅在 reviewExecutor === 'subagent' 时生效 */
+  /** 审查 subagent 模型；仅在 reviewExecutor === 'subagent' 时生效 */
   reviewModel?: string
-  /** coding subagent 模型（LyConfig.codexHost.codingModel）；仅在 codingExecutor === 'subagent' 时生效 */
+  /** coding subagent 模型；仅在 codingExecutor === 'subagent' 时生效 */
   codingModel?: string
+  /** 审查 subagent 推理档 */
+  reviewReasoningEffort?: string
+  /** coding subagent 推理档 */
+  codingReasoningEffort?: string
+}
+
+/** 宿主产物路径（均可由测试注入） */
+export interface HostPaths {
+  /** 命令产物目录：安装为 <skillsDir>/<filePrefix><cmd>/SKILL.md */
+  skillsDir: string
+  /** 本包在该宿主下的私有目录（config.toml 所在） */
+  lyDir: string
+  /** 角色词目录 */
+  promptsDir: string
+  /** 子代理定义目录（仅部分宿主使用） */
+  agentsDir?: string
 }
 
 /** 适配器安装/卸载/校验共用的上下文 */
 export interface HostAdapterContext {
-  /** 宿主安装根目录（保留统一形态；codex 宿主不使用） */
+  /** 宿主安装根目录（保留统一形态；当前宿主不使用） */
   installDir: string
   force: boolean
   /** npm 包内 templates/ 目录 */
   templateDir: string
-  /** 角色词位置（~/.codex/lyx/prompts/，测试可注入） */
-  promptsDir: string
-  /** codex skills 安装目录（~/.agents/skills/，测试可注入） */
-  codexSkillsDir: string
+  paths: HostPaths
   config: HostAdapterConfig
   result: InstallResult
 }
@@ -44,118 +55,114 @@ export interface HostAdapterContext {
 export interface HostTemplateTarget {
   sourceDir: string
   targetDir: string
-  /** 目标目录名前缀（codex 宿主 = 'lyx-'，安装为 <targetDir>/lyx-<cmd>/SKILL.md） */
+  /** 目标目录名前缀（'lyx-' → <targetDir>/lyx-<cmd>/SKILL.md） */
   filePrefix?: string
+}
+
+/** 技能扫描根（供 OpenSpec 依赖检查使用） */
+export interface HostSkillRoot {
+  scope: 'project' | 'global'
+  path: string
+}
+
+/** 卸载过程的可变汇总（由共享卸载流程创建，宿主钩子追加） */
+export interface HostUninstallReport {
+  success: boolean
+  removedSkills: string[]
+  removedLegacyPrompts: string[]
+  removedPrompts: boolean
+  errors: string[]
+}
+
+/** 体检项（doctor 按宿主分组输出） */
+export interface HostDoctorCheck {
+  label: string
+  status: 'ok' | 'warn' | 'fail'
+  detail: string
+  /** 附在检查列表后的补充提示行 */
+  hints?: string[]
+}
+
+/** 体检 / 偏差检测的输入：该宿主的产物路径与配置节（配置文件缺失时为 undefined） */
+export interface HostInspectContext {
+  paths: HostPaths
+  config: HostAdapterConfig | undefined
+}
+
+export interface HostUninstallOptions {
+  legacyCleanupDirs?: { codexDir?: string, homeDir?: string }
 }
 
 export interface HostAdapter {
   id: HostId
+  /** 默认产物路径 */
+  defaultPaths: () => HostPaths
+  /** 宿主探测目录：存在即视为用户在用该宿主（安装向导默认勾选依据） */
+  detectDir: () => string
+  /** 命令调用前缀（展示用：codex = '@'，claude = '/'） */
+  commandPrefix: string
+  /** 历史版本写入的宿主配置节名（读取时兼容为 [host]，写入时不再保留） */
+  legacyConfigSections?: string[]
+  /** OpenSpec `--tools` 取值 */
+  openspecTool: string
+  /** OpenSpec 技能扫描根（项目级在前） */
+  openspecSkillRoots: (cwd: string) => HostSkillRoot[]
   /** 命令模板安装目标（源目录 + 目标目录 + 文件名前缀） */
   promptsTarget: (ctx: HostAdapterContext) => HostTemplateTarget
-  /** 模板渲染规则：宿主可追加宿主专属变量处理（在共享 injectConfigVariables 之后） */
-  renderTemplate: (content: string, ctx: HostAdapterContext) => string
-  /** 卸载清单：该宿主名下的产物路径清单（lyx-* 绝对路径清单） */
+  /** 模板渲染规则（宿主片段注入 + 共享变量处理 + 宿主专属处理）；command 为命令名（如 'review-plan'） */
+  renderTemplate: (content: string, ctx: HostAdapterContext, command: string) => string
+  /** 卸载清单：该宿主名下的命令产物路径清单（绝对路径） */
   uninstallList: (ctx: HostAdapterContext) => Promise<string[]>
-  /** 可选：宿主专属的附加安装步骤（codex 无） */
+  /** 可选：宿主专属的附加安装步骤（角色词、子代理定义等） */
   installExtras?: (ctx: HostAdapterContext) => Promise<void>
-  /** 可选：安装后校验（codex = ROLE_FILE 目标存在性） */
+  /** 可选：安装后校验 */
   verify?: (ctx: HostAdapterContext) => Promise<void>
+  /** 可选：宿主专属体检项（命令产物、角色词 / 子代理定义、子代理配置） */
+  doctorChecks?: (ctx: HostInspectContext) => Promise<HostDoctorCheck[]>
+  /** 可选：已安装产物中与当前配置不一致的文件（如子代理定义的模型 / 推理档）；无偏差返回 [] */
+  definitionDrift?: (ctx: HostInspectContext) => Promise<string[]>
+  /** 可选：update 前需备份的本包产物（绝对路径；缺省 = uninstallList） */
+  backupList?: (ctx: HostAdapterContext) => Promise<string[]>
+  /** 可选：宿主专属的附加卸载步骤（在删除私有目录之前执行） */
+  uninstallExtras?: (ctx: HostAdapterContext, report: HostUninstallReport, options: HostUninstallOptions) => Promise<void>
 }
 
 // ═══════════════════════════════════════════════════════
-// codex 宿主模板渲染
+// Registry — 宿主的唯一登记处
 // ═══════════════════════════════════════════════════════
 
 /**
- * codex 宿主模板渲染：共享 injectConfigVariables 之后追加 {{REVIEW_MODEL}} 处理。
- * - 已配置 reviewModel → 全量替换为模型名
- * - 未配置 → 剥离 " -m {{REVIEW_MODEL}}" 参数（回退当前会话模型，exec 不带 -m），
- *   其余 {{REVIEW_MODEL}} 占位（正文引用）渲染为空串
- *
- * subagent 多 Agent 模式说明：模型指定改为"模板指示 + 宿主能力"落实——模板正文直接写明
- * 审查/coding subagent 的模型取 `codexHost.reviewModel`/`codingModel` 的哪个字段、
- * 未配置或空白回退当前会话模型，由运行环境的宿主 spawn 能力执行，不依赖 shell 层模型参数。
- * 执行者由 `codexHost.reviewExecutor`/`codingExecutor` 决定（未配置 = main）；模型字段仅在
- * 对应执行者为 subagent 时生效；{{REVIEW_MODEL}} 处理仅保留给历史模板/旧安装位升级残留的兼容渲染。
+ * 登记顺序即默认展示 / 遍历顺序。惰性求值：宿主包与共享层之间存在模块循环
+ * （宿主包 → 共享配置读写 → 注册表），在模块求值期直接取值会拿到未初始化的适配器。
  */
-export function renderCodexTemplate(content: string, config: HostAdapterConfig): string {
-  let processed = injectConfigVariables(content, config)
-  const model = config.reviewModel?.trim() || ''
-  if (model) {
-    processed = processed.replace(/\{\{REVIEW_MODEL\}\}/g, model)
-  }
-  else {
-    processed = processed.replace(/ -m \{\{REVIEW_MODEL\}\}/g, '')
-    processed = processed.replace(/\{\{REVIEW_MODEL\}\}/g, '')
-  }
-  return processed
+function registeredAdapters(): HostAdapter[] {
+  return [codexAdapter, claudeAdapter]
 }
 
-// ═══════════════════════════════════════════════════════
-// codex adapter — 单 Agent 模式（SKILL.md 形态，Codex 官方 skill 机制）
-// ═══════════════════════════════════════════════════════
-
-export function getCodexSkillsDir(): string {
-  return AGENTS_SKILLS_DIR
+/** 按 id 索引的注册表（getter 惰性取值，理由同上） */
+export const ADAPTERS: Partial<Record<HostId, HostAdapter>> = {
+  get codex() { return codexAdapter },
+  get claude() { return claudeAdapter },
 }
 
-/** codex 版审查命令模板依赖的角色词（ROLE_FILE 绝对路径目标） */
-const CODEX_ROLE_FILE_TARGETS = ['reviewer.md', 'plan-reviewer.md']
-
-export const codexAdapter: HostAdapter = {
-  id: 'codex',
-
-  promptsTarget: ctx => ({
-    sourceDir: join(ctx.templateDir, 'skills-codex'),
-    targetDir: ctx.codexSkillsDir,
-    filePrefix: 'lyx-',
-  }),
-
-  renderTemplate: (content, ctx) => renderCodexTemplate(content, ctx.config),
-
-  uninstallList: async (ctx) => {
-    try {
-      if (!(await fs.pathExists(ctx.codexSkillsDir)))
-        return []
-      const entries = await fs.readdir(ctx.codexSkillsDir)
-      const dirs: string[] = []
-      for (const entry of entries) {
-        if (!entry.startsWith('lyx-'))
-          continue
-        const full = join(ctx.codexSkillsDir, entry)
-        if ((await fs.stat(full)).isDirectory())
-          dirs.push(full)
-      }
-      return dirs
-    }
-    catch {
-      return []
-    }
-  },
-
-  verify: async (ctx) => {
-    // codex 版模板 ROLE_FILE 以绝对路径指向私有位置（不建软链）——
-    // 角色词缺失时审查命令无法工作，报安装错误
-    for (const file of CODEX_ROLE_FILE_TARGETS) {
-      const target = join(ctx.promptsDir, 'codex', file)
-      if (!(await fs.pathExists(target))) {
-        ctx.result.errors.push(`codex ROLE_FILE target missing: ${target} (role prompts not installed)`)
-        ctx.result.success = false
-      }
-    }
-  },
+/** 全部已注册宿主（按登记顺序） */
+export function listRegisteredHosts(): HostId[] {
+  return registeredAdapters().map(adapter => adapter.id)
 }
 
-// ═══════════════════════════════════════════════════════
-// Registry
-// ═══════════════════════════════════════════════════════
-
-/** 统一注册表（codex 单宿主；保留 Record 形态供未来扩展） */
-export const ADAPTERS: Record<'codex', HostAdapter> = {
-  codex: codexAdapter,
+export function isRegisteredHost(value: unknown): value is HostId {
+  return typeof value === 'string' && registeredAdapters().some(adapter => adapter.id === value)
 }
 
-/** 默认角色词目录（供 uninstall/迁移等调用方取默认值；测试可注入覆盖） */
-export function defaultLyPromptsDir(): string {
-  return LY_PROMPTS_DIR
+export function getAdapter(id: HostId): HostAdapter {
+  const adapter = ADAPTERS[id]
+  if (!adapter)
+    throw new Error(`Unknown host: ${id}`)
+  return adapter
 }
+
+/** 未指定宿主集合且无从推断时的兜底安装集合（保持改造前的单宿主行为） */
+export const FALLBACK_HOSTS: HostId[] = ['codex']
+
+/** 历史无参 API（getConfigPath 等）与未指定宿主的配置读写所指向的默认宿主 */
+export const DEFAULT_HOST: HostId = FALLBACK_HOSTS[0]

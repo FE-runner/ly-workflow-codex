@@ -33,8 +33,8 @@
     "dist",
     "README.zh-CN.md",
     "docs/codex-exec-contract.md",
-    "templates/prompts/codex/",
-    "templates/skills-codex/"
+    "templates/hosts/",
+    "templates/skills/"
   ],
   "engines": {
     "node": ">=20"

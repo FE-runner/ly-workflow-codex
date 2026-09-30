@@ -20,29 +20,29 @@ argument-hint: '<项目摘要或名称>'
 
 ### 步骤 1：生成 AGENTS.md
 
-由当前会话直接生成/更新项目根目录的 `AGENTS.md`（单 Agent 模式，无外部技能委托）：以 `参数`（项目摘要或名称）为线索，结合当前仓库结构，写清模块职责、入口与启动方式、核心类型、构建/测试命令、关键约定。已存在时增量更新，不推翻既有内容、不删除既有章节。
+{{HOST_FRAGMENT:memory-files}}
 
 ### 步骤 2：确保 OpenSpec 可用（共享检查/修复入口）
 
 1. **调用共享 ensure 入口**（当前工作目录下执行，禁止 `cd` 到其他路径；不确定当前目录先 `pwd` 确认）：
    ```bash
-   lycx openspec ensure --yes --json
+   lycx openspec ensure --host {{HOST_ID}} --yes --json
    ```
    若 `lycx` 不在 PATH，则回退：
    ```bash
-   npx -y ly-workflow-codex openspec ensure --yes --json
+   npx -y ly-workflow-codex openspec ensure --host {{HOST_ID}} --yes --json
    ```
 2. **解析 JSON 结果**：读取 `cli.status`、`skills.status`、`skills.missing`、`root.status`、`actions` 与 `executed`。
    - `skills.status === "global-only"`：输出 WARN 说明 skills 仅全局可用但命令可继续；不自动固化项目级。
    - `cli.status !== "ok"`、`skills.status === "missing"` 或 `root.status` 为 `missing` / `unhealthy` 且 ensure 后仍未修复：停止，展示缺失 skill 清单与 `openspec doctor --json` 的 fix 建议。
    - `root.status === "healthy"` 且 `skills.status` 为 `project-ready` 或 `global-only`：继续步骤 3。
-3. **不要自行复制 workflow → skill 检测逻辑**。CLI、skills、root 的检查与修复统一由 `lycx openspec ensure` 负责。
+3. **不要自行复制 workflow → skill 检测逻辑**。CLI、skills、root 的检查与修复统一由 `lycx openspec ensure` 负责；`--host` 限定只针对当前宿主检查与补齐（`--tools` 取值由宿主映射），不重建或清理另一宿主的 OpenSpec 产物。
 
 ### 步骤 3：提交初始化产物
 
 ```bash
 MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"
-git add -- AGENTS.md openspec/
+{{HOST_FRAGMENT:stage-files}}
 # 先将完整 message 写入 "$MSG_FILE"：
 # chore: init AGENTS.md + openspec structure
 #
@@ -52,13 +52,13 @@ git add -- AGENTS.md openspec/
 git commit -F "$MSG_FILE"
 ```
 
-仅暂存本次初始化产生的文件（`AGENTS.md`、`openspec/`），不用 `git add -A`。提交信息按 `@lyx-commit` 正文规范写完整 message，不追加 `Change-Stage` / `Change-Name` trailer。若无可提交内容（两者均已存在且未变化）或 `git commit` 失败，跳过提交，在汇总中如实报告，不中断步骤 4。
+{{HOST_FRAGMENT:stage-scope}}
 
 ### 步骤 4：汇总
 
 ```
 📋 初始化结果
-  AGENTS.md    ✓/✗
+  {{HOST_FRAGMENT:summary-memory}}
   openspec/    ✓/✗
 
 接下来可以：

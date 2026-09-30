@@ -1,0 +1,1 @@
+4. **TASK 范围点名（只审 change 范围）**：审查 subagent 的任务点名"只审该 change 的下列代码变更"，SHALL NOT 超出点名范围作业。TASK 先指示读取 ROLE_FILE（`~/.codex/lyx/prompts/codex/reviewer.md`，角色词内容不重写），再给出审查范围说明（步骤 1 记录的基线引用说明或零 commit 场景组合）与未跟踪文件路径清单；**首轮不拼贴 diff 全文**——审查 subagent 自行执行对应命令获取实际内容（例如"运行 git diff HEAD 得到完整 diff"），不要假设范围。

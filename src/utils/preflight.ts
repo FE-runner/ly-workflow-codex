@@ -1,12 +1,13 @@
 import type { ExecFileOptions } from 'node:child_process'
+import type { HostId } from './host-adapters'
 import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
 import ansis from 'ansis'
 import inquirer from 'inquirer'
 import { join } from 'pathe'
 import { i18n } from '../i18n'
-import { AGENTS_SKILLS_DIR } from './package-meta'
+import { listInstalledHosts } from './config'
+import { getAdapter, listRegisteredHosts } from './host-adapters'
 
 /**
  * OpenSpec dependency inspection and repair.
@@ -35,12 +36,23 @@ export interface OpenspecSkillRoot {
 }
 
 export interface OpenspecSkillsInspection {
+  /** 整体状态：多宿主时取各宿主最差者（missing > unknown > global-only > project-ready） */
   status: OpenspecSkillsInspectionStatus
   required: string[]
   resolved: Record<string, string>
+  /** 整体缺失清单（任一宿主缺失的 skill 并集） */
   missing: string[]
   roots: OpenspecSkillRoot[]
   profileSource: 'openspec-config' | 'fallback'
+  /** 按宿主分别判定（自 add-claude-host 起） */
+  byHost: Partial<Record<HostId, OpenspecHostSkillsInspection>>
+}
+
+export interface OpenspecHostSkillsInspection {
+  status: OpenspecSkillsInspectionStatus
+  resolved: Record<string, string>
+  missing: string[]
+  roots: OpenspecSkillRoot[]
 }
 
 export interface OpenspecRootInspection {
@@ -49,14 +61,16 @@ export interface OpenspecRootInspection {
   error?: string
 }
 
-export type OpenspecAction =
-  | { kind: 'install-cli' }
-  | { kind: 'warn-global-only' }
-  | { kind: 'init-root' }
-  | { kind: 'repair-skills', strategy: 'update' | 'init' }
-  | { kind: 'report-root', doctor?: unknown }
+export type OpenspecAction
+  = | { kind: 'install-cli' }
+    | { kind: 'warn-global-only' }
+    | { kind: 'init-root', hosts: HostId[] }
+    | { kind: 'repair-skills', strategy: 'update' | 'init', hosts: HostId[] }
+    | { kind: 'report-root', doctor?: unknown }
 
 export interface OpenspecInspection {
+  /** 本次检查所覆盖的宿主集合 */
+  hosts: HostId[]
   cli: {
     status: OpenspecCliInspectionStatus
     version?: string
@@ -75,6 +89,13 @@ interface OpenspecEnsureOptions {
   cwd?: string
   yes?: boolean
   confirmInstall?: () => Promise<boolean>
+  /** 目标宿主（写入型修复的范围）；缺省为已安装宿主集合 */
+  hosts?: HostId[]
+  /**
+   * 是否允许写入型修复（init root / 补齐项目级 skills）。缺省：hosts 显式给出或存在已安装宿主时允许；
+   * 不存在任何宿主配置文件且未显式指定宿主时只做只读诊断（写入延后到宿主选择确认之后）。
+   */
+  allowWrite?: boolean
 }
 
 interface ExecResult {
@@ -103,43 +124,35 @@ const LEGACY_OPENSPEC_SKILL_NAMES = [
 const DEFAULT_WORKFLOWS = ['propose', 'explore', 'apply', 'update', 'sync', 'archive']
 
 const WORKFLOW_TO_SKILL: Record<string, string> = {
-  explore: 'openspec-explore',
-  new: 'openspec-new-change',
-  continue: 'openspec-continue-change',
-  apply: 'openspec-apply-change',
-  update: 'openspec-update-change',
-  ff: 'openspec-ff-change',
-  sync: 'openspec-sync-specs',
-  archive: 'openspec-archive-change',
+  'explore': 'openspec-explore',
+  'new': 'openspec-new-change',
+  'continue': 'openspec-continue-change',
+  'apply': 'openspec-apply-change',
+  'update': 'openspec-update-change',
+  'ff': 'openspec-ff-change',
+  'sync': 'openspec-sync-specs',
+  'archive': 'openspec-archive-change',
   'bulk-archive': 'openspec-bulk-archive-change',
-  verify: 'openspec-verify-change',
-  onboard: 'openspec-onboard',
-  propose: 'openspec-propose',
-}
-
-/** codex skills 安装目录 — defaults to ~/.agents/skills. */
-export function getCodexSkillsDir(): string {
-  return AGENTS_SKILLS_DIR
-}
-
-export function getOpenspecSkillRoots(cwd = process.cwd()): OpenspecSkillRoot[] {
-  return [
-    { scope: 'project', path: join(cwd, '.agents', 'skills') },
-    { scope: 'project', path: join(cwd, '.codex', 'skills') },
-    { scope: 'global', path: AGENTS_SKILLS_DIR },
-    { scope: 'global', path: join(homedir(), '.codex', 'skills') },
-  ]
+  'verify': 'openspec-verify-change',
+  'onboard': 'openspec-onboard',
+  'propose': 'openspec-propose',
 }
 
 /**
- * Legacy boolean detector: any known openspec-* skill under the old two roots.
+ * OpenSpec 技能扫描根：由各宿主适配器提供，项目级在前、全局级在后（项目级命中优先）。
+ * hosts 缺省为全部已注册宿主。
+ */
+export function getOpenspecSkillRoots(cwd = process.cwd(), hosts: HostId[] = listRegisteredHosts()): OpenspecSkillRoot[] {
+  const roots = hosts.flatMap(id => getAdapter(id).openspecSkillRoots(cwd))
+  return [...roots.filter(r => r.scope === 'project'), ...roots.filter(r => r.scope === 'global')]
+}
+
+/**
+ * Legacy boolean detector: any known openspec-* skill under the registered hosts' roots.
  * New code should use `inspectOpenspec()`.
  */
 export function detectOpenspecSkills(): boolean {
-  const roots = [
-    AGENTS_SKILLS_DIR,
-    join(process.cwd(), '.agents', 'skills'),
-  ]
+  const roots = getOpenspecSkillRoots().map(r => r.path)
   return LEGACY_OPENSPEC_SKILL_NAMES.some(name =>
     roots.some(root => existsSync(join(root, name, 'SKILL.md'))),
   )
@@ -204,12 +217,18 @@ function mapWorkflowsToSkills(workflows: string[]): string[] {
   return [...new Set(workflows.map(w => WORKFLOW_TO_SKILL[w]).filter((s): s is string => Boolean(s)))]
 }
 
-function inspectOpenspecSkills(
+const SKILLS_STATUS_RANK: Record<OpenspecSkillsInspectionStatus, number> = {
+  'project-ready': 0,
+  'global-only': 1,
+  'unknown': 2,
+  'missing': 3,
+}
+
+function inspectHostSkills(
   required: string[],
-  cwd: string,
+  roots: OpenspecSkillRoot[],
   profileSource: 'openspec-config' | 'fallback',
-): OpenspecSkillsInspection {
-  const roots = getOpenspecSkillRoots(cwd)
+): OpenspecHostSkillsInspection {
   const resolved: Record<string, string> = {}
   const projectHits = new Set<string>()
   const missing: string[] = []
@@ -238,7 +257,48 @@ function inspectOpenspecSkills(
   else
     status = 'project-ready'
 
-  return { status, required, resolved, missing, roots, profileSource }
+  return { status, resolved, missing, roots }
+}
+
+/**
+ * skills 层检查：每个宿主只在该宿主自己的技能根里判定（单宿主缺另一宿主的技能根不算 missing），
+ * 整体状态取各宿主最差者。
+ */
+function inspectOpenspecSkills(
+  required: string[],
+  cwd: string,
+  profileSource: 'openspec-config' | 'fallback',
+  hosts: HostId[],
+): OpenspecSkillsInspection {
+  const byHost: Partial<Record<HostId, OpenspecHostSkillsInspection>> = {}
+  for (const host of hosts)
+    byHost[host] = inspectHostSkills(required, getOpenspecSkillRoots(cwd, [host]), profileSource)
+
+  const perHost = hosts.map(h => byHost[h]!)
+  const status = perHost.reduce<OpenspecSkillsInspectionStatus>(
+    (worst, cur) => SKILLS_STATUS_RANK[cur.status] > SKILLS_STATUS_RANK[worst] ? cur.status : worst,
+    'project-ready',
+  )
+  const missing = [...new Set(perHost.flatMap(h => h.missing))]
+  const resolved = Object.assign({}, ...[...perHost].reverse().map(h => h.resolved)) as Record<string, string>
+
+  return { status, required, resolved, missing, roots: getOpenspecSkillRoots(cwd, hosts), profileSource, byHost }
+}
+
+/** 某状态的宿主清单（按检查顺序） */
+function hostsWithStatus(skills: OpenspecSkillsInspection, status: OpenspecSkillsInspectionStatus): HostId[] {
+  return (Object.keys(skills.byHost) as HostId[]).filter(h => skills.byHost[h]?.status === status)
+}
+
+/**
+ * 读取型检查的宿主集合：已安装宿主（配置文件存在）；一个都没有时取全部已注册宿主
+ * （全新环境首次 init 前也要按全部宿主的技能根扫描，SHALL NOT 因集合为空跳过检查）。
+ */
+export async function resolveInspectHosts(explicit?: HostId[]): Promise<HostId[]> {
+  if (explicit && explicit.length > 0)
+    return explicit
+  const installed = await listInstalledHosts()
+  return installed.length > 0 ? installed : listRegisteredHosts()
 }
 
 async function inspectOpenspecRoot(cwd: string, cli: OpenspecCliStatus): Promise<OpenspecRootInspection> {
@@ -271,8 +331,9 @@ async function inspectOpenspecRoot(cwd: string, cli: OpenspecCliStatus): Promise
     : { status: 'unhealthy', doctor }
 }
 
-export async function inspectOpenspec(options?: { cwd?: string }): Promise<OpenspecInspection> {
+export async function inspectOpenspec(options?: { cwd?: string, hosts?: HostId[] }): Promise<OpenspecInspection> {
   const cwd = options?.cwd ?? process.cwd()
+  const hosts = await resolveInspectHosts(options?.hosts)
   const cli = await detectOpenspecCli()
   const cliStatus: OpenspecCliInspectionStatus = !cli.installed
     ? 'missing'
@@ -282,7 +343,7 @@ export async function inspectOpenspec(options?: { cwd?: string }): Promise<Opens
     ? await readOpenspecProfile(cwd)
     : { workflows: DEFAULT_WORKFLOWS, source: 'fallback' as const }
   const required = mapWorkflowsToSkills(profile.workflows)
-  const skills = inspectOpenspecSkills(required, cwd, profile.source)
+  const skills = inspectOpenspecSkills(required, cwd, profile.source, hosts)
   const root = await inspectOpenspecRoot(cwd, cli)
 
   const actions: OpenspecAction[] = []
@@ -292,16 +353,17 @@ export async function inspectOpenspec(options?: { cwd?: string }): Promise<Opens
     actions.push({ kind: 'warn-global-only' })
   if (skills.status === 'missing') {
     if (root.status === 'missing')
-      actions.push({ kind: 'init-root' })
+      actions.push({ kind: 'init-root', hosts })
     else
-      actions.push({ kind: 'repair-skills', strategy: 'update' })
+      actions.push({ kind: 'repair-skills', strategy: 'init', hosts: hostsWithStatus(skills, 'missing') })
   }
   if (root.status === 'missing' && !actions.some(a => a.kind === 'init-root'))
-    actions.push({ kind: 'init-root' })
+    actions.push({ kind: 'init-root', hosts })
   if (root.status === 'unhealthy')
     actions.push({ kind: 'report-root', doctor: root.doctor })
 
   return {
+    hosts,
     cli: { status: cliStatus, version: cli.version },
     skills,
     root,
@@ -372,14 +434,23 @@ export function printOpenspecInspection(inspection: OpenspecInspection): void {
     console.log(ansis.yellow(`⚠ ${i18n.t('common:preflight.cliUnhealthy')}`))
   }
 
-  if (inspection.skills.status === 'global-only') {
-    console.log(ansis.yellow(`⚠ ${i18n.t('common:preflight.skillsGlobalOnly')}`))
-  }
-  else if (inspection.skills.status === 'missing') {
-    console.log(ansis.yellow(`⚠ ${i18n.t('common:preflight.skillsMissing', { list: inspection.skills.missing.join(', ') })}`))
-  }
-  else if (inspection.skills.status === 'unknown') {
-    console.log(ansis.yellow(`⚠ ${i18n.t('common:preflight.skillsUnknown')}`))
+  // 多宿主时按宿主分行输出（单宿主时行为与改造前一致，不加宿主前缀）
+  const multiHost = inspection.hosts.length > 1
+  for (const host of inspection.hosts) {
+    const hostSkills = inspection.skills.byHost[host]
+    if (!hostSkills)
+      continue
+    const tag = multiHost ? `[${host}] ` : ''
+    if (hostSkills.status === 'global-only') {
+      console.log(ansis.yellow(`⚠ ${tag}${i18n.t('common:preflight.skillsGlobalOnly')}`))
+    }
+    else if (hostSkills.status === 'missing') {
+      console.log(ansis.yellow(`⚠ ${tag}${i18n.t('common:preflight.skillsMissing', { list: hostSkills.missing.join(', ') })}`))
+      console.log(ansis.gray(`  ${i18n.t('common:preflight.repairHint', { cmd: `openspec init --tools ${getAdapter(host).openspecTool}` })}`))
+    }
+    else if (hostSkills.status === 'unknown') {
+      console.log(ansis.yellow(`⚠ ${tag}${i18n.t('common:preflight.skillsUnknown')}`))
+    }
   }
 
   if (inspection.root.status === 'missing') {
@@ -393,7 +464,12 @@ export function printOpenspecInspection(inspection: OpenspecInspection): void {
 export async function ensureOpenspec(options?: OpenspecEnsureOptions): Promise<OpenspecEnsureResult> {
   const cwd = options?.cwd ?? process.cwd()
   const executed: string[] = []
-  let inspection = await inspectOpenspec({ cwd })
+  const installed = await listInstalledHosts()
+  // 写入目标 = 显式指定的宿主，或已安装（已确认）宿主；SHALL NOT 为未确认的宿主写入项目级产物
+  const targets = options?.hosts && options.hosts.length > 0 ? options.hosts : installed
+  const allowWrite = options?.allowWrite ?? targets.length > 0
+  const inspect = () => inspectOpenspec({ cwd, hosts: targets.length > 0 ? targets : undefined })
+  let inspection = await inspect()
 
   if (inspection.cli.status === 'missing') {
     const confirmed = options?.yes || (options?.confirmInstall ? await options.confirmInstall() : false)
@@ -401,7 +477,7 @@ export async function ensureOpenspec(options?: OpenspecEnsureOptions): Promise<O
       return { inspection, executed }
     if (await installCli()) {
       executed.push('install-cli')
-      inspection = await inspectOpenspec({ cwd })
+      inspection = await inspect()
     }
     else {
       return { inspection, executed }
@@ -414,23 +490,33 @@ export async function ensureOpenspec(options?: OpenspecEnsureOptions): Promise<O
   if (inspection.root.status === 'unhealthy')
     return { inspection, executed }
 
+  // 全新环境（无任何宿主配置文件）且未显式指定宿主：只读诊断，写入型修复延后到宿主选择确认之后
+  if (!allowWrite || targets.length === 0)
+    return { inspection, executed }
+
+  const toolsOf = (hosts: HostId[]) => hosts.map(h => getAdapter(h).openspecTool).join(',')
+
   if (inspection.root.status === 'missing') {
-    const initResult = await execFileText('openspec', ['init', '--tools', 'codex', '--no-animation'], { cwd })
-    executed.push('init-root')
-    inspection = await inspectOpenspec({ cwd })
+    const tools = toolsOf(targets)
+    const initResult = await execFileText('openspec', ['init', '--tools', tools, '--no-animation'], { cwd })
+    executed.push(`init-root:openspec init --tools ${tools}`)
+    inspection = await inspect()
     if (!initResult.ok && inspection.root.status === 'missing')
       return { inspection, executed }
   }
 
-  if (inspection.skills.status === 'missing') {
-    const updateResult = await execFileText('openspec', ['update', '--force'], { cwd })
-    executed.push('repair-skills:update')
-    inspection = await inspectOpenspec({ cwd })
+  // 只对确实缺少技能的宿主补齐；global-only 不触发项目级修复；不重建另一宿主的产物
+  const missingHosts = hostsWithStatus(inspection.skills, 'missing')
+  if (missingHosts.length > 0) {
+    const tools = toolsOf(missingHosts)
+    const initResult = await execFileText('openspec', ['init', '--tools', tools, '--no-animation'], { cwd })
+    executed.push(`repair-skills:init:openspec init --tools ${tools}`)
+    inspection = await inspect()
 
     if (inspection.skills.status === 'missing') {
-      const initResult = await execFileText('openspec', ['init', '--tools', 'codex', '--no-animation'], { cwd })
-      executed.push('repair-skills:init')
-      inspection = await inspectOpenspec({ cwd })
+      const updateResult = await execFileText('openspec', ['update', '--force'], { cwd })
+      executed.push('repair-skills:update:openspec update --force')
+      inspection = await inspect()
       if (!updateResult.ok && !initResult.ok && inspection.skills.status === 'missing')
         return { inspection, executed }
     }
@@ -443,17 +529,10 @@ export async function ensureOpenspec(options?: OpenspecEnsureOptions): Promise<O
  * Orchestrated preflight entry for installer flows (default action / init / menu).
  * Never throws — installer main flow must proceed regardless of check outcomes.
  */
-export async function checkExternalDeps(options?: { skipPrompt?: boolean; initOpenspec?: boolean }): Promise<void> {
+export async function checkExternalDeps(options?: { skipPrompt?: boolean, initOpenspec?: boolean }): Promise<void> {
   try {
-    if (options?.initOpenspec) {
-      const result = await ensureOpenspec({
-        yes: options.skipPrompt,
-        confirmInstall: () => confirmOpenspecCliInstall(options.skipPrompt),
-      })
-      printOpenspecInspection(result.inspection)
-      return
-    }
-
+    // --init-openspec 的写入型修复不在此处执行：前置检查发生在宿主选择之前，
+    // 写入延后到 init 确认宿主（配置文件已产生）之后按所选宿主集合执行。
     let inspection = await inspectOpenspec()
     if (inspection.cli.status === 'missing') {
       if (!await confirmOpenspecCliInstall(options?.skipPrompt))

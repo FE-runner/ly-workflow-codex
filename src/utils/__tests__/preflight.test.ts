@@ -1,9 +1,9 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { homedir } from 'node:os'
 import { join } from 'pathe'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initI18n } from '../../i18n'
 
-import { checkExternalDeps, detectOpenspecCli, detectOpenspecSkills, ensureOpenspec, inspectOpenspec } from '../preflight'
+import { checkExternalDeps, detectOpenspecCli, detectOpenspecSkills, ensureOpenspec, inspectOpenspec, printOpenspecInspection } from '../preflight'
 
 const execFileMock = vi.fn()
 const spawnMock = vi.fn()
@@ -18,6 +18,13 @@ vi.mock('node:child_process', () => ({
 vi.mock('node:fs', () => ({
   existsSync: (...args: any[]) => existsSyncMock(...args),
 }))
+
+/** 已安装宿主（配置文件存在）——mock 掉真实 home 探测，保证用例与本机环境无关 */
+const installedHostsState: { hosts: string[] } = { hosts: ['codex'] }
+vi.mock('../config', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../config')>()
+  return { ...mod, listInstalledHosts: async () => [...installedHostsState.hosts] }
+})
 
 vi.mock('inquirer', () => ({
   default: { prompt: (...args: any[]) => promptMock(...args) },
@@ -297,11 +304,13 @@ describe('checkExternalDeps', () => {
     expect(errSpy).not.toHaveBeenCalled()
   })
 
-  it('warns once when CLI installed but openspec skills missing', async () => {
+  it('warns once when CLI installed but openspec skills missing (plus the repair command)', async () => {
     mockExec()
     existsSyncMock.mockReturnValue(false)
     await checkExternalDeps()
-    expect(logSpy).toHaveBeenCalledTimes(1)
+    const lines = logSpy.mock.calls.map(c => String(c[0]))
+    expect(lines.filter(l => l.includes('⚠'))).toHaveLength(1)
+    expect(lines.some(l => l.includes('openspec init --tools codex'))).toBe(true)
     expect(promptMock).not.toHaveBeenCalled()
   })
 
@@ -409,4 +418,91 @@ describe('checkExternalDeps', () => {
 // 保持 beforeAll 引用避免 i18n 未初始化（部分用例通过 i18n key 输出）
 beforeAll(async () => {
   await initI18n('zh-CN')
+})
+
+describe('multi-host skills inspection and repair (add-claude-host)', () => {
+  const home = homedir()
+  const cwd = process.cwd()
+  const project = (host: 'codex' | 'claude') => host === 'codex' ? join(cwd, '.agents', 'skills') : join(cwd, '.claude', 'skills')
+
+  beforeEach(() => {
+    cliState.installed = true
+    mockExec()
+    installedHostsState.hosts = ['codex']
+  })
+
+  afterEach(() => {
+    installedHostsState.hosts = ['codex']
+    vi.restoreAllMocks()
+  })
+
+  it('only claude installed: judged by claude roots, not missing because codex roots are empty', async () => {
+    installedHostsState.hosts = ['claude']
+    existsSyncMock.mockImplementation((p: any) => String(p).startsWith(project('claude')))
+    const result = await inspectOpenspec()
+    expect(result.hosts).toEqual(['claude'])
+    expect(result.skills.status).toBe('project-ready')
+    expect(result.skills.byHost.codex).toBeUndefined()
+  })
+
+  it('no host config file: scans all registered hosts instead of skipping', async () => {
+    installedHostsState.hosts = []
+    existsSyncMock.mockReturnValue(true)
+    const result = await inspectOpenspec()
+    expect(result.hosts).toEqual(['codex', 'claude'])
+    expect(Object.keys(result.skills.byHost).sort()).toEqual(['claude', 'codex'])
+  })
+
+  it('codex project-ready + claude missing → overall missing, per-host lines, repair only claude', async () => {
+    installedHostsState.hosts = ['codex', 'claude']
+    existsSyncMock.mockImplementation((p: any) => String(p).startsWith(project('codex')))
+    const result = await inspectOpenspec()
+    expect(result.skills.byHost.codex?.status).toBe('project-ready')
+    expect(result.skills.byHost.claude?.status).toBe('missing')
+    expect(result.skills.status).toBe('missing')
+    expect(result.actions).toContainEqual({ kind: 'repair-skills', strategy: 'init', hosts: ['claude'] })
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    printOpenspecInspection(result)
+    const lines = logSpy.mock.calls.map(c => String(c[0]))
+    expect(lines.some(l => l.includes('[claude]'))).toBe(true)
+    expect(lines.some(l => l.includes('[codex]'))).toBe(false)
+    expect(lines.some(l => l.includes('openspec init --tools claude'))).toBe(true)
+  })
+
+  it('ensure repairs only the host missing skills with its own --tools value', async () => {
+    installedHostsState.hosts = ['codex', 'claude']
+    existsSyncMock.mockImplementation((p: any) => String(p).startsWith(project('codex')))
+    const result = await ensureOpenspec({ yes: true })
+    const initCalls = execFileMock.mock.calls.filter(([cmd, args]) => cmd === 'openspec' && Array.isArray(args) && args[0] === 'init')
+    expect(initCalls.map(([, args]) => args.slice(0, 3))).toContainEqual(['init', '--tools', 'claude'])
+    expect(initCalls.every(([, args]) => args[2] === 'claude')).toBe(true)
+    expect(result.executed).toContain('repair-skills:init:openspec init --tools claude')
+  })
+
+  it('fresh environment (no host config): ensure writes nothing, only diagnoses', async () => {
+    installedHostsState.hosts = []
+    existsSyncMock.mockReturnValue(false)
+    const result = await ensureOpenspec({ yes: true })
+    const writeCalls = execFileMock.mock.calls.filter(([cmd, args]) => cmd === 'openspec' && Array.isArray(args) && (args[0] === 'init' || args[0] === 'update'))
+    expect(writeCalls).toHaveLength(0)
+    expect(result.executed).toEqual([])
+  })
+
+  it('after host confirmation: writes only for the selected hosts', async () => {
+    installedHostsState.hosts = []
+    existsSyncMock.mockReturnValue(false)
+    await ensureOpenspec({ yes: true, hosts: ['codex'], allowWrite: true })
+    const initCalls = execFileMock.mock.calls.filter(([cmd, args]) => cmd === 'openspec' && Array.isArray(args) && args[0] === 'init')
+    expect(initCalls.length).toBeGreaterThan(0)
+    expect(initCalls.every(([, args]) => args[2] === 'codex')).toBe(true)
+  })
+
+  it('global-only never triggers project-level writes', async () => {
+    installedHostsState.hosts = ['codex']
+    existsSyncMock.mockImplementation((p: any) => String(p).startsWith(join(home, '.agents', 'skills')))
+    const result = await ensureOpenspec({ yes: true })
+    expect(result.inspection.skills.status).toBe('global-only')
+    expect(result.executed).toEqual([])
+  })
 })

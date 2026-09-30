@@ -16,31 +16,32 @@ export interface LyConfig {
   workflows: {
     installed: string[]
   }
-  // 已安装宿主集合（兼容旧配置读取；codex 单宿主下恒为 ['codex']）
-  installedHosts?: HostId[]
   paths: {
     commands: string
     prompts: string
     backup: string
   }
-  // codex 宿主（单 Agent 模式）专属配置
-  codexHost?: {
-    // 审查执行者：main = 主 agent 直接执行（默认/未配置）；subagent = spawn 独立审查 subagent
-    reviewExecutor?: ExecutorKind
-    // coding 执行者：main = 主 agent 直接实施（默认/未配置）；subagent = spawn coding subagent
-    codingExecutor?: ExecutorKind
-    // 审查 subagent 模型；仅在 reviewExecutor === 'subagent' 时生效，未配置或空白回退当前会话模型
-    reviewModel?: string
-    // coding subagent 模型；仅在 codingExecutor === 'subagent' 时生效，未配置或空白回退当前会话模型
-    codingModel?: string
-    // 审查 subagent 推理档；仅在 reviewExecutor === 'subagent' 且非空时随 reviewModel spawn 传入
-    reviewReasoningEffort?: string
-    // coding subagent 推理档；仅在 codingExecutor === 'subagent' 且非空时随 codingModel spawn 传入
-    codingReasoningEffort?: string
-    // 提示参考：本机实测可 spawn 的模型清单（不作候选/校验来源，agent 模型可用性
-    // 由环境实际能力决定）；未配置或清洗后为空时提示口径回退 SPAWNABLE_MODELS_DEFAULT
-    spawnableModels?: string[]
-  }
+  // 宿主配置节（每宿主配置文件内的 [host] 节；字段语义全部宿主一致）
+  host?: HostSection
+}
+
+// 宿主配置节字段
+export interface HostSection {
+  // 审查执行者：main = 主 agent 直接执行（默认/未配置）；subagent = spawn 独立审查 subagent
+  reviewExecutor?: ExecutorKind
+  // coding 执行者：main = 主 agent 直接实施（默认/未配置）；subagent = spawn coding subagent
+  codingExecutor?: ExecutorKind
+  // 审查 subagent 模型；仅在 reviewExecutor === 'subagent' 时生效，未配置或空白回退当前会话模型
+  reviewModel?: string
+  // coding subagent 模型；仅在 codingExecutor === 'subagent' 时生效，未配置或空白回退当前会话模型
+  codingModel?: string
+  // 审查 subagent 推理档；仅在 reviewExecutor === 'subagent' 且非空时随 reviewModel spawn 传入
+  reviewReasoningEffort?: string
+  // coding subagent 推理档；仅在 codingExecutor === 'subagent' 且非空时随 codingModel spawn 传入
+  codingReasoningEffort?: string
+  // 提示参考：本机实测可 spawn 的模型清单（不作候选/校验来源，agent 模型可用性
+  // 由环境实际能力决定）；未配置或清洗后为空时提示口径回退 SPAWNABLE_MODELS_DEFAULT
+  spawnableModels?: string[]
 }
 
 // 工作流定义
@@ -61,6 +62,10 @@ export interface InitOptions {
   lang?: SupportedLang
   skipPrompt?: boolean
   force?: boolean
+  /** 宿主已确认后执行项目级 OpenSpec 修复（lycx init --init-openspec） */
+  initOpenspec?: boolean
+  /** 指定宿主（逗号分隔）：非交互时只安装这些宿主，交互时作为默认勾选 */
+  host?: string
   // 非交互模式参数
   workflows?: string
   installDir?: string
@@ -75,6 +80,8 @@ export interface InstallResult {
   skippedCommands?: string[]
   errors: string[]
   configPath: string
+  /** 按宿主分别记录（自 add-claude-host 起）；上面的聚合字段为全部宿主之和 */
+  hosts?: Partial<Record<HostId, InstallResult>>
 }
 
 // Re-export CLI types

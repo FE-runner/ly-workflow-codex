@@ -35,7 +35,7 @@ function cmd(
 
 // ═══════════════════════════════════════════════════════
 // Core commands (always installed)
-// Source: templates/skills-codex/ (codex 单宿主安装源，SKILL.md 形态)
+// Source: templates/skills/ (各宿主共享的命令模板正文，SKILL.md 形态)
 // ═══════════════════════════════════════════════════════
 
 const CORE_CONFIGS: WorkflowConfig[] = [

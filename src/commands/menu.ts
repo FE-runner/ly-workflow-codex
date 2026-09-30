@@ -1,5 +1,6 @@
+import type { ExecutorKind } from '../types'
+import type { HostId } from '../utils/host-adapters'
 import { exec } from 'node:child_process'
-import { homedir } from 'node:os'
 import { promisify } from 'node:util'
 import ansis from 'ansis'
 import fs from 'fs-extra'
@@ -9,9 +10,9 @@ import { join } from 'pathe'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import type { ExecutorKind } from '../types'
-import { getConfigPath, mergeCodexHostConfig, readLyConfig, sanitizeExecutor, sanitizeReasoningEffort, sanitizeReviewModel, writeLyConfig } from '../utils/config'
-import { getCoreCommandIds, getWorkflowConfigs, installWorkflows, uninstallWorkflows } from '../utils/installer'
+import { getConfigPath, getHostConfigPath, listInstalledHosts, mergeHostConfig, readLyConfig, sanitizeExecutor, sanitizeReasoningEffort, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import { DEFAULT_HOST, getAdapter, listRegisteredHosts } from '../utils/host-adapters'
+import { getCoreCommandIds, getWorkflowConfigs, installWorkflows } from '../utils/installer'
 import {
   buildModelFieldChoices,
   buildReasoningEffortChoices,
@@ -20,8 +21,9 @@ import {
   REASONING_CHOICE_CUSTOM,
   REASONING_CHOICE_UNSET,
 } from '../utils/model-candidates'
-import { AGENTS_SKILLS_DIR, PACKAGE_NAME } from '../utils/package-meta'
+import { PACKAGE_NAME } from '../utils/package-meta'
 import { init } from './init'
+import { printUninstallResult, resolveUninstallHosts, runUninstall } from './uninstall'
 import { update } from './update'
 
 const execAsync = promisify(exec)
@@ -141,6 +143,41 @@ function groupSep(label: string): InstanceType<typeof inquirer.Separator> {
 }
 
 // ═══════════════════════════════════════════════════════
+// Host picking（单宿主操作入口：已安装 >1 个宿主时显式选择；未选 = 全部已安装宿主）
+// ═══════════════════════════════════════════════════════
+
+/**
+ * 已安装宿主只有 0/1 个 → 不询问，返回 undefined（调用方按"全部已安装宿主"处理）；
+ * 多个 → 让用户选择（single = 单选，否则多选，默认全选）。
+ */
+export async function pickInstalledHosts(messageKey: string, opts: { single?: boolean } = {}): Promise<HostId[] | undefined> {
+  return pickInstalledHostsWith(await listInstalledHosts(), async (question) => {
+    const answer = await inquirer.prompt([question])
+    return opts.single ? [answer.picked] : answer.picked
+  }, Boolean(opts.single), i18n.t(messageKey))
+}
+
+/** 可测试的选择逻辑（ask 注入）：已安装 ≤1 个时不询问 */
+export async function pickInstalledHostsWith(
+  installed: HostId[],
+  ask: (question: any) => Promise<HostId[]>,
+  single: boolean,
+  message = '',
+): Promise<HostId[] | undefined> {
+  if (installed.length <= 1)
+    return installed.length === 1 && single ? installed : undefined
+  return ask(single
+    ? { type: 'list', name: 'picked', message, choices: installed.map(h => ({ name: h, value: h })) }
+    : {
+        type: 'checkbox',
+        name: 'picked',
+        message,
+        choices: installed.map(h => ({ name: h, value: h, checked: true })),
+        validate: (value: unknown[]) => value.length > 0 || i18n.t('init:hostSelect.required'),
+      })
+}
+
+// ═══════════════════════════════════════════════════════
 // Main Menu
 // ═══════════════════════════════════════════════════════
 
@@ -167,7 +204,8 @@ export function buildMainMenuChoices(isZh: boolean): any[] {
 
 export async function showMainMenu(): Promise<void> {
   while (true) {
-    const config = await readLyConfig()
+    const installedHosts = await listInstalledHosts()
+    const config = await readLyConfig(installedHosts[0] ?? DEFAULT_HOST)
     const cmdCount = config?.workflows?.installed?.length || 0
     const lang = config?.general?.language || 'zh-CN'
 
@@ -175,9 +213,10 @@ export async function showMainMenu(): Promise<void> {
       ansis.green(`v${version}`),
       ansis.white(`${cmdCount} commands`),
       ansis.yellow(lang),
+      ansis.cyan(`hosts: ${installedHosts.length > 0 ? installedHosts.join('+') : '-'}`),
     ]
-    if (sanitizeReviewModel(config?.codexHost?.reviewModel)) {
-      statusParts.push(ansis.green(`review model: ${config?.codexHost?.reviewModel}`))
+    if (sanitizeReviewModel(config?.host?.reviewModel)) {
+      statusParts.push(ansis.green(`review model: ${config?.host?.reviewModel}`))
     }
 
     drawHeader(statusParts)
@@ -197,7 +236,7 @@ export async function showMainMenu(): Promise<void> {
         await init()
         break
       case '2':
-        await update()
+        await update({ hosts: await pickInstalledHosts('menu:hostPick.update') })
         break
       case '3':
         await configReviewModel()
@@ -237,44 +276,41 @@ function showHelp(): void {
   console.log(ansis.cyan.bold(`  ${i18n.t('menu:help.title')}`))
   console.log()
 
-  const col1 = 22
+  const col1 = 26
   const section = (title: string) => console.log(ansis.yellow.bold(`  ${title}`))
   const cmd = (name: string, desc: string) => console.log(`  ${ansis.green(name.padEnd(col1))} ${ansis.gray(desc)}`)
+  const coreConfigs = getWorkflowConfigs()
 
-  const commandsDir = AGENTS_SKILLS_DIR
-
-  let installedFiles: string[] = []
-  try {
-    installedFiles = fs.readdirSync(commandsDir).filter((f) => {
-      if (!f.startsWith('lyx-'))
-        return false
-      try {
-        return fs.statSync(join(commandsDir, f)).isDirectory()
+  let shown = 0
+  for (const host of listRegisteredHosts()) {
+    const adapter = getAdapter(host)
+    const commandsDir = adapter.defaultPaths().skillsDir
+    let installed: string[] = []
+    try {
+      installed = fs.readdirSync(commandsDir)
+        .filter(f => f.startsWith('lyx-') && fs.statSync(join(commandsDir, f)).isDirectory())
+        .map(f => f.replace(/^lyx-/, ''))
+    }
+    catch { continue }
+    if (installed.length === 0)
+      continue
+    shown++
+    section(`${isZh ? '核心命令' : 'Core commands'} [${host}]`)
+    for (const config_ of coreConfigs) {
+      for (const cmdName of config_.commands) {
+        if (installed.includes(cmdName))
+          cmd(`${adapter.commandPrefix}lyx-${cmdName}`, (isZh ? config_.description : config_.descriptionEn) || '')
       }
-      catch { return false }
-    })
+    }
+    console.log()
   }
-  catch {
+
+  if (shown === 0) {
     console.log(ansis.yellow(`  ${isZh ? '未找到已安装的命令。' : 'No installed commands found.'}`))
     console.log(ansis.gray(`  ${isZh ? '运行 `lycx init` 后查看已安装命令' : 'Run `lycx init` then check installed commands'}`))
     console.log()
     return
   }
-
-  const coreConfigs = getWorkflowConfigs()
-  const coreCommandNames = new Set(coreConfigs.flatMap(w => w.commands))
-
-  const coreFiles = installedFiles.map(f => f.replace(/^lyx-/, ''))
-
-  section(isZh ? '核心命令' : 'Core commands')
-  for (const config_ of coreConfigs) {
-    for (const cmdName of config_.commands) {
-      if (coreFiles.includes(cmdName) && coreCommandNames.has(cmdName)) {
-        cmd(`@lyx-${cmdName}`, (isZh ? config_.description : config_.descriptionEn) || '')
-      }
-    }
-  }
-  console.log()
 
   console.log(ansis.gray(`  ${i18n.t('menu:help.hint')}`))
   console.log()
@@ -285,7 +321,8 @@ function showHelp(): void {
  */
 function readLyConfigSync(): any {
   try {
-    const configPath = getConfigPath()
+    const installed = listRegisteredHosts().map(h => getHostConfigPath(h)).filter(p => fs.pathExistsSync(p))
+    const configPath = installed[0] ?? getConfigPath()
     if (fs.pathExistsSync(configPath)) {
       return parseTOML(fs.readFileSync(configPath, 'utf-8'))
     }
@@ -298,12 +335,23 @@ function readLyConfigSync(): any {
 // Review model configuration
 // ═══════════════════════════════════════════════════════
 
-/** codex 宿主审查执行者（codexHost.reviewExecutor）与审查模型（codexHost.reviewModel）编辑入口 */
+/**
+ * 执行者 / 审查模型编辑入口（按宿主）：
+ * - codex：审查执行者 + 审查模型 + 审查推理档（既有流程）
+ * - claude：执行者二连（main / subagent），不采集模型与推理档；改完按当前配置重渲染子代理定义
+ */
 async function configReviewModel(): Promise<void> {
-  const config = await readLyConfig()
-  const currentReviewModel = sanitizeReviewModel(config?.codexHost?.reviewModel)
-  const currentExecutor = sanitizeExecutor(config?.codexHost?.reviewExecutor)
-  const currentReviewReasoningEffort = sanitizeReasoningEffort(config?.codexHost?.reviewReasoningEffort)
+  const hosts = await pickInstalledHosts('menu:hostPick.config', { single: true })
+  const host = hosts?.[0] ?? DEFAULT_HOST
+  if (host === 'claude') {
+    await configClaudeExecutors()
+    return
+  }
+
+  const config = await readLyConfig(host)
+  const currentReviewModel = sanitizeReviewModel(config?.host?.reviewModel)
+  const currentExecutor = sanitizeExecutor(config?.host?.reviewExecutor)
+  const currentReviewReasoningEffort = sanitizeReasoningEffort(config?.host?.reviewReasoningEffort)
   // 候选/默认语义与 init 模型三连共用（buildModelFieldChoices）：
   // 留空（继承当前会话模型）+ 自定义输入 + 既有值；agent 模型需额外配置
 
@@ -387,19 +435,19 @@ async function configReviewModel(): Promise<void> {
     return
   }
 
-  const fresh = await readLyConfig()
+  const fresh = await readLyConfig(host)
   if (!fresh) {
     console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized`)
     return
   }
   // 写回保留既有 codingExecutor / codingModel / codingReasoningEffort / spawnableModels；
   // review 推理档按本次选择写入或清除。
-  fresh.codexHost = mergeCodexHostConfig(fresh.codexHost, {
+  fresh.host = mergeHostConfig(fresh.host, {
     reviewExecutor: nextExecutor,
     reviewModel: next,
     reviewReasoningEffort: nextReasoningEffort,
   })
-  await writeLyConfig(fresh)
+  await writeLyConfig(fresh, host)
 
   console.log()
   console.log(ansis.green(`  ✓ ${i18n.t('init:model.routingUpdated')}`))
@@ -411,16 +459,49 @@ async function configReviewModel(): Promise<void> {
 
   // 改配置后重装命令模板（codex 单宿主：模型经"模板指示 + 宿主 spawn 能力"落实，无 -m 参数；
   // 重装用于刷新模板正文与内置默认清单占位）
-  await reinstallTemplates()
+  await reinstallTemplates(host)
 }
 
-/** 模型配置变更后的命令模板重装（codex 宿主，--force 覆盖渲染） */
-async function reinstallTemplates(): Promise<void> {
+/** claude 宿主执行者开关：只改 reviewExecutor / codingExecutor，模型与推理档保留原值 */
+async function configClaudeExecutors(): Promise<void> {
+  const config = await readLyConfig('claude')
+  if (!config) {
+    console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized (claude)`)
+    return
+  }
+  console.log()
+  console.log(ansis.gray(`  ${i18n.t('init:claude.executorHint')}`))
+  const next: { reviewExecutor?: ExecutorKind, codingExecutor?: ExecutorKind } = {}
+  for (const key of ['reviewExecutor', 'codingExecutor'] as const) {
+    const { executor } = await inquirer.prompt([{
+      type: 'list',
+      name: 'executor',
+      message: i18n.t(`init:executor.${key}`),
+      choices: [
+        { name: i18n.t('init:executor.main'), value: 'main' },
+        { name: i18n.t('init:executor.subagent'), value: 'subagent' },
+      ],
+      default: sanitizeExecutor(config.host?.[key]) ?? 'main',
+    }])
+    next[key] = executor === 'subagent' ? 'subagent' : 'main'
+  }
+  if (next.reviewExecutor === (sanitizeExecutor(config.host?.reviewExecutor) ?? 'main')
+    && next.codingExecutor === (sanitizeExecutor(config.host?.codingExecutor) ?? 'main')) {
+    console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))
+    return
+  }
+  config.host = mergeHostConfig(config.host, next)
+  await writeLyConfig(config, 'claude')
+  console.log(ansis.green(`  ✓ ${i18n.t('init:model.routingUpdated')}`))
+  await reinstallTemplates('claude')
+}
+
+/** 配置变更后的命令模板重装（指定宿主，--force 覆盖渲染；claude 同时重渲子代理定义） */
+async function reinstallTemplates(host: HostId): Promise<void> {
   const spinner = ora(i18n.t('init:model.reinstalling')).start()
   try {
-    const config = await readLyConfig()
-    const reviewModel = sanitizeReviewModel(config?.codexHost?.reviewModel)
-    const result = await installWorkflows(getCoreCommandIds(), '', true, { reviewModel })
+    const config = await readLyConfig(host)
+    const result = await installWorkflows(getCoreCommandIds(), '', true, { hosts: [host], hostConfig: { [host]: config?.host ?? {} } })
     if (result.success) {
       spinner.succeed(i18n.t('init:model.reinstallDone'))
     }
@@ -483,31 +564,14 @@ async function uninstall(): Promise<void> {
   console.log()
   console.log(ansis.yellow(`  ${i18n.t('menu:uninstall.uninstalling')}`))
 
-  const result = await uninstallWorkflows(join(homedir(), '.codex'))
+  const hosts = await resolveUninstallHosts(await pickInstalledHosts('menu:hostPick.uninstall'))
+  const result = await runUninstall(hosts)
 
   if (result.success) {
     console.log(ansis.green(`  ✅ ${i18n.t('menu:uninstall.success')}`))
 
-    if (result.removedSkills.length > 0) {
-      console.log()
-      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedSkills')}`))
-      for (const file of result.removedSkills) {
-        console.log(`    ${ansis.gray('•')} ${file}`)
-      }
-    }
-
-    if (result.removedLegacyPrompts.length > 0) {
-      console.log()
-      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedLegacyPrompts')}`))
-      for (const file of result.removedLegacyPrompts) {
-        console.log(`    ${ansis.gray('•')} ${file}`)
-      }
-    }
-
-    if (result.removedPrompts) {
-      console.log()
-      console.log(ansis.cyan(`  ${i18n.t('menu:uninstall.removedPrompts')}`))
-    }
+    console.log()
+    printUninstallResult(result)
 
     if (isGlobalInstall) {
       console.log()

@@ -1,6 +1,6 @@
 ---
 name: lyx-review-plan
-description: '读取 OpenSpec change 的 proposal/design/tasks，按 [codexHost] reviewExecutor 决定审查主体（main = 主 agent 直接审查；subagent = spawn 审查 subagent），分级审查方案合理性，审查-修复循环直到 Critical 清零或触发终止条件'
+description: '读取 OpenSpec change 的 proposal/design/tasks，按 [host] reviewExecutor 决定审查主体（main = 主 agent 直接审查；subagent = spawn 审查 subagent），分级审查方案合理性，审查-修复循环直到 Critical 清零或触发终止条件'
 argument-hint: '[<change-name>] [--no-commit]'
 ---
 
@@ -11,14 +11,14 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 > 调用方式：`@lyx-review-plan` mention 后跟随的自然语言即参数（如 `@lyx-review-plan` 带需求描述/选项）；无参数时直接 `@lyx-review-plan`。
 
-审查当前 OpenSpec change 的方案是否合理，聚焦遗漏边界、范围不清晰、风险点——不是逐行代码风格。输出 Critical/Warning/Info 分级结果（与 `@lyx-review-code` 一致）。**审查主体由 `~/.codex/lyx/config.toml` 的 `[codexHost] reviewExecutor` 决定**（未配置、空白或非法取值等价 `"main"`）：
+审查当前 OpenSpec change 的方案是否合理，聚焦遗漏边界、范围不清晰、风险点——不是逐行代码风格。输出 Critical/Warning/Info 分级结果（与 `@lyx-review-code` 一致）。**审查主体由 `{{LYX_CONFIG_FILE}}` 的 `[host] reviewExecutor` 决定**（未配置、空白或非法取值等价 `"main"`）：
 
 - **`"main"`（默认）**：主 agent 在当前会话直接审查——不 spawn 子代理、不读取 `reviewModel` / `reviewReasoningEffort`、不产生 `[回退]` 标记。主 agent 的发现即最终裁决，**不适用**逐条裁决、驳回硬线、熔断、审查对象类型持续系统性误判这些为双主体仲裁设计的条件；发现 Critical 时直接修复该 change 的 artifact，修复后自查一轮确认清零，自审循环最多 2 轮（超过则停止转人工）。
-- **`"subagent"`**：进入既有单审查 subagent 流程（下方步骤），首轮之后 SHALL 优先以 `send_input` 复用同一子代理；复用失败才回退为重新 spawn 全新子代理（按增量语义携带上一轮全部 Critical 逐字原文与路径清单）。逐条裁决、驳回硬线、熔断、轮数上限等既有规则保持适用。
+{{HOST_FRAGMENT:executor-subagent}}
 
 与执行者无关的规则（目标 change 解析、工件路径枚举、基线 spec 引用检测、分级输出、每轮 `openspec validate`）在两条路径下保持一致。
 
-审查由 **1 个审查 subagent** 执行（subagent 多 Agent 模式）：子会话**非 fork spawn**、只携带本模板构造的 TASK（软上下文经该 change 目录下的 `context.md` 到达），任务中点名"只审该 change 的产物范围"；模型按 `codexHost.reviewModel` 指定，未配置或空白时继承当前会话模型。SHALL NOT spawn 第二个审查 agent、SHALL NOT 实现"并行双审、交换结论、共识归并"环节——单 agent 的分级结论即本轮唯一审查发现来源，质量把关由当前会话逐条裁决与"驳回硬线"终止条件承担。Critical 修复由当前会话执行。
+审查由 **1 个审查 subagent** 执行（subagent 多 Agent 模式）：子会话**非 fork spawn**、只携带本模板构造的 TASK（软上下文经该 change 目录下的 `context.md` 到达），任务中点名"只审该 change 的产物范围"；模型按 `[host] reviewModel` 指定，未配置或空白时继承当前会话模型。SHALL NOT spawn 第二个审查 agent、SHALL NOT 实现"并行双审、交换结论、共识归并"环节——单 agent 的分级结论即本轮唯一审查发现来源，质量把关由当前会话逐条裁决与"驳回硬线"终止条件承担。Critical 修复由当前会话执行。
 
 循环执行期间默认不提交；仅当循环以"正常清零"结束时，才对审查目标全部文件（该 change 的 artifact 与 delta spec，含编排方已暂存的产物与循环修复）统一提交一次（见步骤 5）。传入 `--no-commit` 时，连这次最终的统一提交也不做。
 
@@ -56,14 +56,12 @@ ls -d openspec/changes/*/ 2>/dev/null | grep -v '/archive/'
 
 **轮内纪律（主会话硬规则）**：
 
-1. **同轮等待结果**：spawn 之后 SHALL 在本轮内等待（wait）子 agent 返回，收到结果先逐字转达（写入本轮执行日志）再判定；SHALL NOT 在 spawn 后结束本轮回合，留下"子 agent 已返回但主会话已退出、结果无人消费"的断链状态。
-2. **禁止口头分发**：每一步 spawn / wait 都 SHALL 落到宿主的实际工具调用，SHALL NOT 仅以自然语言描述"已分发/将分发审查任务给 subagent"代替实际 spawn 调用；出现"我将 spawn…"类描述而没有对应工具调用时，该输出不视为分发动作，不得据此结束本轮或进入下一阶段。
-3. **消费完即关闭**：子 agent 结果消费完毕（逐条裁决完成、不再需要该 agent）SHALL 关闭它；SHALL NOT 假设 subagent 跨用户回合存活。
+{{HOST_FRAGMENT:subagent-discipline}}
 
-1. **非 fork spawn**：审查 subagent SHALL 以**非 fork** 方式 spawn——子代理只携带 spawn 消息（TASK），SHALL NOT 携带父线程对话历史（宿主 V1 语义为 `fork_context: false` 默认值；V2 语义为 `fork_turns: none`）。仅当宿主不支持完全非 fork 而仅支持"最近 N 轮"fork 模式时，SHALL 取最小 N（或 0）近似非 fork 并在报告中如实说明；SHALL NOT 使用全量 fork。
+{{HOST_FRAGMENT:subagent-nonfork}}
 2. **软上下文经 context.md 到达**：非 fork 意味着主会话讨论中的关键决策、取舍、已知边界等"软上下文"不再随会话历史自动到达审查 agent——TASK SHALL 指示审查 subagent 读取该 change 目录下的 `context.md`（`openspec/changes/<change-name>/context.md`）获取软上下文，SHALL NOT 在 TASK 中整段复制其内容。`context.md` 缺失（历史 change）时在报告中如实注明"context.md 缺失，软上下文不可用"后继续，SHALL NOT 凭空虚构上下文。
-3. **agent 模型需额外配置（含推理档；spawn 前确认字段，不做清单强校验）**：审查 subagent 的模型 = `~/.codex/lyx/config.toml` 的 `[codexHost] reviewModel`；未配置或空白 → 继承当前会话模型。推理档 = `[codexHost] reviewReasoningEffort`；先 trim，trim 后为空 → 不传该参数，trim 后非空时把 trim 后的值作为宿主 spawn 的 `reasoning_effort` 随 `reviewModel` 一并传入。模型能否 spawn 由运行环境实际能力决定，SHALL NOT 依赖任何硬编码清单或 `/models` 结果预判。spawn 前 SHALL 读取 `~/.codex/lyx/config.toml` 确认模型与推理档字段取值，读取失败（缺文件/解析错误）→ 视为**配置状态未知**：明确提示"无法读取配置，请运行 `lycx doctor` 检查"，SHALL NOT 按"未配置"静默继承回退。spawn 失败报错原文含 `Unknown model` 与 `Available models: ...` 时如实展示，提示"该模型当前不支持 spawn，请改用报错中 Available models 列表内的模型"；推理档被宿主/上游拒绝时同样如实展示报错原文并按既有 spawn 失败口径处理，SHALL NOT 把取值预判为"配置无效"。模型与推理档指定只写在模板指示里，SHALL NOT 依赖任何 shell 层模型参数（无 `-m`/`--model` 类指令），SHALL NOT 内置任何"模型名 → 推理档"的硬编码映射。**验证某模型是否可 spawn 的示例 prompt**：让 Codex 用该模型 spawn 一个子代理执行简单任务（如回复 ok），报错原文即判定依据。
-4. **TASK 范围点名（只审 change 范围）**：审查 subagent 的任务点名"只审该 change 的下列产物"，SHALL NOT 超出点名范围作业。TASK 先指示读取 ROLE_FILE（`~/.codex/lyx/prompts/codex/plan-reviewer.md`，角色词内容不重写），再列出路径清单（步骤 2 枚举的 artifact + delta spec；若步骤 2 检测到基线 spec 引用，同时说明基线路径仅作审查上下文、不属于修复对象）。**首轮只传路径清单，不拼贴文件全文**——审查 subagent 具备自主读取文件的能力，需要实际内容时自行读取。
+{{HOST_FRAGMENT:subagent-model}}
+{{HOST_FRAGMENT:subagent-task}}
 
 TASK 核心约束（写入审查 subagent 的任务）：
 - 只审查该 change 目录下 artifact 之间的内在一致性和完整性（proposal vs design vs tasks vs spec 是否互相矛盾、是否有遗漏）
@@ -116,7 +114,7 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 
 路径清单之外的文件不重新整段传入。若某条上一轮 Critical 的位置字段缺失可解析路径，命令保守处理：将该 change 目录下全部 artifact/delta spec 路径纳入下一轮路径清单，并在报告中说明该情况（不得静默丢弃该 Critical）。
 
-**第 2 轮起优先复用同一审查 subagent（`send_input`）**：实测宿主支持在子代理首次任务完成后再次唤醒它且其保留自身会话上下文，因此"回合结束即失去访问能力"SHALL NOT 再作为必须重新 spawn 的理由。主会话 SHALL 先以 `send_input` 向首轮那个子代理发送增量内容（修复说明 + 上一轮全部 Critical 逐字原文 + 路径清单 + 该 change 目录下 `context.md` 路径引用），由它判断"问题是否已解决"。**复用失败时**（子代理会话丢失、`send_input` 报错、`resume_agent` 不可用）SHALL 回退为重新 spawn 一个全新审查 subagent（**非 fork，只携带 TASK**），TASK 按同一增量语义构造，并在本轮报告中说明复用失败原因。回到步骤 3 的执行方式，不要求用户手动重新触发命令。生成本轮执行日志后再判定 Critical 是否清零。
+{{HOST_FRAGMENT:subagent-reuse}}
 
 ### 循环终止条件（任一命中即停止，转步骤 5）
 
