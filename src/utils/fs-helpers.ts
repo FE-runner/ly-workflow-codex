@@ -29,6 +29,18 @@ async function isDirEntry(full: string): Promise<boolean> {
   }
 }
 
+/** 条目是否为普通文件：ENOENT（断链等）按"不是文件"跳过，其余错误向上抛出 */
+async function isFileEntry(full: string): Promise<boolean> {
+  try {
+    return (await fs.stat(full)).isFile()
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      return false
+    throw error
+  }
+}
+
 /**
  * 列出目录下以 prefix 开头的子目录（绝对路径）。
  *
@@ -58,7 +70,7 @@ export async function listPrefixedFiles(dir: string, prefix: string, suffix: str
     if (!entry.startsWith(prefix) || !entry.endsWith(suffix))
       continue
     const full = join(dir, entry)
-    if ((await fs.stat(full)).isFile())
+    if (await isFileEntry(full))
       files.push(full)
   }
   return files

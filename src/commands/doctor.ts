@@ -1,4 +1,4 @@
-import type { HostDoctorCheck, HostId } from '../utils/host-adapters'
+import type { HostAdapterConfig, HostDoctorCheck, HostId, HostPaths } from '../utils/host-adapters'
 import { execSync } from 'node:child_process'
 import ansis from 'ansis'
 import fs from 'fs-extra'
@@ -64,9 +64,28 @@ export async function collectHostDoctorChecks(host: HostId): Promise<HostDoctorC
       ? `v${config.general?.version || '?'}, lang=${config.general?.language || '?'} (${getHostConfigPath(host)})`
       : i18n.t('doctor:configMissing', { path: getHostConfigPath(host) }),
   }]
-  if (adapter.doctorChecks)
-    checks.push(...await adapter.doctorChecks({ paths: adapter.defaultPaths(), config: config?.host }))
+  checks.push(...await collectHostDoctorChecksWith(host, adapter.defaultPaths(), config?.host))
   return checks
+}
+
+/**
+ * 适配器体检项（路径可注入，便于测试）：目录枚举遇到权限 / IO 错误会抛出（不再静默当成"空"），
+ * 此处如实报该宿主体检失败，SHALL NOT 中断整体输出。
+ */
+export async function collectHostDoctorChecksWith(host: HostId, paths: HostPaths, config: HostAdapterConfig | undefined): Promise<HostDoctorCheck[]> {
+  const adapter = getAdapter(host)
+  if (!adapter.doctorChecks)
+    return []
+  try {
+    return await adapter.doctorChecks({ paths, config })
+  }
+  catch (error) {
+    return [{
+      label: 'host checks',
+      status: 'fail',
+      detail: i18n.t('doctor:hostCheckFailed', { error: error instanceof Error ? error.message : String(error) }),
+    }]
+  }
 }
 
 export async function doctor(options: HostOpsOptions = {}): Promise<void> {
@@ -159,11 +178,17 @@ export async function status(options: HostOpsOptions = {}): Promise<void> {
     const adapter = getAdapter(host)
     const config = await readLyConfig(host)
     const installedVer = config?.general?.version || 'unknown'
-    const cmds = await listPrefixedDirs(adapter.defaultPaths().skillsDir, 'lyx-')
+    let cmdCount: string
+    try {
+      cmdCount = String((await listPrefixedDirs(adapter.defaultPaths().skillsDir, 'lyx-')).length)
+    }
+    catch (error) {
+      cmdCount = ansis.red(i18n.t('doctor:hostCheckFailed', { error: error instanceof Error ? error.message : String(error) }))
+    }
     const executor = (key: 'reviewExecutor' | 'codingExecutor') => sanitizeExecutor(config?.host?.[key]) ?? 'main'
     console.log(ansis.magenta.bold(`  ${i18n.t('doctor:hostGroup', { host })}`))
     console.log(`  ${ansis.bold('Version')}        ${installedVer}${installedVer !== latestVer ? ansis.yellow(` (latest: ${latestVer})`) : ansis.green(' (up to date)')}`)
-    console.log(`  ${ansis.bold('Commands')}       ${cmds.length} (${adapter.commandPrefix}lyx-*)`)
+    console.log(`  ${ansis.bold('Commands')}       ${cmdCount} (${adapter.commandPrefix}lyx-*)`)
     console.log(`  ${ansis.bold('Config')}         ${getHostConfigPath(host)}`)
     console.log(`  ${ansis.bold('Executors')}      review=${executor('reviewExecutor')}, coding=${executor('codingExecutor')}`)
     console.log()

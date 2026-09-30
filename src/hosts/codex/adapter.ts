@@ -179,6 +179,7 @@ export const codexAdapter: HostAdapter = {
     }
     catch (error) {
       report.errors.push(`Failed to clean legacy ly-* skills: ${error}`)
+      report.success = false
     }
 
     // 旧安装位残留：~/.codex/prompts/ly-*.md（v0.2.0 前产物）
@@ -190,6 +191,7 @@ export const codexAdapter: HostAdapter = {
     }
     catch (error) {
       report.errors.push(`Failed to clean legacy codex prompts: ${error}`)
+      report.success = false
     }
 
     // 角色词：仅删本包归属的 <promptsDir>/codex/ 子目录；本就不存在则跳过，不报错

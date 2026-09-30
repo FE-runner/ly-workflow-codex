@@ -186,3 +186,44 @@ describe('review-code fixes (add-claude-host W1–W4)', () => {
     expect(lines).toContain('lyx-*.md')
   })
 })
+
+describe('review-code round-2 fixes (add-claude-host)', () => {
+  const lockedBase = mkdtempSync(join(tmpdir(), 'ly-locked-'))
+  const isRoot = typeof process.getuid === 'function' && process.getuid() === 0
+
+  afterAll(async () => {
+    await fs.chmod(join(lockedBase, 'skills'), 0o755).catch(() => {})
+    await fs.remove(lockedBase)
+  })
+
+  it.skipIf(isRoot)('w1: unreadable skills dir → doctor reports a failed host check instead of throwing', async () => {
+    const skillsDir = join(lockedBase, 'skills')
+    await fs.ensureDir(join(skillsDir, 'lyx-commit'))
+    await fs.chmod(skillsDir, 0o000)
+    const adapterPaths = { ...codexPaths, skillsDir }
+    await expect(codexDoctorChecks({ paths: adapterPaths, config: {} })).rejects.toThrow()
+    const { collectHostDoctorChecksWith } = await import('../doctor')
+    const checks = await collectHostDoctorChecksWith('codex', adapterPaths, undefined)
+    const failed = checks.find(c => c.label === 'host checks')
+    expect(failed?.status).toBe('fail')
+    expect(failed?.detail).toMatch(/EACCES|permission/i)
+    await fs.chmod(skillsDir, 0o755)
+  })
+
+  it('w3: menu uninstall scope lists the claude paths when only claude is being removed', () => {
+    const lines = describeUninstallTargets(['claude']).join('\n')
+    expect(lines).toContain('.claude/skills/lyx-*/')
+    expect(lines).toContain('.claude/agents/lyx-*.md')
+    expect(lines).not.toContain('.agents/skills')
+    expect(lines).not.toContain('.codex/lyx')
+  })
+
+  it('info: broken symlinks are skipped for files the same way as for directories', async () => {
+    const { listPrefixedFiles } = await import('../../utils/fs-helpers')
+    const dir = join(lockedBase, 'links')
+    await fs.ensureDir(dir)
+    await fs.writeFile(join(dir, 'lyx-a.md'), '#\n')
+    await fs.symlink(join(dir, 'missing.md'), join(dir, 'lyx-broken.md'))
+    expect((await listPrefixedFiles(dir, 'lyx-', '.md')).map(f => f.split('/').pop())).toEqual(['lyx-a.md'])
+  })
+})

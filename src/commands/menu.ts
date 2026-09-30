@@ -23,7 +23,7 @@ import {
 } from '../utils/model-candidates'
 import { PACKAGE_NAME } from '../utils/package-meta'
 import { init } from './init'
-import { printUninstallResult, resolveUninstallHosts, runUninstall } from './uninstall'
+import { describeUninstallTargets, printUninstallResult, resolveUninstallHosts, runUninstall } from './uninstall'
 import { update } from './update'
 
 const execAsync = promisify(exec)
@@ -549,6 +549,14 @@ async function uninstall(): Promise<void> {
     console.log()
   }
 
+  // 先确定要卸载的宿主，再按该集合的实际删除 / 修改范围生成确认文案（与 CLI 一致）
+  const hosts = await resolveUninstallHosts(await pickInstalledHosts('menu:hostPick.uninstall'))
+  console.log(`  ${i18n.t('menu:uninstall.scopeTitle')}`)
+  for (const line of describeUninstallTargets(hosts))
+    console.log(ansis.gray(`    ${line}`))
+  console.log(ansis.gray(`  ${i18n.t('menu:uninstall.scopeNote')}`))
+  console.log()
+
   const { confirm } = await inquirer.prompt([{
     type: 'confirm',
     name: 'confirm',
@@ -564,7 +572,6 @@ async function uninstall(): Promise<void> {
   console.log()
   console.log(ansis.yellow(`  ${i18n.t('menu:uninstall.uninstalling')}`))
 
-  const hosts = await resolveUninstallHosts(await pickInstalledHosts('menu:hostPick.uninstall'))
   const result = await runUninstall(hosts)
 
   if (result.success) {
