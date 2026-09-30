@@ -20,7 +20,7 @@
 ## 4. 文案与文档同步
 
 - [ ] 4.1 更新 `src/i18n/index.ts` 的 zh-CN / en 文案：claude 采集提示（由"只采集执行者"改为与 codex 同口径）、菜单标签、配置摘要相关条目；验证：`src/i18n/__tests__/i18n.test.ts` 中针对 `init:claude.executorHint` 的 `/inherit/` 断言按新文案同步且通过
-- [ ] 4.2 同步 `README.md`、`AGENTS.md`、`CLAUDE.md` 中"claude 只采集执行者 / 不采集模型与推理档"的表述；验证：`rg -n "只采集执行者|不采集模型|模型与推理档不采集" README.md AGENTS.md CLAUDE.md src` 零命中
+- [ ] 4.2 同步 `README.md`、`README.zh-CN.md`、`AGENTS.md`、`CLAUDE.md` 与 `src/i18n/index.ts` 中"claude 只采集执行者 / 不采集模型与推理档"的中英文旧口径——中文旧口径：`只采集执行者`、`不采集 provider / 模型 / 推理档`；英文旧口径：`asks only for the two executors`、`no provider / model / reasoning-effort collection`、`only asks for executors`、`models and reasoning effort are not collected`。同时复核两个 README 中"维护方式 = 手改配置（编辑交互入口为后续增强 / an interactive editor is planned）"一句——该句主语是 `[host] spawnableModels`（本次仍无交互入口），按实际主语判断保留或改写，SHALL NOT 机械删除；验证：`rg -n "只采集执行者|不采集 provider / 模型|asks only for the two executors|no provider / model|only asks for executors|models and reasoning effort are not collected" README.md README.zh-CN.md AGENTS.md CLAUDE.md src` 零命中；SHALL NOT 把仅描述未变更 provider 边界的表述（如 `不采集 provider`、`provider config is never written`）纳入零命中条件
 - [ ] 4.3 更新 `src/commands/__tests__/host-ops.test.ts` 与 `src/hosts/claude/__tests__/claude-host.test.ts` 中依赖旧采集边界的断言；验证：`pnpm vitest run src/commands/__tests__/host-ops.test.ts src/hosts/claude/__tests__/claude-host.test.ts` 通过
 
 ## 5. 收尾

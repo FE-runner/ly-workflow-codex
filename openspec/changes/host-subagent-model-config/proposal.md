@@ -9,7 +9,7 @@ claude 宿主的子代理模型与推理档目前只能手改 `~/.claude/lyx/con
 - **BREAKING（交互行为变更）**：codex 菜单新增编码侧的执行者 / 模型 / 推理档提问；claude 菜单新增审查侧模型 / 推理档提问，并保留既有执行者二连。菜单交互轮次因此变多。
 - 推理档建议档位清单改为按宿主提供（挂宿主适配器，共享层不出现宿主名与宿主路径判断）：claude = `low` / `medium` / `high` / `xhigh` / `max`，codex 保持 `minimal` / `low` / `medium` / `high` / `max`。清单仍只作提示、不做枚举强校验，既有值不在清单内时照常保留并默认选中。
 - 边界不变：不采集、不读取、不写入宿主自身的 provider / settings 配置（含 claude 的 `~/.claude/settings.json`）；claude 子代理定义未配置时仍以"继承当前会话"为默认。
-- 同步 i18n 文案（zh-CN / en，含菜单标签与采集提示）与 `README.md` / `AGENTS.md` / `CLAUDE.md` 中"claude 只采集执行者"的表述，并更新 `CHANGELOG.md`。
+- 同步 i18n 文案（zh-CN / en，含菜单标签与采集提示）与 `README.md` / `README.zh-CN.md` / `AGENTS.md` / `CLAUDE.md` 中"claude 只采集执行者"的表述，并更新 `CHANGELOG.md`。
 
 ## Capabilities
 
@@ -28,7 +28,7 @@ claude 宿主的子代理模型与推理档目前只能手改 `~/.claude/lyx/con
 - `src/utils/host-adapters.ts` 与 `src/hosts/codex/`、`src/hosts/claude/`：新增宿主级推理档建议清单字段
 - `src/utils/model-candidates.ts`：`buildReasoningEffortChoices` 的建议清单改为按宿主传入
 - `src/i18n/index.ts`（zh-CN / en）：新增与更新采集提示、菜单标签、摘要文案
-- 文档：`README.md`、`AGENTS.md`、`CLAUDE.md` 中"claude 只采集执行者"的表述同步
+- 文档：`README.md`、`README.zh-CN.md`、`AGENTS.md`、`CLAUDE.md` 中"claude 只采集执行者 / 不采集模型与推理档"的表述同步（中英文 README 各有一处直接冲突的旧口径）
 - 测试：`src/commands/__tests__/{init,menu,host-ops}.test.ts`、`src/hosts/claude/__tests__/claude-host.test.ts`、`src/i18n/__tests__/i18n.test.ts`、`src/utils/__tests__/model-candidates.test.ts`
 - `CHANGELOG.md`
 - 不涉及运行时依赖、打包产物布局与既有配置字段的兼容读取
