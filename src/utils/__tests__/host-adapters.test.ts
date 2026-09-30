@@ -221,6 +221,11 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       expect(content, name).not.toContain('git add -A -- .')
       expect(content, name).not.toContain('git add -A &&')
     }
+    // 仅有进行中快照改动时：propose 视为干净并跳过空 WIP，commit --all 不硬失败
+    const propose = read('propose.md')
+    expect(propose).toContain('?? openspec/changes/<change-name>/review-findings.md')
+    expect(propose).toContain('已跳过 WIP 提交')
+    expect(read('commit.md')).toContain('没有可提交的改动（进行中快照已按规则排除）')
   })
 
   it('templates declare and write back re-review notes', () => {

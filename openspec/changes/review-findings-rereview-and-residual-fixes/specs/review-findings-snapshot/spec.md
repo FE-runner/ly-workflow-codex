@@ -55,7 +55,7 @@
 
 ### Requirement: 快照随归档落库
 
-`@lyx-archive` 现有的 `git add -- openspec/` SHALL 覆盖 change 目录下的快照，使其随归档 commit 落库，并随 change 目录搬入 `openspec/changes/archive/<日期>-<change-name>/`——SHALL NOT 依赖任何额外的归档专门步骤。审查阶段已写快照（未跟踪），archive 阶段 SHALL NOT 重新生成或重建**当前 change 的快照内容**；归档前核对按「本 change 内修复标注」Requirement 追加的就地标注只追加解决子项、不改动原 Warning 条目，SHALL NOT 被视为重新生成或重建。此外，`@lyx-archive` MAY 按「追加式解决说明」与「追加式复审说明」Requirement 向**更早 change 的已归档快照**追加解决说明或复审说明——该追加不是对当前 change 快照的重新生成或重建，且 SHALL 复用同一次归档提交。未归档的 change 其快照 SHALL 保持未跟踪状态：除 review-plan / apply / review-code 的提交外，lyx 模板中的**全量暂存路径**（`@lyx-commit --all` 在暂存区为空时的全量暂存、`@lyx-propose` 切分支 / 留在当前分支前的 WIP commit）SHALL 排除进行中 change 目录下的 `review-findings.md`（仅匹配 `openspec/changes/<change-name>/review-findings.md` 一层，SHALL NOT 波及 `archive/` 下已跟踪的快照），SHALL NOT 将其提前纳入提交。排除后该路径保持未跟踪；若快照已被意外跟踪，命令 SHALL 如实报告，SHALL NOT 自动 `git rm --cached` 或改写历史。
+`@lyx-archive` 现有的 `git add -- openspec/` SHALL 覆盖 change 目录下的快照，使其随归档 commit 落库，并随 change 目录搬入 `openspec/changes/archive/<日期>-<change-name>/`——SHALL NOT 依赖任何额外的归档专门步骤。审查阶段已写快照（未跟踪），archive 阶段 SHALL NOT 重新生成或重建**当前 change 的快照内容**；归档前核对按「本 change 内修复标注」Requirement 追加的就地标注只追加解决子项、不改动原 Warning 条目，SHALL NOT 被视为重新生成或重建。此外，`@lyx-archive` MAY 按「追加式解决说明」与「追加式复审说明」Requirement 向**更早 change 的已归档快照**追加解决说明或复审说明——该追加不是对当前 change 快照的重新生成或重建，且 SHALL 复用同一次归档提交。未归档的 change 其快照 SHALL 保持未跟踪状态：除 review-plan / apply / review-code 的提交外，lyx 模板中的**全量暂存路径**（`@lyx-commit --all` 在暂存区为空时的全量暂存、`@lyx-propose` 切分支 / 留在当前分支前的 WIP commit）SHALL 排除进行中 change 目录下的 `review-findings.md`（仅匹配 `openspec/changes/<change-name>/review-findings.md` 一层，SHALL NOT 波及 `archive/` 下已跟踪的快照），SHALL NOT 将其提前纳入提交。脏改动检测（如 propose 的 `git status --porcelain` 处置询问）SHALL 同样忽略这类未跟踪快照；排除后暂存区为空时 SHALL 跳过提交并如实说明，SHALL NOT 以"nothing to commit"报错中断编排。排除后该路径保持未跟踪；若快照已被意外跟踪，命令 SHALL 如实报告，SHALL NOT 自动 `git rm --cached` 或改写历史。
 
 #### Scenario: 归档后快照进入 archive 目录
 
@@ -86,6 +86,11 @@
 
 - **WHEN** 另一个进行中的 change 留有未跟踪快照，用户运行 `@lyx-propose` 并选择 WIP commit 处置脏改动
 - **THEN** WIP commit 纳入其余改动，但该快照 SHALL NOT 被纳入
+
+#### Scenario: 仅有进行中快照改动时不中断
+
+- **WHEN** 工作区唯一的改动是另一个进行中 change 的未跟踪 `review-findings.md`，用户运行 `@lyx-propose` 或 `@lyx-commit --all`
+- **THEN** propose 视工作区为干净、不发出脏改动询问；`@lyx-commit --all` 暂存后暂存区为空，如实说明没有可提交的改动并结束，SHALL NOT 执行 `git commit` 报错
 
 #### Scenario: 全量暂存排除不波及已归档快照
 
