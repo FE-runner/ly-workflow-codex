@@ -2,7 +2,7 @@
 
 > 多宿主（Codex / Claude Code）单 Agent 工作流：同一会话内自己完成聊天 / 分析 / 规划 / 实施，两个宿主共享同一套命令流程。审查与实施主体由当前宿主配置文件的 `[host] reviewExecutor` / `codingExecutor` 决定（未配置等价 `main` = 主 agent 直接执行；`subagent` = spawn 独立子代理，非 fork spawn + 主会话逐条裁决异议）；慢验证统一由 `@lyx-archive` 的归档前关卡执行。执行约定内联于各 skill 模板（[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED）。
 
-**Last Updated**: 2026-09-30 (v0.7.0)
+**Last Updated**: 2026-09-30 (v0.8.0)
 
 ---
 
@@ -163,7 +163,7 @@ spawnableModels = [...]    # 仅 codex：本机实测可 spawn 的模型清单�
 
 ## 发版规则
 
-1. 更新 `package.json` 版本号（当前 0.4.0）
+1. 更新 `package.json` 版本号（当前 0.8.0）
 2. 更新 `CHANGELOG.md`（新条目在顶部）
 3. 同步根文档中的版本引用与行为描述
 4. `pnpm typecheck && pnpm build && pnpm test` 全绿后 commit

@@ -9,12 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.8.0] - 2026-09-30
 
-`lycx init` 与菜单的配置入口统一为同一采集面（执行者二连 → 模型二连 → 推理档二连）：Claude Code 宿主不再只能配执行者，推理档建议档位改为按宿主提供。
+`lycx init` 与菜单的配置入口统一为同一采集面（执行者二连 → 模型二连 → 推理档二连）：Claude Code 宿主不再只能配执行者，推理档建议档位改为按宿主提供。审查未修项快照新增复审说明通道。
 
 ### Added
 
+- `review-findings-snapshot` 新增**复审说明**通道：后续 change 可在 `proposal.md` 的 `## 复审的审查未修项` 声明锚点与结论（`成立` / `不成立`），由 `@lyx-archive` 向已归档快照追加 `- 复审：<change>（归档于 <日期>，结论：…）— …`；`@lyx-explore` 列出快照时额外显示"未复审"与"复审未通过"条数
 - `lycx init` 的 Claude Code 分支补齐模型二连（`reviewModel` / `codingModel`）与推理档二连（`reviewReasoningEffort` / `codingReasoningEffort`）采集，采集条件、候选语义与清洗规则与 Codex 完全一致（仅在对应执行者为 `subagent` 时采集；候选 = 留空继承当前会话 + 自定义输入 + 既有值）
 - 新增共享采集实现 `src/commands/collect-subagent-config.ts`，`lycx init` 与菜单复用同一套执行者 / 模型 / 推理档采集
 
@@ -23,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING（交互行为）**：菜单「配置审查模型」改为「配置执行者与模型」，两个宿主统一为 执行者二连 → 模型二连 → 推理档二连。Codex 菜单因此新增编码侧的执行者 / 模型 / 推理档提问；Claude Code 菜单新增审查侧模型与推理档提问，并保留其原有的执行者二连
 - 推理档建议档位清单改由宿主适配层提供：Claude Code = `low` / `medium` / `high` / `xhigh` / `max`（无 `minimal`，含 `xhigh`），Codex 保持 `minimal` / `low` / `medium` / `high` / `max`；清单仍只作候选提示，不做枚举强校验，既有值不在清单内时照常保留并默认选中
 - `README.md` / `README.zh-CN.md` / `AGENTS.md` 同步"Claude Code 只采集执行者"的旧表述；不涉及配置格式变更，此前手工写入 Claude Code 配置的模型与推理档被读取为既有值默认项，语义不变
+
+### Fixed
+
+- `@lyx-propose` 切分支前的工作区处置：「仅有进行中 change 的未跟踪 `review-findings.md` 快照改动」时不再因暂存区为空而判定 WIP 提交失败——跳过该提交并如实说明；`@lyx-commit --all` 的全量暂存同样排除进行中快照
 
 ## [0.7.0] - 2026-09-30
 
