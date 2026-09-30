@@ -23,7 +23,7 @@
 
 **宿主机制差异按宿主落实（自本 change 起）**：非 fork 与跨轮复用两条契约在各宿主按其实际能力落实，语义不变——claude 宿主的普通子代理天然运行在独立的全新上下文中（满足非 fork 契约），跨轮复用走该宿主的子代理续跑能力；正文中列举的宿主专有语义（如某宿主的 fork 上下文参数名）仅作该宿主的实现说明，SHALL NOT 被解读为其他宿主的必填参数。宿主在交互模式下默认以后台方式运行子代理时，等待语义按 `ly-review-gates` 的宿主条款解读。
 
-**向导与体检 Requirement 的宿主适用范围（自本 change 起）**：本能力中描述安装向导采集与体检展示的 Requirement，其适用范围 SHALL 按宿主区分——codex 宿主沿用既有采集与展示口径（含 provider 提供方选择与 Codex 现状检测）；claude 宿主按本 delta 的 ADDED Requirement「Claude 宿主的子代理字段采集与体检边界」执行。两套口径之间的差异以该 ADDED Requirement 为准，SHALL NOT 被解读为同一宿主同时适用两套互相矛盾的要求；claude 宿主不适用的采集步骤 SHALL NOT 被判定为缺失或失败。
+**向导与体检 Requirement 的宿主适用范围（自本 change 起）**：本能力中描述安装向导采集与体检展示的 Requirement，其适用范围 SHALL 按宿主区分——两个宿主 SHALL 采用同一采集面（执行者二连 → 模型二连 → 推理档二连），codex 宿主额外包含 provider 提供方选择与 Codex 现状检测步骤；claude 宿主 SHALL NOT 采集或写入其自身的 provider（模型与网关）配置。claude 宿主的采集与体检边界见「Claude 宿主的子代理字段采集与体检边界」，两者语义一致，SHALL NOT 被解读为同一宿主同时适用两套互相矛盾的要求；claude 宿主不适用的采集步骤（provider 选择与现状检测）SHALL NOT 被判定为缺失或失败。
 
 #### Scenario: 仅配置 reviewModel，未配置新字段
 - **WHEN** 用户只配置审查模型，未配置 `codingModel` / `reviewExecutor` / `codingExecutor`
@@ -58,7 +58,7 @@
 - **THEN** 该取值写入该宿主的子代理定义文件，子代理按该模型与推理档运行
 
 #### Scenario: claude 宿主未配置模型时子代理继承会话
-- **WHEN** claude 宿主未配置审查子代理的模型与推理档
+- **WHEN** claude 宿主的审查子代理模型与推理档处于未配置状态，用户执行安装
 - **THEN** 子代理定义以继承语义写入，子代理使用当前会话的模型与推理档，SHALL NOT 阻断安装或审查流程
 
 ### Requirement: codexHost 提供三个可选推理档字段（与模型字段一一对应）
@@ -69,7 +69,7 @@
 
 推理档 SHALL 仅在对应执行者为 `"subagent"` 时生效；执行者为 `"main"`（含未配置）时该字段被忽略，`lycx doctor` 输出 WARN 提示。
 
-**覆盖/不覆盖语义**：交互 `lycx init` 与 `lycx` 菜单"配置审查模型" SHALL 允许用户显式选择"不覆盖（继承模型/宿主默认）"或"覆盖并指定档位"。选择"不覆盖" SHALL 清除对应字段（等价于未配置，spawn 不传 `reasoning_effort`）；选择"覆盖" SHALL 写入选定档位值。非交互模式（`--skip-prompt`）、`lycx update` 以及用户未触碰推理档选择的编辑路径 SHALL 保留既有两字段原值，SHALL NOT 因重装或编辑而隐式清除。
+**覆盖/不覆盖语义**：交互 `lycx init` 与菜单配置入口 SHALL 允许用户显式选择"不覆盖（继承模型/宿主默认）"或"覆盖并指定档位"。菜单配置入口 SHALL 覆盖审查侧与编码侧两组字段（执行者、模型、推理档），SHALL NOT 只编辑审查侧。选择"不覆盖" SHALL 清除对应字段（等价于未配置，spawn 不传 `reasoning_effort`）；选择"覆盖" SHALL 写入选定档位值。非交互模式（`--skip-prompt`）、`lycx update` 以及用户未触碰推理档选择的编辑路径 SHALL 保留既有两字段原值，SHALL NOT 因重装或编辑而隐式清除。
 
 `src/types/index.ts` SHALL 同步移除 `reviewReasoningEffortB` 类型定义。
 
@@ -90,7 +90,7 @@
 - **THEN** 等价于未覆盖，coding subagent 的 spawn 不传推理档参数，SHALL NOT 传空字符串
 
 #### Scenario: 交互选择不覆盖时清除既有推理档
-- **WHEN** 用户已有 `reviewReasoningEffort = "low"`，在交互 `lycx init` 或菜单"配置审查模型"中显式选择"不覆盖（继承模型/宿主默认）"
+- **WHEN** 用户已有 `reviewReasoningEffort = "low"`，在交互 `lycx init` 或菜单配置入口中显式选择"不覆盖（继承模型/宿主默认）"
 - **THEN** 写回配置中 `reviewReasoningEffort` 字段被清除，后续 spawn 不传 `reasoning_effort`
 
 #### Scenario: update 重装保留已配置的推理档
@@ -98,12 +98,16 @@
 - **THEN** 重装后 `~/.codex/lyx/config.toml` 仍保留两个推理档字段原值，SHALL NOT 被重置或清除
 
 #### Scenario: menu 单字段编辑不丢推理档
-- **WHEN** 用户通过 `lycx` 菜单"修改审查模型"编辑 `reviewModel`，但未改变推理档的覆盖选择
+- **WHEN** 用户通过菜单配置入口编辑 `reviewModel`，但未改变推理档的覆盖选择
 - **THEN** 写回后 `reviewReasoningEffort` 原值保留，SHALL NOT 被隐式清除
 
 #### Scenario: 执行者为 main 时推理档被忽略
 - **WHEN** 用户配置 `reviewExecutor = "main"` 与 `reviewReasoningEffort = "low"`
 - **THEN** 审查由主 agent 直接执行，推理档不生效；`lycx doctor` 对该组合输出 WARN 提示
+
+#### Scenario: 菜单可编辑编码侧推理档
+- **WHEN** 用户通过菜单配置入口为编码侧选择"覆盖并指定档位" `high`
+- **THEN** `codingReasoningEffort` 写入 `high`，且审查侧的既有字段不因本次编辑被连带清除
 
 ### Requirement: codexHost.spawnableModels 声明宿主可 spawn 模型清单（提示参考，不作校验来源）
 `~/.codex/lyx/config.toml` 的 `[codexHost]` 节 SHALL 提供可选 `spawnableModels` 字符串数组字段：提示参考用，声明当前宿主显式 spawn 子代理可用的模型清单（用户可按实测维护）。该字段未配置、空白或清洗后为空时，提示口径回退使用内置默认常量 `SPAWNABLE_MODELS_DEFAULT`（`gpt-6-astra`、`gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5`）。清洗规则 SHALL 为：仅保留非空字符串、逐项 trim、去重；清洗后空数组等价未配置。字段显式存在但整体格式非法（如非数组字面量）时，`lycx doctor` 对该形态输出 WARN 提示（区别于完全未配置的静默通过）。**spawnableModels SHALL NOT 作为模型字段候选或校验来源**——模型二连候选与 doctor 判定均不依赖该清单；SHALL NOT 以 provider `/models` 拉取结果或 `~/.codex/models.json` 注册集合作为候选/校验来源（实测二者均不等于 spawn 可用列表）。agent 模型能否 spawn 由环境实际能力决定，运行期以宿主 spawn 报错为准。
@@ -180,15 +184,21 @@
 
 **采集集合变更（自本 change 起）**：本 Requirement 标题中"模型三连/三个模型字段"为历史措辞——向导实际采集**执行者二连 + 模型二连 + 推理档覆盖选择**（`reviewExecutor`、`codingExecutor`、`reviewModel`、`codingModel` 与对应推理档覆盖选择），语义以正文为准。
 
-`lycx init` 向导 SHALL 在交互模式先采集两个执行者字段，再采集两个模型字段。**执行者采集**：逐字段 list 选择，候选 SHALL 为「主 agent 直接执行（默认，值为 `main`）」与「spawn 独立子代理（值为 `subagent`）」；未配置或既有值为空 SHALL 默认选中"主 agent 直接执行"。**模型采集**：仅在对应执行者为 `"subagent"` 时提示采集，候选 SHALL 为「继承当前会话模型（留空）+ 自定义输入 + 既有值（若有）」，SHALL NOT 包含内置/维护清单字面量。执行者为 `"main"` 时不采集对应模型字段，并 SHALL 在摘要中标注"该模型字段不生效"。
+**两宿主共用的采集面**：交互 `lycx init` SHALL 对每个选定的已安装宿主采集 **执行者二连 → 模型二连 → 推理档二连**，两个宿主的候选语义、采集条件与清洗规则一致。
 
-**推理档采集**：对应执行者为 `"subagent"` 时，向导 SHALL 在模型采集后为该 subagent 采集推理档覆盖选择。候选 SHALL 为「不覆盖（继承模型/宿主默认）」+ 常见档位建议（`minimal` / `low` / `medium` / `high` / `max`）+「自定义输入…」；既有值非空时 SHALL 作为候选项保留并默认选中，即使该值不在建议清单内。选择「不覆盖」 SHALL 清除对应字段；选择建议档位或自定义输入 SHALL 写入 trim 后的值；自定义输入 trim 后为空 SHALL 等价于「不覆盖」。候选 SHALL NOT 作为枚举白名单强校验，合法档位仍由宿主/上游实际能力判定。
+**执行者采集**：逐字段 list 选择，候选 SHALL 为「主 agent 直接执行（默认，值为 `main`）」与「spawn 独立子代理（值为 `subagent`）」；未配置或既有值为空 SHALL 默认选中"主 agent 直接执行"。
+
+**模型采集**：仅在对应执行者为 `"subagent"` 时提示采集，候选 SHALL 为「继承当前会话模型（留空）+ 自定义输入 + 既有值（若有）」，SHALL NOT 包含内置/维护清单字面量。执行者为 `"main"` 时不采集对应模型字段，并 SHALL 在摘要中标注"该模型字段不生效"。
+
+**推理档采集**：对应执行者为 `"subagent"` 时，向导 SHALL 在模型采集后为该 subagent 采集推理档覆盖选择。候选 SHALL 为「不覆盖（继承模型/宿主默认）」+ **该宿主的建议档位清单** +「自定义输入…」；既有值非空时 SHALL 作为候选项保留并默认选中，即使该值不在建议清单内。选择「不覆盖」 SHALL 清除对应字段；选择建议档位或自定义输入 SHALL 写入 trim 后的值；自定义输入 trim 后为空 SHALL 等价于「不覆盖」。候选 SHALL NOT 作为枚举白名单强校验，合法档位仍由宿主/上游实际能力判定。
+
+**建议档位清单按宿主提供**：各宿主的建议档位清单 SHALL 由该宿主的适配层提供，SHALL NOT 由共享层按宿主名分支。codex 宿主的建议清单 SHALL 为 `minimal` / `low` / `medium` / `high` / `max`；claude 宿主的建议清单 SHALL 为 `low` / `medium` / `high` / `xhigh` / `max`。
 
 配置摘要 SHALL 展示每个 subagent 的推理档状态：`未覆盖（继承模型/宿主默认）` 或 `已覆盖: <值>`；执行者为 `"main"` 时 SHALL 标注推理档"不生效"（既有值可保留展示），与模型字段摘要口径一致。
 
-交互流程 SHALL 为"语言 → 选定 API 提供方 → Codex 现状检测展示 → 执行者二连 → 模型与推理档采集（按执行者） → 配置摘要"，SHALL NOT 包含"工作流模式"与"选择 Agent"等单选项步骤。现状检测 SHALL 为纯静态读取（`~/.codex/config.toml` 顶层 `model`、`[model_providers.*]` 条目、`~/.codex/models.json` 注册规模），读取失败 SHALL 标注"未检测到"且不阻断。**候选 SHALL NOT 依赖 provider 的 `/models` 拉取结果**。
+**codex 宿主专属前置步骤**：codex 宿主的交互流程 SHALL 在上述采集面之前额外包含"选定 API 提供方 → Codex 现状检测展示"，SHALL NOT 包含"工作流模式"与"选择 Agent"等单选项步骤。现状检测 SHALL 为纯静态读取（`~/.codex/config.toml` 顶层 `model`、`[model_providers.*]` 条目、`~/.codex/models.json` 注册规模），读取失败 SHALL 标注"未检测到"且不阻断。**候选 SHALL NOT 依赖 provider 的 `/models` 拉取结果**。
 
-交互 init、非交互模式（`--skip-prompt`）与 menu 单字段编辑等所有重写 `[codexHost]` 的路径 SHALL 保留既有 `codingModel`、`spawnableModels` 与两个推理档字段，SHALL NOT 因重装或编辑而丢弃；已移除的 `reviewModelB` / `reviewReasoningEffortB` SHALL NOT 被写回。**例外**：交互 init 或菜单中显式选择"不覆盖"时 SHALL 清除对应推理档字段。
+交互 init、非交互模式（`--skip-prompt`）与菜单单字段编辑等所有重写宿主配置节的路径 SHALL 保留既有模型字段、`spawnableModels` 与两个推理档字段，SHALL NOT 因重装或编辑而丢弃；已移除的 `reviewModelB` / `reviewReasoningEffortB` SHALL NOT 被写回。**例外**：交互 init 或菜单中显式选择"不覆盖"时 SHALL 清除对应推理档字段。
 
 #### Scenario: 全新安装，三字段均选择"不设置"
 - **WHEN** 用户全新运行 `lycx init`，执行者与模型字段均选择默认（主 agent 直接执行、模型留空）
@@ -196,7 +206,7 @@
 
 #### Scenario: update 重装保留已配置的 B/coding 字段
 - **WHEN** 用户已配置 `codingModel` 后运行 `lycx update`（即 `init --force --skip-prompt`）
-- **THEN** 重装后 `~/.codex/lyx/config.toml` 仍保留 `codingModel` 原值，`spawnableModels` 与两个推理档字段同规则保留，SHALL NOT 被重置；已移除的 `reviewModelB` 不再写回
+- **THEN** 重装后宿主配置文件仍保留 `codingModel` 原值，`spawnableModels` 与两个推理档字段同规则保留，SHALL NOT 被重置；已移除的 `reviewModelB` 不再写回（本 scenario 标题中"B"为历史标签，语义以正文为准）
 
 #### Scenario: 自定义输入配置模型（含清单外模型名）
 - **WHEN** 用户在执行者为 `subagent` 后的模型采集选择"自定义输入"，输入 `glm-5.3-flash`（不在任何内置/维护清单内）
@@ -204,10 +214,10 @@
 
 #### Scenario: update 重装保留已配置的模型字段
 - **WHEN** 用户已配置 `reviewModel` / `codingModel` 后运行 `lycx update`
-- **THEN** 重装后 `~/.codex/lyx/config.toml` 仍保留两字段原值，`spawnableModels` 与两个推理档字段同规则保留，SHALL NOT 被重置
+- **THEN** 重装后宿主配置文件仍保留两字段原值，`spawnableModels` 与两个推理档字段同规则保留，SHALL NOT 被重置
 
 #### Scenario: menu 单字段编辑不丢其余字段
-- **WHEN** 用户通过 `lycx` 菜单"修改审查模型"编辑 `reviewModel`，而执行者字段与其余字段已有配置
+- **WHEN** 用户通过菜单配置入口编辑 `reviewModel`，而执行者字段与其余字段已有配置
 - **THEN** 写回后其余字段原值保留（推理档仅在用户显式选择"不覆盖"时清除），SHALL NOT 被隐式清除
 
 #### Scenario: 交互重装保留既有值作默认并统一写回
@@ -237,6 +247,14 @@
 #### Scenario: 既有推理档值保留为候选
 - **WHEN** 用户已有 `reviewReasoningEffort = "custom-tier"`（不在建议清单内），交互运行 `lycx init`
 - **THEN** 该值作为候选项附加并默认选中，不因不在建议清单内被静默丢弃或替换
+
+#### Scenario: 建议档位清单按宿主提供
+- **WHEN** 交互 `lycx init` 在 claude 宿主的推理档采集渲染建议档位
+- **THEN** 建议清单为 `low` / `medium` / `high` / `xhigh` / `max`；codex 宿主的建议清单为 `minimal` / `low` / `medium` / `high` / `max`；两者均仅作提示，自定义输入入口保留
+
+#### Scenario: claude 宿主采集面与 codex 一致
+- **WHEN** 用户交互运行 `lycx init` 且选定 claude 宿主，两个执行者均选择"spawn 独立子代理"
+- **THEN** 向导按 执行者二连 → 模型二连 → 推理档二连 采集四个字段并写入该宿主配置节，候选与采集条件与 codex 同口径；不出现 claude 宿主的 provider（模型与网关）配置采集步骤
 
 #### Scenario: 候选不依赖 /models 拉取，自由输入入口保留
 - **WHEN** 模型采集候选机制不依赖选定 provider 的 `GET {base_url}/models` 拉取（/models 结果不作为候选/校验来源）
@@ -310,14 +328,22 @@
 
 ### Requirement: Claude 宿主的子代理字段采集与体检边界
 
-claude 宿主的安装向导 SHALL 采集执行者字段（`reviewExecutor` / `codingExecutor`，取值 main / subagent），交互菜单 SHALL 提供同一开关；SHALL NOT 采集子代理的模型与推理档字段，也 SHALL NOT 采集或写入该宿主自身的 provider（模型与网关）配置；该宿主的子代理定义 SHALL 以"继承当前会话"为默认。`lycx doctor` 的子代理配置检查项 SHALL 按宿主分别展示：codex 宿主沿用既有展示口径，claude 宿主 SHALL 展示其宿主配置节中的执行者字段与子代理定义侧的实际取值来源（继承或已指定），并在未采集模型字段时不报缺失错误。
+**采集边界变更（自本 change 起）**：本 Requirement 及其场景的名称沿用历史标签，语义以正文为准——claude 宿主由"只采集执行者"改为与 codex 同一采集面。
+
+claude 宿主的安装向导 SHALL 与 codex 宿主采用同一采集面：执行者二连（`reviewExecutor` / `codingExecutor`，取值 main / subagent）→ 模型二连（`reviewModel` / `codingModel`）→ 推理档二连（`reviewReasoningEffort` / `codingReasoningEffort`），仅在对应执行者为 `"subagent"` 时采集模型与推理档；交互菜单 SHALL 提供同一采集面。该宿主 SHALL NOT 采集或写入其自身的 provider（模型与网关）配置。该宿主的子代理定义 SHALL 以"继承当前会话"为默认（模型与推理档未配置时）。`lycx doctor` 的子代理配置检查项 SHALL 按宿主分别展示：codex 宿主沿用既有展示口径，claude 宿主 SHALL 展示其宿主配置节中的执行者字段、模型与推理档字段，以及子代理定义侧的实际取值来源（继承或已指定）；未配置模型字段时 SHALL 按继承语义标注，SHALL NOT 报缺失错误。
 
 #### Scenario: claude 宿主向导不采集模型字段
+- **WHEN** 用户交互安装 claude 宿主，两个执行者均选择"spawn 独立子代理"
+- **THEN** 向导随后采集 `reviewModel` / `codingModel` 与两个推理档字段并写入 `~/.claude/lyx/config.toml` 的宿主配置节；不出现该宿主 provider（模型与网关）配置的采集或写入步骤（本 scenario 标题为历史标签，语义以正文为准）
 
-- **WHEN** 用户交互安装 claude 宿主
-- **THEN** 向导出现执行者选择（main / subagent）并写入该宿主配置节；不出现子代理模型与推理档采集步骤，也不出现该宿主 provider 配置的采集或写入，摘要中如实说明子代理默认继承会话模型
+#### Scenario: claude 宿主执行者为 subagent 时定义侧取值来源可追溯
+- **WHEN** 用户在 claude 宿主配置 `reviewExecutor = "subagent"` 与 `reviewModel = "claude-sonnet-5-5"` 后运行 `lycx doctor`
+- **THEN** 检查项展示该宿主的执行者字段与模型取值，并标注子代理定义为"已指定"而非继承；不报 FAIL
 
 #### Scenario: doctor 按宿主展示子代理配置
-
 - **WHEN** 两个宿主均已安装，用户运行 `lycx doctor`
 - **THEN** 子代理配置检查项按宿主分别展示；claude 宿主的子代理定义为继承语义时标注为继承而非缺失，SHALL NOT 输出"未配置模型"类错误
+
+#### Scenario: claude 宿主未配置模型时子代理继承会话
+- **WHEN** claude 宿主未配置审查子代理的模型与推理档
+- **THEN** 子代理定义以继承语义写入，且定义内容不因"是否被采集过"而不同，SHALL NOT 阻断安装或审查流程
