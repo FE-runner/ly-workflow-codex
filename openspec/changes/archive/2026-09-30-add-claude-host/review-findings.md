@@ -8,9 +8,12 @@
 1. [src/commands/doctor.ts:56-69、src/commands/doctor.ts:112-115、src/hosts/codex/doctor.ts:177-185、src/hosts/claude/doctor.ts:42-50] — `doctor` / `status` 没有捕获 `listPrefixedDirs` 现在可能抛出的 IO/权限错误
    问题：例如 skills 目录 `EACCES` 时，命令会中断并打印 stack trace，而不是输出该宿主体检失败。该抛错行为是本轮为修 Critical 3 有意引入的（不再把错误吞成空数组），但没有同步给 doctor/status 加兜底。
    建议：在 `collectHostDoctorChecks` 或各宿主 `doctorChecks` 内捕获并返回 `fail` 体检项。
+   - 解决：in-change-review-findings-resolution（归档于 2026-09-30）— 已在 0a33558 修复（collectHostDoctorChecksWith 捕获 doctorChecks 抛错并返回 fail 体检项），本 change 补登记
 2. [src/hosts/codex/adapter.ts:172-193] — legacy `ly-*` skills 和 `~/.codex/prompts/ly-*.md` 清理失败时只 `push` error，不设置 `report.success = false`
    问题：卸载整体结果仍可能是 success，菜单会显示成功。
    建议：这两类清理失败也把宿主 report 标记为失败。
+   - 解决：in-change-review-findings-resolution（归档于 2026-09-30）— 已在 0a33558 修复（legacy 清理失败设置 report.success = false），本 change 补登记
 3. [src/i18n/index.ts:303、src/i18n/index.ts:615、src/commands/menu.ts:537-568] — 菜单卸载确认仍只描述 codex 产物范围，但随后可能选择或默认卸载 claude
    问题：只安装 Claude 时，用户确认的文案列的是 codex 路径，实际删除 `~/.claude/skills/lyx-*`、`~/.claude/agents/lyx-*.md` 和 `~/.claude/lyx/`。
    建议：先解析宿主集合，再用 `describeUninstallTargets(hosts)` 生成确认文案。
+   - 解决：in-change-review-findings-resolution（归档于 2026-09-30）— 已在 0a33558 修复（菜单先解析宿主集合再用 describeUninstallTargets 生成确认范围），本 change 补登记
