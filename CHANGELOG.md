@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-09-30
+
+本版新增 **Claude Code 宿主**：同一套 14 个 `lyx-*` 命令流程可安装到 Codex 与 Claude Code 两个宿主（Claude 侧调用写法为 `/lyx-*`），安装器改为宿主包架构、每宿主一个配置文件。审查未修项快照同时补上"本 change 内修复"的就地标注路径。
+
+### Added
+
+- **Claude Code 宿主**：命令安装到 `~/.claude/skills/lyx-*/`，审查 / 实施子代理定义安装到 `~/.claude/agents/lyx-*.md`（未配置模型时 `model: inherit`）；子代理路径用 `Agent` 工具调用自定义子代理、`SendMessage` 续跑
+- `lycx init` 支持选择宿主（按 `~/.codex` / `~/.claude` 探测默认勾选）；`uninstall` / `doctor` / `status` / `update` 支持 `--host` 按宿主操作，`doctor` 按宿主分组输出
+- OpenSpec 集成按宿主：技能扫描补 `.claude/skills`，项目级修复按缺失宿主传 `--tools <host>`
+- `@lyx-init` 在 Claude 宿主下额外产出导入 `AGENTS.md` 的 `CLAUDE.md`
+- `review-findings-snapshot`：新增「本 change 内修复标注」——同一 change 内修复的 Warning 可在 active 快照追加 `- 解决：本 change 内修复（未复审，commit <短 hash>）— <说明>`；触发点为审查后同会话修复并提交后（标注前确认一次），以及 `@lyx-archive` 归档前核对未标注条目（候选 commit 逐条确认，默认跳过，失败不阻断归档）
+- `@lyx-explore` 列出快照时额外显示已解决条目中"未复审"的条数
+
+### Changed
+
+- **BREAKING（配置结构）**：配置改为每宿主一个文件——`~/.codex/lyx/config.toml`（路径不变）与 `~/.claude/lyx/config.toml`；移除 `installedHosts`（配置文件存在即已安装）；宿主配置节 `[codexHost]` 归一为 `[host]`，旧键兼容读取、下次 init 重写
+- 代码按宿主包组织：共享层 `src/utils/` 只认适配器接口与注册表，宿主专属内容位于 `src/hosts/<id>/` 与 `templates/hosts/<id>/`；Codex 宿主行为保持不变，`src/index.ts` 三个路径函数保留无参签名（内部默认 codex，标注 deprecated）
+- 审查未修项快照：「不改写 active 快照」收窄为只约束跨 change 回写；审查后修复提交须按路径暂存、不纳入快照
+- 快照条目最小结构、旧快照按顶层条目顺序定位、归档回写从归档后目录读取 `proposal.md` 等口径收紧
+- README / AGENTS.md / CLAUDE.md 同步双宿主与快照行为说明
+
+### Fixed
+
+- `doctor` / `status` 在目录枚举遇到权限 / IO 错误时输出该宿主体检失败，不再中断并打印堆栈
+- codex 卸载清理旧版 `ly-*` 残留失败时正确标记卸载失败
+- 菜单卸载确认按所选宿主列出实际删除 / 修改范围（此前只列 codex 路径）
+
 ## [0.6.1] - 2026-09-29
 
 本版补齐"审查未修项快照"的闭环：历史 Warning 被后续 change 解决后，可在新 change 的 `proposal.md` 声明锚点，由 `@lyx-archive` 向已归档快照追加解决说明——原文不改、幂等、锚点失败不阻断归档。
