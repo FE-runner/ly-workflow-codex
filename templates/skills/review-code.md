@@ -159,7 +159,7 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证统一�
 
 - **格式**：缩进子项 `- 解决：本 change 内修复（未复审，commit <短 hash>）— <一句说明>`；一律带"未复审"，SHALL NOT 产出不带"未复审"的变体。
 - **先提交后标注**：修复尚未提交（仅存在于工作区）时 SHALL NOT 标注，并提示需先提交修复；`<短 hash>` SHALL 指向可解析的 commit。
-- **修复提交排除快照**：该修复提交 SHALL 只按路径暂存修复文件，SHALL NOT 使用 `git add -A` 等会把未跟踪 `review-findings.md` 纳入的方式；快照若已被意外跟踪，SHALL 如实报告，就地标注照常追加、随后续提交落库。
+- **修复提交排除快照**：该修复提交 SHALL 由主会话只按路径暂存修复文件（`git add -- <修复文件>`），message 参照 `@lyx-commit` 格式；SHALL NOT 委托 `@lyx-commit --all`，SHALL NOT 使用 `git add -A` 等会把未跟踪 `review-findings.md` 纳入的方式；快照若已被意外跟踪，SHALL 如实报告，就地标注照常追加、随后续提交落库。
 - **标注前确认**：标注前 SHALL 列出拟标注的条目编号与对应 commit，由用户确认一次后再写入，避免把只修了部分的条目误标。
 - **幂等**：同一 Warning 下已存在引用同一 commit 的就地标注时跳过；同一 Warning 被多次修复时按提交先后追加多行。
 - **原文不变**：原 Warning 的位置 / 问题 / 建议原文与编号逐字不变；就地标注不计入 Warning 计数、不触发编号重排。

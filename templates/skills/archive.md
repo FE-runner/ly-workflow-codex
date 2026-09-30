@@ -24,6 +24,8 @@ argument-hint: '[<change-name>]'
 
 完整验证通过后、委托 OpenSpec 归档流程**之前**（此时快照仍位于 active 路径 `openspec/changes/<change-name>/review-findings.md`），核对当前 change 快照中在本 change 内已修复但尚未标注的 Warning（见 `review-findings-snapshot` 的「本 change 内修复标注」）：
 
+- **先确定目标 change**：未指定参数时，先按 opsx:archive 流程的默认规则确定目标 change；不能唯一确定时询问用户，确定后再做核对。SHALL NOT 猜测 change 名，SHALL NOT 因目标未确定而把"快照不存在"当作跳过核对的理由。
+
 - **统计**：统计快照中**没有任何解决子项**的 Warning 条数（按 Warning 顶层条目计）。快照不存在或计数为 0 时 SHALL NOT 询问，直接继续。
 - **询问一次**：计数大于 0 时询问一次，例如："快照中有 N 条 Warning 未标注解决，要逐条核对是否已在本 change 内修复吗？(y/N)"——默认不核对；用户拒绝时快照保持原样，直接继续归档。
 - **候选 commit**：用户同意后逐条处理。取该条目**所在节**元信息中的基线 commit，以 `git log <基线>..HEAD -- <位置文件>` 列出候选修复 commit（位置涉及多个文件时取并集；位置无可解析文件时视为无候选）。候选可能包含审查循环的统一修复 commit 或 apply commit 等噪声，逐条呈现判断供用户甄别。

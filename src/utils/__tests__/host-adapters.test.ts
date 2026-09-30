@@ -191,6 +191,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       expect(content, name).toContain(note)
       expect(content, name).toContain('先提交后标注')
       expect(content, name).toContain('修复提交排除快照')
+      expect(content, name).toContain(t('SHALL NOT 委托 `@lyx-commit --all`'))
       expect(content, name).toContain('标注前确认')
       // 重跑审查整节替换时，就地标注不被合并保留
       expect(content, name).toContain('SHALL NOT 为保留就地标注而合并新旧节')
@@ -198,6 +199,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
 
     const archive = read('archive.md')
     expect(archive).toContain('归档前核对本 change 未标注 Warning')
+    expect(archive).toContain('先确定目标 change')
     expect(archive).toContain(note)
     expect(archive).toContain('(y/N)')
     expect(archive).toContain('由用户直接提供修复 commit hash')
