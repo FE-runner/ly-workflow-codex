@@ -31,3 +31,17 @@
 - **`~/.claude/settings.json` 的 `env` 块会压过 shell 变量**：本机用 `ANTHROPIC_MODEL=... claude -p` 覆盖无效，实测仍走 settings 里的模型。验证模型可用性时不要依赖 shell 覆盖。
 - claude 侧 `reviewModel` 同时作用于 `lyx-plan-reviewer` 与 `lyx-reviewer`（两个定义共用 `reviewModel`），`codingModel` 只作用于 `lyx-implementer`；这是既有粒度，本 change 不改。
 - 本仓 `lycx init --skip-prompt` 不会覆盖已存在的命令文件（按旧安装残留跳过），但会重渲染子代理定义；改完 `[host]` 配置后这条路径可用于刷新定义。
+
+## 实施决策（apply 阶段回写）
+
+- 共享采集实现落在**新文件** `src/commands/collect-subagent-config.ts`（`collectSubagentConfig` + `SubagentConfigCollected`），而不是留在 `init.ts` 里——menu 需要复用同一套采集，放 init.ts 会造成 commands 之间反向依赖。
+- `printSummary` **无需改动**：它本来就按宿主无关的口径渲染四个字段（claude 仅影响空值时的"继承当前会话"文案豁免）。因此该任务改为补测试锁定行为，而不是改实现。
+- 菜单测试落在**新文件** `src/commands/__tests__/menu-config.test.ts`（原 `menu.test.ts` 的菜单结构断言保持不变）；`configExecutorsAndModels` 为测试导出，与既有 `pickInstalledHostsWith` 的测试导出惯例一致。
+- `buildReasoningEffortChoices` 的 `suggestions` 改为**必填参数**，共享常量 `REASONING_EFFORT_SUGGESTIONS` 删除；建议清单只在两个宿主适配器里各定义一份。
+- 两个 README 的"维护方式 = 手改配置（编辑交互入口为后续增强 / an interactive editor is planned）"按实际主语改写为显式限定 `spawnableModels`（该字段本次仍无交互入口），而不是删除整句。
+- `CLAUDE.md` 经检索不含旧采集口径表述（它是精简导航，正文以 AGENTS.md 为准），本次未改动该文件。
+
+## 实施期间发现的坑
+
+- **`pnpm lint` 在本仓 HEAD 上并非全绿**：`src/utils/__tests__/host-adapters.test.ts` 有 3 处 quote/prefer-template 报错，`package.json` 的 `files` 数组排序与若干 `openspec/changes/archive/**` 文档同样报错。本次只保证改动文件的 lint 干净，未顺带修复这些无关项（发版规则的门禁是 `typecheck && build && test`，不含 lint）。
+- **import 排序规则（perfectionist/sort-imports）**：type-only import 需归组在前，且同一模块的 type import 必须排在 value import 之前，否则报 `Expected "./x" (sibling-type) to come before ...`。新增共享模块的引用时先跑一次 eslint 可省一轮返工。

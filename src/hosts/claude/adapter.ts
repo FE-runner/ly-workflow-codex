@@ -16,6 +16,13 @@ import { CLAUDE_AGENTS_DIR, CLAUDE_HOME_DIR, CLAUDE_LY_DIR, CLAUDE_PROMPTS_DIR, 
 /** 模板中展示的配置文件路径（安装期 ~/ 再展开为绝对路径） */
 const CLAUDE_CONFIG_FILE_DISPLAY = '~/.claude/lyx/config.toml'
 
+/**
+ * claude 宿主的推理档建议清单（仅作候选提示，不做枚举强校验）。
+ * Claude Code 子代理 frontmatter 的 `effort` 取值为 low / medium / high / xhigh / max（无 minimal），
+ * 且可用档位取决于所选模型——因此只作候选提示，合法性以宿主实际报错为准。
+ */
+export const CLAUDE_REASONING_EFFORT_SUGGESTIONS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+
 /** 子代理定义 → 对应的模型 / 推理档配置字段 */
 export const CLAUDE_AGENT_DEFINITIONS = [
   { file: 'lyx-plan-reviewer.md', modelKey: 'reviewModel', effortKey: 'reviewReasoningEffort' },
@@ -108,6 +115,8 @@ export const claudeAdapter: HostAdapter = {
   detectDir: () => CLAUDE_HOME_DIR,
 
   commandPrefix: '/',
+
+  reasoningEffortSuggestions: CLAUDE_REASONING_EFFORT_SUGGESTIONS,
 
   openspecTool: 'claude',
 

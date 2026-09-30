@@ -4,10 +4,12 @@ import { initI18n } from '../../i18n'
 const state = vi.hoisted(() => ({
   installed: [] as string[],
   detected: [] as string[],
+  existing: null as any,
   answers: [] as Array<Record<string, unknown>>,
   prompts: [] as any[],
   writes: [] as Array<{ host: string, config: any }>,
   installs: [] as Array<{ hosts: string[], hostConfig: any }>,
+  logs: [] as string[],
 }))
 
 vi.mock('inquirer', () => ({
@@ -50,7 +52,7 @@ vi.mock('../../utils/config', async (importOriginal) => {
   return {
     ...mod,
     listInstalledHosts: async () => [...state.installed],
-    readLyConfig: async () => null,
+    readLyConfig: async () => state.existing,
     writeLyConfig: async (config: any, host: string) => { state.writes.push({ host, config }) },
   }
 })
@@ -80,13 +82,17 @@ beforeAll(async () => {
 beforeEach(() => {
   state.installed = []
   state.detected = []
+  state.existing = null
   state.answers = []
   state.prompts = []
   state.writes = []
   state.installs = []
+  state.logs = []
   providerSpies.upsertModelProvider.mockClear()
   providerSpies.listModelProviders.mockClear()
-  vi.spyOn(console, 'log').mockImplementation(() => {})
+  vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+    state.logs.push(args.map(a => String(a)).join(' '))
+  })
 })
 
 afterEach(() => {
@@ -134,25 +140,129 @@ describe('init — non-interactive host set (5.2)', () => {
   })
 })
 
-describe('init — claude wizard (5.3)', () => {
-  it('asks executors only, never touches provider config, writes executors to the claude [host] section', async () => {
+describe('init — claude wizard (host-subagent-model-config)', () => {
+  it('执行者均为 main 时不进入模型与推理档采集，且不触碰 provider 配置', async () => {
     state.detected = ['claude']
     state.answers = [
       { selectedLang: 'zh-CN' },
       { hosts: ['claude'] },
-      { pick: 'subagent' },
+      { pick: 'main' },
       { pick: 'main' },
       { confirm: true },
     ]
     await init()
     expect(providerSpies.upsertModelProvider).not.toHaveBeenCalled()
     expect(providerSpies.listModelProviders).not.toHaveBeenCalled()
-    // 没有模型/推理档采集步骤：全部提示都已按预设答案消费完毕
+    // main 执行者下模型/推理档不采集：全部提示都已按预设答案消费完毕
     expect(state.answers).toEqual([])
     expect(state.prompts.map(p => p.name)).toEqual(['selectedLang', 'hosts', 'pick', 'pick', 'confirm'])
     const write = state.writes.find(w => w.host === 'claude')!
-    expect(write.config.host).toEqual({ reviewExecutor: 'subagent', codingExecutor: 'main' })
+    expect(write.config.host).toEqual({ reviewExecutor: 'main', codingExecutor: 'main' })
     expect(write.config.paths.prompts.replace(/\\/g, '/')).toContain('/.claude/lyx')
+  })
+
+  it('执行者二连为 subagent 时采集模型二连与推理档二连并写入宿主配置节', async () => {
+    state.detected = ['claude']
+    state.answers = [
+      { selectedLang: 'zh-CN' },
+      { hosts: ['claude'] },
+      { pick: 'subagent' },
+      { pick: 'subagent' },
+      { pick: 'claude-sonnet-5-5' },
+      { pick: 'claude-opus-5-5' },
+      { pick: 'high' },
+      { pick: 'low' },
+      { confirm: true },
+    ]
+    await init()
+    expect(providerSpies.upsertModelProvider).not.toHaveBeenCalled()
+    expect(state.answers).toEqual([])
+    expect(state.prompts.map(p => p.name)).toEqual([
+      'selectedLang',
+      'hosts',
+      'pick',
+      'pick',
+      'pick',
+      'pick',
+      'pick',
+      'pick',
+      'confirm',
+    ])
+    const write = state.writes.find(w => w.host === 'claude')!
+    expect(write.config.host).toEqual({
+      reviewExecutor: 'subagent',
+      codingExecutor: 'subagent',
+      reviewModel: 'claude-sonnet-5-5',
+      codingModel: 'claude-opus-5-5',
+      reviewReasoningEffort: 'high',
+      codingReasoningEffort: 'low',
+    })
+  })
+
+  it('claude 的推理档候选含 xhigh、不含 minimal（按宿主提供的建议清单）', async () => {
+    state.detected = ['claude']
+    state.answers = [
+      { selectedLang: 'zh-CN' },
+      { hosts: ['claude'] },
+      { pick: 'subagent' },
+      { pick: 'main' },
+      { pick: '\u0000lyx:unset' },
+      { pick: 'xhigh' },
+      { confirm: true },
+    ]
+    await init()
+    const reasoningPrompt = state.prompts.find(p => String(p.message).includes('reviewReasoningEffort'))!
+    const values = reasoningPrompt.choices.map((c: any) => c.value)
+    expect(values).toContain('xhigh')
+    expect(values).not.toContain('minimal')
+    const write = state.writes.find(w => w.host === 'claude')!
+    expect(write.config.host.reviewReasoningEffort).toBe('xhigh')
+    expect(write.config.host.reviewModel).toBeUndefined()
+  })
+
+  it('非交互 --skip-prompt 保留既有模型与推理档字段', async () => {
+    state.installed = ['claude']
+    state.existing = {
+      host: {
+        reviewExecutor: 'subagent',
+        codingExecutor: 'subagent',
+        reviewModel: 'claude-sonnet-5-5',
+        codingModel: 'claude-opus-5-5',
+        reviewReasoningEffort: 'high',
+        codingReasoningEffort: 'low',
+      },
+    }
+    await init({ skipPrompt: true })
+    const write = state.writes.find(w => w.host === 'claude')!
+    expect(write.config.host).toEqual({
+      reviewExecutor: 'subagent',
+      codingExecutor: 'subagent',
+      reviewModel: 'claude-sonnet-5-5',
+      codingModel: 'claude-opus-5-5',
+      reviewReasoningEffort: 'high',
+      codingReasoningEffort: 'low',
+    })
+  })
+
+  it('claude 摘要分别展示已配置的模型与推理档状态', async () => {
+    state.detected = ['claude']
+    state.answers = [
+      { selectedLang: 'zh-CN' },
+      { hosts: ['claude'] },
+      { pick: 'subagent' },
+      { pick: 'subagent' },
+      { pick: 'claude-sonnet-5-5' },
+      { pick: 'claude-opus-5-5' },
+      { pick: 'high' },
+      { pick: '\u0000lyx:reasoning-unset' },
+      { confirm: true },
+    ]
+    await init()
+    const summary = state.logs.join('\n')
+    expect(summary).toContain('claude-sonnet-5-5')
+    expect(summary).toContain('claude-opus-5-5')
+    expect(summary).toContain('已覆盖: high')
+    expect(summary).toContain('未覆盖（继承模型/宿主默认）')
   })
 })
 

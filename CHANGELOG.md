@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+`lycx init` 与菜单的配置入口统一为同一采集面（执行者二连 → 模型二连 → 推理档二连）：Claude Code 宿主不再只能配执行者，推理档建议档位改为按宿主提供。
+
+### Added
+
+- `lycx init` 的 Claude Code 分支补齐模型二连（`reviewModel` / `codingModel`）与推理档二连（`reviewReasoningEffort` / `codingReasoningEffort`）采集，采集条件、候选语义与清洗规则与 Codex 完全一致（仅在对应执行者为 `subagent` 时采集；候选 = 留空继承当前会话 + 自定义输入 + 既有值）
+- 新增共享采集实现 `src/commands/collect-subagent-config.ts`，`lycx init` 与菜单复用同一套执行者 / 模型 / 推理档采集
+
+### Changed
+
+- **BREAKING（交互行为）**：菜单「配置审查模型」改为「配置执行者与模型」，两个宿主统一为 执行者二连 → 模型二连 → 推理档二连。Codex 菜单因此新增编码侧的执行者 / 模型 / 推理档提问；Claude Code 菜单新增审查侧模型与推理档提问，并保留其原有的执行者二连
+- 推理档建议档位清单改由宿主适配层提供：Claude Code = `low` / `medium` / `high` / `xhigh` / `max`（无 `minimal`，含 `xhigh`），Codex 保持 `minimal` / `low` / `medium` / `high` / `max`；清单仍只作候选提示，不做枚举强校验，既有值不在清单内时照常保留并默认选中
+- `README.md` / `README.zh-CN.md` / `AGENTS.md` 同步"Claude Code 只采集执行者"的旧表述；不涉及配置格式变更，此前手工写入 Claude Code 配置的模型与推理档被读取为既有值默认项，语义不变
+
 ## [0.7.0] - 2026-09-30
 
 本版新增 **Claude Code 宿主**：同一套 14 个 `lyx-*` 命令流程可安装到 Codex 与 Claude Code 两个宿主（Claude 侧调用写法为 `/lyx-*`），安装器改为宿主包架构、每宿主一个配置文件。审查未修项快照同时补上"本 change 内修复"的就地标注路径。

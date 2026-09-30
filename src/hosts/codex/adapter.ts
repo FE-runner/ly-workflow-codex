@@ -12,6 +12,12 @@ import { CODEX_LEGACY_CONFIG_SECTION, SPAWNABLE_MODELS_DEFAULT } from './schema'
 // ═══════════════════════════════════════════════════════
 
 /**
+ * codex 宿主的推理档建议清单（仅作候选提示，不做枚举强校验）。
+ * codex 侧推理档经"模板指示 + 宿主 spawn 能力"落实，实际可用档位以宿主 / 上游报错为准。
+ */
+export const CODEX_REASONING_EFFORT_SUGGESTIONS = ['minimal', 'low', 'medium', 'high', 'max'] as const
+
+/**
  * codex 宿主的历史占位符兼容渲染（由共享层迁入）：
  * {{REVIEWER_MODEL}}/{{IMPLEMENTER_MODEL}} 统一渲染为 codex、实施者条件块折叠、
  * {{SPAWNABLE_MODELS_DEFAULT}} 渲染为内置默认清单文本（当前模板正文已不再引用，保留兼容旧模板）。
@@ -110,6 +116,8 @@ export const codexAdapter: HostAdapter = {
   legacyConfigSections: [CODEX_LEGACY_CONFIG_SECTION],
 
   commandPrefix: '@',
+
+  reasoningEffortSuggestions: CODEX_REASONING_EFFORT_SUGGESTIONS,
 
   openspecTool: 'codex',
 

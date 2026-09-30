@@ -41,11 +41,15 @@ src/index.ts                 包公共出口（types + 主入口；getConfigPath
 
 src/commands/
   init.ts                    初始化向导：语言 → 宿主多选（默认 = 已安装 ∪ 探测到）→ 逐宿主采集
-                             （codex：API 提供方 → 现状检测 → 执行者二连 → 模型/推理档；
-                              claude：只采集执行者二连）→ 摘要 → 逐宿主写配置 + 安装；
+                             （两宿主同采集面：执行者二连 → 模型二连 → 推理档二连；
+                              codex 额外前置 API 提供方 → 现状检测）→ 摘要 → 逐宿主写配置 + 安装；
                              非交互按"已安装 → 探测 → 兜底 codex"决定宿主；--init-openspec 的
                              写入型修复在宿主确认之后执行
-  menu.ts                    交互式菜单（按宿主展示；更新 / 配置执行者与模型 / 卸载可选宿主）
+  collect-subagent-config.ts 子代理配置采集（init / menu 共用）：执行者二连 → 模型二连 → 推理档二连；
+                             宿主差异只有执行者提示文案键与推理档建议清单（经宿主适配层传入），
+                             共享层不做宿主名分支
+  menu.ts                    交互式菜单（按宿主展示；更新 / 配置执行者与模型 / 卸载可选宿主；
+                             配置入口复用 collect-subagent-config，两宿主同口径）
   doctor.ts                  doctor / status：通用项 + 按宿主分组的适配器体检项
   update.ts                  按宿主决策：版本落后重装 / 定义偏差本地重渲染 / 跳过；按宿主备份回滚
   uninstall.ts               卸载宿主集合解析、确认范围描述、结果输出
@@ -125,7 +129,7 @@ spawnableModels = [...]    # 仅 codex：本机实测可 spawn 的模型清单�
 ```
 
 - codex 宿主：模型与推理档经"模板指示 + 宿主 spawn 能力"按次传入。
-- claude 宿主：向导只采集执行者；模型与推理档（可手改配置）在安装 / 更新时写入 `~/.claude/agents/lyx-*.md` 的 `model` / `effort`，未配置为 `model: inherit`；配置改动后未重装时 `lycx doctor` 提示偏差，`lycx update` 按当前配置重渲染。lyx **不写** Claude Code 自身的 provider / settings 配置。
+- claude 宿主：向导与菜单采集面与 codex 一致（执行者二连 → 模型二连 → 推理档二连；推理档建议清单 = `low`/`medium`/`high`/`xhigh`/`max`，codex 侧保持 `minimal`/`low`/`medium`/`high`/`max`；清单挂在宿主适配层）；模型与推理档在安装 / 更新时写入 `~/.claude/agents/lyx-*.md` 的 `model` / `effort`，未配置为 `model: inherit`；配置改动后未重装时 `lycx doctor` 提示偏差，`lycx update` 按当前配置重渲染。lyx **不写** Claude Code 自身的 provider / settings 配置。
 - 历史字段（`installedHosts`、`routing`、`performance`、历史节名）读取时丢弃，不写回。
 
 本包私有目录与 ly-workflow（老项目，`~/.claude/.ly/`）彻底解耦，不做任何自动迁移。

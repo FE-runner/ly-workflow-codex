@@ -1,6 +1,7 @@
 import type { CodexModelProvider } from '../hosts/codex/provider'
 import type { ExecutorKind, InitOptions, InstallResult, LyConfig, SupportedLang } from '../types'
 import type { HostId } from '../utils/host-adapters'
+import type { SubagentConfigCollected } from './collect-subagent-config'
 import ansis from 'ansis'
 import fs from 'fs-extra'
 import inquirer from 'inquirer'
@@ -23,149 +24,20 @@ import {
 import { getAdapter, listRegisteredHosts } from '../utils/host-adapters'
 import { defaultInteractiveHosts, detectHosts, parseHostList, resolveNonInteractiveHosts } from '../utils/host-selection'
 import { getCoreCommandIds, installWorkflows } from '../utils/installer'
-import {
-  buildModelFieldChoices,
-  buildReasoningEffortChoices,
-  MODEL_CHOICE_CUSTOM,
-  MODEL_CHOICE_UNSET,
-  REASONING_CHOICE_CUSTOM,
-  REASONING_CHOICE_UNSET,
-} from '../utils/model-candidates'
 import { PACKAGE_NAME } from '../utils/package-meta'
+import { collectSubagentConfig } from './collect-subagent-config'
 
 // ═══════════════════════════════════════════════════════
-// codex 宿主采集：API 提供方 → 模型三连
+// 宿主采集：codex = API 提供方 / 现状检测（专属前置）+ 子代理配置；
+//           claude = 子代理配置（采集面与 codex 一致，无 provider 步骤）
 // ═══════════════════════════════════════════════════════
 
 const OPENAI_OFFICIAL_BASE_URL = 'https://api.openai.com/v1'
-
-/** codexHost 的采集结果：执行者二连 + 模型二连 */
-interface CodexHostCollected {
-  reviewExecutor?: ExecutorKind
-  codingExecutor?: ExecutorKind
-  reviewModel?: string
-  codingModel?: string
-  reviewReasoningEffort?: string
-  codingReasoningEffort?: string
-}
 
 type ProviderChoice
   = | { type: 'existing', provider: CodexModelProvider }
     | { type: 'official' }
     | { type: 'custom' }
-
-// 模型字段的驱动元数据（i18n 键 + 持久化清洗归属：reviewModel 白名单、codingModel 仅 trim）。
-// 仅在对应执行者为 subagent 时提示采集；main 路径下保留既有值但不采集。
-const MODEL_FIELDS = [
-  { key: 'reviewModel', labelKey: 'init:model.reviewModelA', sanitize: sanitizeReviewModel },
-  { key: 'codingModel', labelKey: 'init:model.codingModel', sanitize: sanitizeModelField },
-] as const
-
-// 推理档覆盖字段的驱动元数据（与对应执行者/模型字段配对）
-const REASONING_FIELDS = [
-  { key: 'reviewReasoningEffort', executorKey: 'reviewExecutor', labelKey: 'init:reasoning.reviewLabel' },
-  { key: 'codingReasoningEffort', executorKey: 'codingExecutor', labelKey: 'init:reasoning.codingLabel' },
-] as const
-
-// 执行者字段的驱动元数据（候选固定为 main / subagent，默认 main）
-const EXECUTOR_FIELDS = [
-  { key: 'reviewExecutor', labelKey: 'init:executor.reviewExecutor' },
-  { key: 'codingExecutor', labelKey: 'init:executor.codingExecutor' },
-] as const
-
-/**
- * 执行者字段 list 选择：候选 = 主 agent 直接执行（默认）/ spawn 独立子代理。
- * 未配置或既有值非法时默认选中 main。
- */
-async function pickExecutorField(input: {
-  field: typeof EXECUTOR_FIELDS[number]
-  current?: ExecutorKind
-}): Promise<ExecutorKind> {
-  const { field, current } = input
-  const { pick } = await inquirer.prompt([{
-    type: 'list',
-    name: 'pick',
-    message: i18n.t(field.labelKey),
-    choices: [
-      { name: i18n.t('init:executor.main'), value: 'main' },
-      { name: i18n.t('init:executor.subagent'), value: 'subagent' },
-    ],
-    default: current ?? 'main',
-  }])
-  return pick === 'subagent' ? 'subagent' : 'main'
-}
-
-/**
- * 模型字段 list 选择（候选 = 默认继承（留空）+ 自定义输入 + 既有值）：
- * 候选构造与默认值语义由 `buildModelFieldChoices` 统一提供（init 与 menu 共用）——
- * 模型指定只保留两种方式：留空（继承当前会话模型）或自定义输入任意模型名
- * （能否 spawn 由宿主实际能力决定，配置仅为提示；agent 模型需额外配置并可用示例 prompt 验证）。
- * 既有值非空 → 附该项并默认；无既有值或空白 → 默认"留空"。
- */
-async function pickModelField(input: {
-  field: typeof MODEL_FIELDS[number]
-  current?: string
-}): Promise<string | undefined> {
-  const { field, current } = input
-  const { choices, defaultChoice } = buildModelFieldChoices({ current })
-
-  const { pick } = await inquirer.prompt([{
-    type: 'list',
-    name: 'pick',
-    message: i18n.t(field.labelKey),
-    choices,
-    default: defaultChoice,
-    pageSize: 15,
-  }])
-
-  if (pick === MODEL_CHOICE_UNSET)
-    return undefined
-  if (pick === MODEL_CHOICE_CUSTOM) {
-    // 自定义输入：保留自由输入方式（不做清单限制）；留空视为取消（回退默认"留空"）
-    const { custom } = await inquirer.prompt([{
-      type: 'input',
-      name: 'custom',
-      message: i18n.t('init:model.customPrompt'),
-    }])
-    const model = custom?.trim()
-    return model || undefined
-  }
-  return typeof pick === 'string' ? pick.trim() : undefined
-}
-
-/**
- * 推理档覆盖选择：候选 = 不覆盖 + 建议档位 + 自定义输入 + 既有值。
- * 返回 undefined 表示不覆盖（清除字段）；自定义输入留空同样等价于不覆盖。
- */
-async function pickReasoningEffortField(input: {
-  field: typeof REASONING_FIELDS[number]
-  current?: string
-}): Promise<string | undefined> {
-  const { field, current } = input
-  const { choices, defaultChoice } = buildReasoningEffortChoices({ current })
-
-  const { pick } = await inquirer.prompt([{
-    type: 'list',
-    name: 'pick',
-    message: i18n.t(field.labelKey),
-    choices,
-    default: defaultChoice,
-    pageSize: 15,
-  }])
-
-  if (pick === REASONING_CHOICE_UNSET)
-    return undefined
-  if (pick === REASONING_CHOICE_CUSTOM) {
-    const { custom } = await inquirer.prompt([{
-      type: 'input',
-      name: 'custom',
-      message: i18n.t('init:reasoning.customPrompt'),
-    }])
-    const value = custom?.trim()
-    return value || undefined
-  }
-  return typeof pick === 'string' ? pick.trim() : undefined
-}
 
 /**
  * Codex 现状检测（只读展示，零副作用）：主会话模型（~/.codex/config.toml 顶层 model）、
@@ -212,8 +84,8 @@ async function printCodexStatus(): Promise<void> {
  * 决定，配置仅为提示并附示例 prompt 教用户验证；agent 模型需额外配置）。
  */
 async function collectCodexHostConfig(options: {
-  defaults: CodexHostCollected
-}): Promise<CodexHostCollected> {
+  defaults: SubagentConfigCollected
+}): Promise<SubagentConfigCollected> {
   // ── Step 1: 选择 API 提供方 ──
   console.log()
   console.log(ansis.cyan.bold(`  🔌 ${i18n.t('init:mode.providerSelect')}`))
@@ -280,71 +152,25 @@ async function collectCodexHostConfig(options: {
   // ── Step 2: Codex 现状检测（只读展示）──
   await printCodexStatus()
 
-  // ── Step 3: 执行者二连（候选 = 主 agent 直接执行 / spawn 独立子代理）──
-  console.log()
-  console.log(ansis.cyan.bold(`  ${i18n.t('init:executor.title')}`))
-  console.log()
-  console.log(ansis.gray(`  ${i18n.t('init:executor.hint')}`))
-  console.log()
-
-  const collected: CodexHostCollected = {}
-  for (const field of EXECUTOR_FIELDS) {
-    collected[field.key] = await pickExecutorField({
-      field,
-      current: options.defaults[field.key],
-    })
-  }
-
-  // ── Step 4: 模型采集（仅在对应执行者为 subagent 时提示；main 下保留既有值但不采集）──
-  console.log()
-  console.log(ansis.cyan.bold(`  🧠 ${i18n.t('init:model.trioTitle')}`))
-  console.log()
-  console.log(ansis.gray(`  ${i18n.t('init:model.trioCandidatesHint')}`))
-  console.log()
-
-  for (const field of MODEL_FIELDS) {
-    const executorKey = field.key === 'reviewModel' ? 'reviewExecutor' : 'codingExecutor'
-    if (collected[executorKey] !== 'subagent') {
-      // 执行者为 main：该模型字段不生效，保留既有值但不采集
-      collected[field.key] = options.defaults[field.key]?.trim() || undefined
-      continue
-    }
-    const current = options.defaults[field.key]?.trim() || undefined
-    const raw = await pickModelField({ field, current })
-    collected[field.key] = field.sanitize(raw)
-  }
-
-  // ── Step 5: 推理档覆盖采集（仅在对应执行者为 subagent 时提示；main 下保留既有值）──
-  for (const field of REASONING_FIELDS) {
-    if (collected[field.executorKey] !== 'subagent') {
-      collected[field.key] = options.defaults[field.key]?.trim() || undefined
-      continue
-    }
-    collected[field.key] = await pickReasoningEffortField({
-      field,
-      current: options.defaults[field.key],
-    })
-  }
-  return collected
+  // ── Step 3: 子代理配置采集（执行者二连 → 模型二连 → 推理档二连；与 claude 共用实现）──
+  return collectSubagentConfig({
+    defaults: options.defaults,
+    executorHintKey: 'init:executor.hint',
+    suggestions: getAdapter('codex').reasoningEffortSuggestions,
+  })
 }
 
 /**
- * claude 宿主侧交互采集：只采集执行者二连（main / subagent）。
- * SHALL NOT 采集模型与推理档（子代理定义默认 model: inherit），SHALL NOT 采集或写入
- * Claude Code 自身的 provider / settings 配置；既有模型与推理档（手改配置得到的）原样保留。
+ * claude 宿主侧交互采集：与 codex 采用同一采集面（执行者二连 → 模型二连 → 推理档二连），
+ * 复用 `collectSubagentConfig`；差异只在推理档建议清单按宿主提供（claude = low/medium/high/xhigh/max）。
+ * SHALL NOT 采集或写入 Claude Code 自身的 provider / settings 配置；既有模型与推理档原样保留为默认值。
  */
-async function collectClaudeHostConfig(options: { defaults: CodexHostCollected }): Promise<CodexHostCollected> {
-  console.log()
-  console.log(ansis.cyan.bold(`  ${i18n.t('init:executor.title')}`))
-  console.log()
-  console.log(ansis.gray(`  ${i18n.t('init:claude.executorHint')}`))
-  console.log()
-
-  const collected: CodexHostCollected = { ...options.defaults }
-  for (const field of EXECUTOR_FIELDS) {
-    collected[field.key] = await pickExecutorField({ field, current: options.defaults[field.key] })
-  }
-  return collected
+async function collectClaudeHostConfig(options: { defaults: SubagentConfigCollected }): Promise<SubagentConfigCollected> {
+  return collectSubagentConfig({
+    defaults: options.defaults,
+    executorHintKey: 'init:claude.executorHint',
+    suggestions: getAdapter('claude').reasoningEffortSuggestions,
+  })
 }
 
 /** 交互选择本次安装的宿主（默认勾选 = 已安装 ∪ 探测到；至少选一个） */
@@ -364,7 +190,7 @@ async function pickHosts(defaults: HostId[]): Promise<HostId[]> {
 }
 
 /** 配置摘要（交互与非交互共用）：宿主 + 执行者字段 + 模型字段 + 命令数 */
-function printSummary(input: { host: HostId, models: CodexHostCollected, commandCount: number }): void {
+function printSummary(input: { host: HostId, models: SubagentConfigCollected, commandCount: number }): void {
   const { host, models, commandCount } = input
   // claude 宿主：模型/推理档写入子代理定义，未配置即 model: inherit（继承当前会话），不算"未配置"
   const inheritsByDefinition = host === 'claude'
@@ -483,10 +309,10 @@ export async function init(options: InitOptions = {}): Promise<void> {
   // ═══════════════════════════════════════════════════════
   // Step 3: 逐宿主采集（既有配置作为默认值；空白等价未配置；保真写回不丢）
   // ═══════════════════════════════════════════════════════
-  const collectedByHost = new Map<HostId, CodexHostCollected>()
+  const collectedByHost = new Map<HostId, SubagentConfigCollected>()
   for (const host of hosts) {
     const existing = existingConfigs.get(host)?.host
-    const defaults: CodexHostCollected = {
+    const defaults: SubagentConfigCollected = {
       reviewExecutor: sanitizeExecutor(existing?.reviewExecutor),
       codingExecutor: sanitizeExecutor(existing?.codingExecutor),
       reviewModel: sanitizeReviewModel(existing?.reviewModel),

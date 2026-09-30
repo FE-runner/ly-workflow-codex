@@ -1,5 +1,5 @@
-import type { ExecutorKind } from '../types'
 import type { HostId } from '../utils/host-adapters'
+import type { SubagentConfigCollected } from './collect-subagent-config'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import ansis from 'ansis'
@@ -10,18 +10,11 @@ import { join } from 'pathe'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import { getConfigPath, getHostConfigPath, listInstalledHosts, mergeHostConfig, readLyConfig, sanitizeExecutor, sanitizeReasoningEffort, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import { getConfigPath, getHostConfigPath, listInstalledHosts, mergeHostConfig, readLyConfig, sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, writeLyConfig } from '../utils/config'
 import { DEFAULT_HOST, getAdapter, listRegisteredHosts } from '../utils/host-adapters'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows } from '../utils/installer'
-import {
-  buildModelFieldChoices,
-  buildReasoningEffortChoices,
-  MODEL_CHOICE_CUSTOM,
-  MODEL_CHOICE_UNSET,
-  REASONING_CHOICE_CUSTOM,
-  REASONING_CHOICE_UNSET,
-} from '../utils/model-candidates'
 import { PACKAGE_NAME } from '../utils/package-meta'
+import { collectSubagentConfig } from './collect-subagent-config'
 import { init } from './init'
 import { describeUninstallTargets, printUninstallResult, resolveUninstallHosts, runUninstall } from './uninstall'
 import { update } from './update'
@@ -191,7 +184,7 @@ export function buildMainMenuChoices(isZh: boolean): any[] {
     groupSep(isZh ? '工作流' : 'Workflow'),
     item('1', i18n.t('menu:options.init'), isZh ? `安装 ${PACKAGE_NAME}` : `Install ${PACKAGE_NAME}`),
     item('2', i18n.t('menu:options.update'), isZh ? '更新到最新版本' : 'Update to latest version'),
-    item('3', i18n.t('menu:options.configReviewModel'), isZh ? '配置审查模型' : 'Configure review model'),
+    item('3', i18n.t('menu:options.configExecutorsAndModels'), isZh ? '配置执行者与模型' : 'Configure executors and models'),
 
     groupSep(isZh ? '帮助与卸载' : 'Help & Uninstall'),
     item('H', i18n.t('menu:options.help'), isZh ? '查看全部斜杠命令' : 'View all slash commands'),
@@ -239,7 +232,7 @@ export async function showMainMenu(): Promise<void> {
         await update({ hosts: await pickInstalledHosts('menu:hostPick.update') })
         break
       case '3':
-        await configReviewModel()
+        await configExecutorsAndModels()
         break
       case '-':
         await uninstall()
@@ -332,168 +325,68 @@ function readLyConfigSync(): any {
 }
 
 // ═══════════════════════════════════════════════════════
-// Review model configuration
+// 子代理配置（执行者 / 模型 / 推理档）编辑
 // ═══════════════════════════════════════════════════════
 
 /**
- * 执行者 / 审查模型编辑入口（按宿主）：
- * - codex：审查执行者 + 审查模型 + 审查推理档（既有流程）
- * - claude：执行者二连（main / subagent），不采集模型与推理档；改完按当前配置重渲染子代理定义
+ * 子代理配置编辑入口（两宿主同口径）：执行者二连 → 模型二连 → 推理档二连，
+ * 复用与 `lycx init` 相同的采集实现；差异只在推理档建议清单由宿主适配层提供。
+ * 未触碰的字段以既有值回填；写回后按当前配置重渲染产物（claude 同时重渲子代理定义）。
  */
-async function configReviewModel(): Promise<void> {
+export async function configExecutorsAndModels(): Promise<void> {
   const hosts = await pickInstalledHosts('menu:hostPick.config', { single: true })
   const host = hosts?.[0] ?? DEFAULT_HOST
-  if (host === 'claude') {
-    await configClaudeExecutors()
+  const config = await readLyConfig(host)
+  if (!config) {
+    console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized (${host})`)
     return
   }
 
-  const config = await readLyConfig(host)
-  const currentReviewModel = sanitizeReviewModel(config?.host?.reviewModel)
-  const currentExecutor = sanitizeExecutor(config?.host?.reviewExecutor)
-  const currentReviewReasoningEffort = sanitizeReasoningEffort(config?.host?.reviewReasoningEffort)
-  // 候选/默认语义与 init 模型三连共用（buildModelFieldChoices）：
-  // 留空（继承当前会话模型）+ 自定义输入 + 既有值；agent 模型需额外配置
-
-  console.log()
-  console.log(ansis.cyan.bold(`  ${i18n.t('init:model.title')}`))
-  console.log()
-
-  // 先编辑审查执行者
-  const { executor } = await inquirer.prompt([{
-    type: 'list',
-    name: 'executor',
-    message: i18n.t('init:executor.reviewExecutor'),
-    choices: [
-      { name: i18n.t('init:executor.main'), value: 'main' },
-      { name: i18n.t('init:executor.subagent'), value: 'subagent' },
-    ],
-    default: currentExecutor ?? 'main',
-  }])
-  const nextExecutor: ExecutorKind = executor === 'subagent' ? 'subagent' : 'main'
-
-  // 执行者为 main 时模型字段不生效：跳过采集，保留既有值
-  let next: string | undefined = currentReviewModel
-  let nextReasoningEffort: string | undefined = currentReviewReasoningEffort
-  if (nextExecutor === 'subagent') {
-    console.log(ansis.gray(`  ${i18n.t('init:host.reviewModelHint')}`))
-    const { choices, defaultChoice } = buildModelFieldChoices({
-      current: currentReviewModel,
-    })
-    const { model } = await inquirer.prompt([{
-      type: 'list',
-      name: 'model',
-      message: i18n.t('init:host.reviewModelPrompt'),
-      choices,
-      default: defaultChoice,
-      pageSize: 15,
-    }])
-    if (model === MODEL_CHOICE_CUSTOM) {
-      // 自定义输入：保留自由输入方式（不做清单限制）；留空视为取消（保持原值语义）
-      const { custom } = await inquirer.prompt([{
-        type: 'input',
-        name: 'custom',
-        message: i18n.t('init:model.customPrompt'),
-      }])
-      next = custom?.trim() || undefined
-    }
-    else {
-      next = model === MODEL_CHOICE_UNSET ? undefined : sanitizeReviewModel(model)
-    }
-
-    const reasoningChoices = buildReasoningEffortChoices({ current: currentReviewReasoningEffort })
-    const { pick: reasoningPick } = await inquirer.prompt([{
-      type: 'list',
-      name: 'pick',
-      message: i18n.t('init:reasoning.reviewLabel'),
-      choices: reasoningChoices.choices,
-      default: reasoningChoices.defaultChoice,
-      pageSize: 15,
-    }])
-    if (reasoningPick === REASONING_CHOICE_UNSET) {
-      nextReasoningEffort = undefined
-    }
-    else if (reasoningPick === REASONING_CHOICE_CUSTOM) {
-      const { custom } = await inquirer.prompt([{
-        type: 'input',
-        name: 'custom',
-        message: i18n.t('init:reasoning.customPrompt'),
-      }])
-      nextReasoningEffort = custom?.trim() || undefined
-    }
-    else {
-      nextReasoningEffort = typeof reasoningPick === 'string' ? reasoningPick.trim() : undefined
-    }
+  const current: SubagentConfigCollected = {
+    reviewExecutor: sanitizeExecutor(config.host?.reviewExecutor),
+    codingExecutor: sanitizeExecutor(config.host?.codingExecutor),
+    reviewModel: sanitizeReviewModel(config.host?.reviewModel),
+    codingModel: sanitizeModelField(config.host?.codingModel),
+    reviewReasoningEffort: sanitizeReasoningEffort(config.host?.reviewReasoningEffort),
+    codingReasoningEffort: sanitizeReasoningEffort(config.host?.codingReasoningEffort),
   }
+  const next = await collectSubagentConfig({
+    defaults: current,
+    executorHintKey: host === 'claude' ? 'init:claude.executorHint' : 'init:executor.hint',
+    suggestions: getAdapter(host).reasoningEffortSuggestions,
+  })
 
-  if (
-    next === currentReviewModel
-    && nextExecutor === (currentExecutor ?? 'main')
-    && nextReasoningEffort === currentReviewReasoningEffort
-  ) {
+  const changed = (Object.keys(current) as Array<keyof SubagentConfigCollected>)
+    .some(key => next[key] !== current[key])
+  if (!changed) {
     console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))
     return
   }
 
   const fresh = await readLyConfig(host)
   if (!fresh) {
-    console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized`)
+    console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized (${host})`)
     return
   }
-  // 写回保留既有 codingExecutor / codingModel / codingReasoningEffort / spawnableModels；
-  // review 推理档按本次选择写入或清除。
-  fresh.host = mergeHostConfig(fresh.host, {
-    reviewExecutor: nextExecutor,
-    reviewModel: next,
-    reviewReasoningEffort: nextReasoningEffort,
-  })
+  // 写回全部六个字段（未触碰者已由采集默认值回填）；spawnableModels 等范围外字段由 mergeHostConfig 保留。
+  fresh.host = mergeHostConfig(fresh.host, next)
   await writeLyConfig(fresh, host)
 
   console.log()
   console.log(ansis.green(`  ✓ ${i18n.t('init:model.routingUpdated')}`))
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelCodex'))} ${next || i18n.t('init:host.reviewModelUnset')}`)
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewReasoningEffort'))} ${
-    nextReasoningEffort
-      ? ansis.green(i18n.t('init:summary.reasoningConfigured', { value: nextReasoningEffort }))
-      : ansis.gray(i18n.t('init:summary.reasoningUnset'))}`)
+  const modelLine = (value: string | undefined): string =>
+    value ? ansis.green(value) : ansis.gray(i18n.t('init:host.reviewModelUnset'))
+  const effortLine = (value: string | undefined): string =>
+    value
+      ? ansis.green(i18n.t('init:summary.reasoningConfigured', { value }))
+      : ansis.gray(i18n.t('init:summary.reasoningUnset'))
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))} ${modelLine(next.reviewModel)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))} ${modelLine(next.codingModel)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewReasoningEffort'))} ${effortLine(next.reviewReasoningEffort)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.codingReasoningEffort'))} ${effortLine(next.codingReasoningEffort)}`)
 
-  // 改配置后重装命令模板（codex 单宿主：模型经"模板指示 + 宿主 spawn 能力"落实，无 -m 参数；
-  // 重装用于刷新模板正文与内置默认清单占位）
+  // 改配置后重装命令模板（claude 同时按当前配置重渲子代理定义）
   await reinstallTemplates(host)
-}
-
-/** claude 宿主执行者开关：只改 reviewExecutor / codingExecutor，模型与推理档保留原值 */
-async function configClaudeExecutors(): Promise<void> {
-  const config = await readLyConfig('claude')
-  if (!config) {
-    console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized (claude)`)
-    return
-  }
-  console.log()
-  console.log(ansis.gray(`  ${i18n.t('init:claude.executorHint')}`))
-  const next: { reviewExecutor?: ExecutorKind, codingExecutor?: ExecutorKind } = {}
-  for (const key of ['reviewExecutor', 'codingExecutor'] as const) {
-    const { executor } = await inquirer.prompt([{
-      type: 'list',
-      name: 'executor',
-      message: i18n.t(`init:executor.${key}`),
-      choices: [
-        { name: i18n.t('init:executor.main'), value: 'main' },
-        { name: i18n.t('init:executor.subagent'), value: 'subagent' },
-      ],
-      default: sanitizeExecutor(config.host?.[key]) ?? 'main',
-    }])
-    next[key] = executor === 'subagent' ? 'subagent' : 'main'
-  }
-  if (next.reviewExecutor === (sanitizeExecutor(config.host?.reviewExecutor) ?? 'main')
-    && next.codingExecutor === (sanitizeExecutor(config.host?.codingExecutor) ?? 'main')) {
-    console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))
-    return
-  }
-  config.host = mergeHostConfig(config.host, next)
-  await writeLyConfig(config, 'claude')
-  console.log(ansis.green(`  ✓ ${i18n.t('init:model.routingUpdated')}`))
-  await reinstallTemplates('claude')
 }
 
 /** 配置变更后的命令模板重装（指定宿主，--force 覆盖渲染；claude 同时重渲子代理定义） */

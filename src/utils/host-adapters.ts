@@ -101,6 +101,11 @@ export interface HostAdapter {
   detectDir: () => string
   /** 命令调用前缀（展示用：codex = '@'，claude = '/'） */
   commandPrefix: string
+  /**
+   * 推理档建议清单（仅作交互提示，不做枚举强校验；实际可用档位以宿主 / 模型能力为准）。
+   * 清单随宿主能力漂移，因此归属宿主侧——共享层只读取该字段，不做宿主名分支。
+   */
+  reasoningEffortSuggestions: readonly string[]
   /** 历史版本写入的宿主配置节名（读取时兼容为 [host]，写入时不再保留） */
   legacyConfigSections?: string[]
   /** OpenSpec `--tools` 取值 */

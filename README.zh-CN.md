@@ -18,9 +18,10 @@ lycx init --skip-prompt --host claude       # 非交互，只装指定宿主
 
 - CLI 二进制名 `lycx`（子命令：`init`/`doctor`/`status`/`uninstall`/`openspec inspect|ensure`，均支持 `--host <codex,claude>`，缺省 = 全部已安装宿主；裸命令进菜单；`update` 在菜单内）
 - 安装产物与配置：见下方「宿主」一节
-- 配置：每宿主一个文件（`~/.codex/lyx/config.toml` / `~/.claude/lyx/config.toml`，文件存在即该宿主已安装；本包私有目录，不做任何自动迁移）；`[host] spawnableModels`（仅 codex） 声明本机实测可 spawn 的模型清单（仅提示参考、不作候选/校验来源；未配置或空白回退内置默认 gpt-6-astra / gpt-5.6-sol / gpt-5.6-terra / gpt-5.6-luna / gpt-5.5），维护方式 = 手改配置（编辑交互入口为后续增强）
+- 配置：每宿主一个文件（`~/.codex/lyx/config.toml` / `~/.claude/lyx/config.toml`，文件存在即该宿主已安装；本包私有目录，不做任何自动迁移）；`[host] spawnableModels`（仅 codex） 声明本机实测可 spawn 的模型清单（仅提示参考、不作候选/校验来源；未配置或空白回退内置默认 gpt-6-astra / gpt-5.6-sol / gpt-5.6-terra / gpt-5.6-luna / gpt-5.5）；执行者 / 模型 / 推理档已有交互入口（`lycx init` 与菜单"配置执行者与模型"），`spawnableModels` 的维护方式 = 手改配置（尚无交互入口）
 - 执行者与推理档：`[host] reviewExecutor` / `codingExecutor`（取值 `main` / `subagent`，未配置等价 `main`）决定审查与实施由谁执行；`reviewReasoningEffort` / `codingReasoningEffort` 分别对应 `reviewModel` / `codingModel`，仅在对应执行者为 `subagent` 且值非空时随 spawn 传入 `reasoning_effort`。执行者为 `main` 时模型与推理档字段不生效，`lycx doctor` 输出 WARN。取值不做枚举强校验；交互 init / 菜单可选择"不覆盖（继承默认）"或覆盖指定档位，非交互 update 保留原值
-- 初始化向导采集流程：语言 → **宿主多选**（默认按已安装宿主与 `~/.codex` / `~/.claude` 是否存在勾选）→ 逐宿主采集：**Claude Code 只采集执行者二连**（不采集 provider / 模型 / 推理档，不写 Claude Code 自身的 provider 配置）；**Codex**：API 提供方（`~/.codex/config.toml` 现有 `[model_providers.*]` / OpenAI 官方 / 自定义）→ **Codex 现状检测（只读**：主会话模型 `~/.codex/config.toml` 顶层 `model` / provider 条目 / `~/.codex/models.json` 注册规模）→ 执行者二连 → 模型与推理档采集（模型候选 = **默认继承当前会话模型（留空）** + **自定义输入** + 既有值；推理档候选 = **不覆盖（继承默认）** + 建议档位 + 自定义输入 + 既有值；不以 provider `/models` 或任何内置/维护清单为候选来源）→ 配置摘要
+- 初始化向导采集流程：语言 → **宿主多选**（默认按已安装宿主与 `~/.codex` / `~/.claude` 是否存在勾选）→ 逐宿主采集：**两个宿主同一采集面 = 执行者二连 → 模型二连 → 推理档二连**（模型候选 = **默认继承当前会话模型（留空）** + **自定义输入** + 既有值；推理档候选 = **不覆盖（继承默认）** + 该宿主建议档位 + 自定义输入 + 既有值，codex = minimal/low/medium/high/max、Claude Code = low/medium/high/xhigh/max；不以 provider `/models` 或任何内置/维护清单为候选来源）→ 配置摘要；**Codex 额外前置**：API 提供方（`~/.codex/config.toml` 现有 `[model_providers.*]` / OpenAI 官方 / 自定义）→ **Codex 现状检测（只读**：主会话模型 `~/.codex/config.toml` 顶层 `model` / provider 条目 / `~/.codex/models.json` 注册规模）。Claude Code 侧仍不采集、不写入其自身的 provider / settings 配置
+- 菜单"配置执行者与模型"：按宿主选择后走与 `lycx init` 相同的采集面（执行者二连 → 模型二连 → 推理档二连）；未触碰字段保留既有值，写回后按当前配置重渲染产物（Claude Code 同时重渲子代理定义）
 
 ## 宿主
 

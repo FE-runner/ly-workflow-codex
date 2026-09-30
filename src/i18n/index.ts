@@ -104,7 +104,7 @@ const zhCN = {
       },
     },
     claude: {
-      executorHint: 'Claude Code 侧只采集执行者：模型与推理档不采集，子代理定义默认 model: inherit（继承当前会话）；不写入 Claude Code 自身的 provider / settings 配置。',
+      executorHint: 'Claude Code 侧与 Codex 采用同一采集面：执行者二连 → 模型二连 → 推理档二连（建议档位 = low / medium / high / xhigh / max）；模型与推理档写入 ~/.claude/agents/lyx-*.md 的子代理定义，未配置即 model: inherit（继承当前会话）；不采集、不写入 Claude Code 自身的 provider / settings 配置。',
       modelInherit: '继承当前会话（子代理定义 model: inherit）',
       noProviderNote: '不采集 / 不写入 Claude Code 的 provider 配置；子代理定义安装到 ~/.claude/agents/lyx-*.md',
     },
@@ -284,7 +284,7 @@ const zhCN = {
     options: {
       init: '初始化 ly-workflow-codex',
       update: '更新工作流',
-      configReviewModel: '配置审查模型',
+      configExecutorsAndModels: '配置执行者与模型',
       uninstall: '卸载 ly-workflow-codex',
       help: '帮助',
       exit: '退出',
@@ -419,7 +419,7 @@ const en: typeof zhCN = {
       },
     },
     claude: {
-      executorHint: 'Claude Code only asks for executors: models and reasoning effort are not collected — subagent definitions default to model: inherit (current session); Claude Code\'s own provider / settings are never written.',
+      executorHint: 'Claude Code uses the same collection surface as Codex: executor pair → model pair → reasoning-effort pair (suggested tiers = low / medium / high / xhigh / max). Models and reasoning effort are written into the subagent definitions under ~/.claude/agents/lyx-*.md and default to model: inherit (current session) when unset; Claude Code\'s own provider / settings are never collected or written.',
       modelInherit: 'inherits the session (subagent definition model: inherit)',
       noProviderNote: 'Claude Code provider config is not collected or written; subagent definitions go to ~/.claude/agents/lyx-*.md',
     },
@@ -599,7 +599,7 @@ const en: typeof zhCN = {
     options: {
       init: 'Initialize ly-workflow-codex',
       update: 'Update workflows',
-      configReviewModel: 'Configure review model',
+      configExecutorsAndModels: 'Configure executors and models',
       uninstall: 'Uninstall ly-workflow-codex',
       help: 'Help',
       exit: 'Exit',
