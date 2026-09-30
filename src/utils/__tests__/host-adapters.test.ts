@@ -183,6 +183,33 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(explore).not.toContain('它是只读留痕')
   })
 
+  it('templates support in-change resolution notes on the active snapshot', () => {
+    const note = '- 解决：本 change 内修复（未复审，commit <短 hash>）'
+    for (const name of ['review-plan.md', 'review-code.md']) {
+      const content = read(name)
+      expect(content, name).toContain('审查后同会话修复的就地标注')
+      expect(content, name).toContain(note)
+      expect(content, name).toContain('先提交后标注')
+      expect(content, name).toContain('修复提交排除快照')
+      expect(content, name).toContain('标注前确认')
+      // 重跑审查整节替换时，就地标注不被合并保留
+      expect(content, name).toContain('SHALL NOT 为保留就地标注而合并新旧节')
+    }
+
+    const archive = read('archive.md')
+    expect(archive).toContain('归档前核对本 change 未标注 Warning')
+    expect(archive).toContain(note)
+    expect(archive).toContain('(y/N)')
+    expect(archive).toContain('由用户直接提供修复 commit hash')
+    // 口径收窄：不改写 active 快照只约束跨 change 回写
+    expect(archive).toContain('只约束跨 change 回写')
+    expect(archive).toContain('不属于对当前 change 快照的重新生成或重建')
+
+    const explore = read('explore.md')
+    expect(explore).toContain('未复审')
+    expect(explore).toContain('其中 3 条已标注解决（3 条未复审）')
+  })
+
   it('explore template asks before listing review-findings snapshots', () => {
     const content = read('explore.md')
     expect(content).toContain('review-findings.md')

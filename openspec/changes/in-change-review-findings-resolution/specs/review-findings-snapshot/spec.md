@@ -15,8 +15,8 @@
 
 就地标注的触发点 SHALL 只有以下两个，SHALL NOT 在其他命令（如 `@lyx-commit`）中自动推断：
 
-1. **审查后同会话修复**：`@lyx-review-plan` / `@lyx-review-code` 写完快照后，同一会话内用户要求修复快照中的 Warning，修复提交完成之后，SHALL 为被该提交修复的条目追加就地标注，并在报告中列出已标注的条目编号。
-2. **归档前核对**：`@lyx-archive` 在归档前完整验证通过之后、委托 OpenSpec 归档流程之前，SHALL 统计当前 change 快照中**没有任何解决子项**的 Warning 条数；为 0 或快照不存在时 SHALL NOT 询问；大于 0 时 SHALL 询问一次是否逐条核对（默认不核对）。用户同意后 SHALL 逐条以快照基线到 `HEAD` 之间涉及该条目位置文件的提交作为候选修复 commit 呈现判断，由用户逐条确认后才标注；找不到候选 commit 或用户否认的条目 SHALL 跳过并如实说明。用户拒绝核对时 SHALL 直接继续归档。
+1. **审查后同会话修复**：`@lyx-review-plan` / `@lyx-review-code` 写完快照后，同一会话内用户要求修复快照中的 Warning，修复提交完成之后，SHALL 先列出拟标注的条目编号与对应 commit 由用户确认一次，再为被该提交修复的条目追加就地标注，并在报告中列出已标注的条目编号。该修复提交 SHALL 只按路径暂存修复文件，SHALL NOT 把未跟踪的 `review-findings.md` 纳入；快照已被意外跟踪时 SHALL 如实报告，就地标注照常追加并随后续提交落库。
+2. **归档前核对**：`@lyx-archive` 在归档前完整验证通过之后、委托 OpenSpec 归档流程之前，SHALL 统计当前 change 快照中**没有任何解决子项**的 Warning 条数；为 0 或快照不存在时 SHALL NOT 询问；大于 0 时 SHALL 询问一次是否逐条核对（默认不核对）。用户同意后 SHALL 逐条以快照基线到 `HEAD` 之间涉及该条目位置文件的提交作为候选修复 commit 呈现判断，由用户逐条确认后才标注；候选取该条目**所在节**的基线；位置涉及多个文件时取并集，无可解析文件时视为无候选。节基线缺失或不是可解析的 commit（元信息仅记录基线状态）时，SHALL 只展示条目、由用户直接提供修复 commit hash，并按"必须引用已存在的修复 commit"校验。找不到候选 commit、用户否认或未提供可解析 hash 的条目 SHALL 跳过并如实说明。用户拒绝核对时 SHALL 直接继续归档。
 
 #### Scenario: 审查后同会话修复并提交后就地标注
 
@@ -37,6 +37,16 @@
 
 - **WHEN** 用户运行 `@lyx-archive`，完整验证通过，当前 change 快照中有 2 条 Warning 没有任何解决子项
 - **THEN** 命令在委托 OpenSpec 归档前询问一次是否逐条核对；用户同意后逐条给出候选修复 commit，用户确认的条目追加就地标注，其余跳过并说明，随后照常归档
+
+#### Scenario: 节基线不可用时由用户提供 hash
+
+- **WHEN** 归档前核对中某条 Warning 所在节的元信息只记录了 `--no-commit` 基线状态
+- **THEN** 命令只展示该条目，请用户直接提供修复 commit hash；hash 可解析时追加就地标注，否则跳过并说明
+
+#### Scenario: 审查后修复提交不纳入快照
+
+- **WHEN** 审查后同会话修复 Warning 并提交
+- **THEN** 该修复提交只包含修复文件，未跟踪的 `review-findings.md` 不被纳入
 
 #### Scenario: 归档前核对无未标注项时不打扰
 

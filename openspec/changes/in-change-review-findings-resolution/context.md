@@ -18,3 +18,8 @@
 ## 注意事项
 - 本 change 自身归档时会同时触发：C 核对（若本 change 快照有未标注 Warning）与跨 change 回写 `add-claude-host` 快照，二者互不影响。
 - 既有测试断言大量逐字匹配模板句子（如 `SHALL NOT 改写 active 快照`），收窄口径时保留原句、追加限定，避免误伤断言。
+
+## 实施决策（apply）
+- 顺带落实 review-plan 第 1 轮 3 条 Warning：delta spec 补"节基线不可用由用户提供 hash""修复提交排除快照""标注前确认"及 2 个 Scenario；proposal Impact / tasks 4.2 补文档同步（AGENTS.md / CLAUDE.md / README.md；README.zh-CN.md 无对应段落未改）；tasks 4.4 验证命令改为 `openspec validate <name> --strict`。
+- 这些修复随 apply commit 落库，快照 `## 方案审查` 3 条尚未就地标注——留给归档前核对（触发点 C）逐条确认，顺带实测新流程。
+- 收窄口径采用"保留原句 + 追加限定句"，既有测试断言（如 `SHALL NOT 改写 active 快照`）未受影响。

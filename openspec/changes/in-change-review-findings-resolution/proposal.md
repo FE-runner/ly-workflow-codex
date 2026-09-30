@@ -25,6 +25,7 @@
 - 模板：`templates/skills/review-plan.md`、`templates/skills/review-code.md`、`templates/skills/archive.md`、`templates/skills/explore.md`（两个宿主共享正文，无需改宿主片段）。
 - 测试：`src/utils/__tests__/host-adapters.test.ts` 补充模板断言。
 - 主 spec：`openspec/specs/review-findings-snapshot/spec.md`（归档时由 delta 合并）。
+- 文档：`AGENTS.md`、`CLAUDE.md`、`README.md` 的快照机制描述同步（`README.zh-CN.md` 无对应段落，不改）。
 - 不涉及 `src/` 下的运行时逻辑，无配置 / 安装产物结构变化；已安装用户需重新 `init` / update 才能拿到新模板。
 
 ## 解决的审查未修项
