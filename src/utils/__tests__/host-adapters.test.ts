@@ -212,6 +212,38 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(explore).toContain('其中 3 条已标注解决（3 条未复审）')
   })
 
+  it('full-tree staging excludes in-progress review-findings snapshots', () => {
+    const pathspec = "':(top,exclude,glob)openspec/changes/*/review-findings.md'"
+    for (const name of ['commit.md', 'propose.md']) {
+      const content = read(name)
+      expect(content, name).toContain("git add -A -- ':/' " + pathspec)
+      // 以仓库顶层为锚点：不得退化为以当前目录为锚点的写法
+      expect(content, name).not.toContain('git add -A -- .')
+      expect(content, name).not.toContain('git add -A &&')
+    }
+  })
+
+  it('templates declare and write back re-review notes', () => {
+    const propose = read('propose.md')
+    expect(propose).toContain('## 复审的审查未修项')
+    expect(propose).toContain('（结论：成立|不成立）')
+    expect(propose).toContain('SHALL NOT 混用')
+
+    const archive = read('archive.md')
+    expect(archive).toContain('回写审查未修项复审说明')
+    expect(archive).toContain('- 复审：<change-name>（归档于 <YYYY-MM-DD>，结论：成立|不成立）')
+    expect(archive).toContain('无可复审的解决说明')
+    expect(archive).toContain('以最后一行为当前复审结论')
+    expect(archive).toContain('冻结后仅允许追加式解决说明与追加式复审说明')
+    // 核对阶段确定的 change 名传给后续归档委托
+    expect(archive).toContain('作为参数传入，SHALL NOT 让其再次推断或询问目标 change')
+
+    const explore = read('explore.md')
+    expect(explore).toContain('复审未通过')
+    expect(explore).toContain('其中 3 条已标注解决（1 条复审未通过）')
+    expect(explore).toContain('（X 条未复审，Y 条复审未通过）')
+  })
+
   it('explore template asks before listing review-findings snapshots', () => {
     const content = read('explore.md')
     expect(content).toContain('review-findings.md')

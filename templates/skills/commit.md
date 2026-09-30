@@ -46,7 +46,7 @@ argument-hint: '[--all] [--amend] [--type <type>] [--scope <scope>]'
 
 1. 获取已暂存与未暂存改动
 2. 若暂存区为空：
-   - `--all` → 执行 `git add -A`
+   - `--all` → 执行 `git add -A -- ':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md'`：全量暂存但排除进行中 change 目录下未跟踪的审查未修项快照（见 `review-findings-snapshot`，它须保持未跟踪直到 `@lyx-archive`）；`':/'` 与 `top` 使暂存范围与排除规则都以仓库顶层为锚点，在任意子目录执行结果一致；`glob` 使 `*` 只匹配一层，不波及 `archive/` 下已跟踪的快照。快照若已被跟踪，如实报告，SHALL NOT 自动 `git rm --cached`
    - 否则提示选择
 
 ### ✂️ 阶段 3：拆分建议

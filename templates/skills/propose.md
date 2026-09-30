@@ -52,14 +52,14 @@ argument-hint: '<需求描述>'
   - **本项目切新分支**：
     1. 捕获 `ISOLATION=branch`、`ISOLATION_SOURCE_BRANCH="$SOURCE_BRANCH"`；询问/确认开发分支名 `<开发分支名>`（规则与 worktree 路径一致：可含 `/`，如 `feature/xxx`），捕获 `DEVELOPMENT_BRANCH=<开发分支名>`。
     2. 检查当前工作区未提交改动（`git status --porcelain`）：非空时用一次三选一询问处置方式，各选项文案如实说明后果：
-       - **提交（WIP commit）**：用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取 message 文件路径并写入完整 message（首行 `chore(wip): 切分支前暂存工作区改动`，正文按 `@lyx-commit` 规范写动机/改动/影响），执行 `git add -A && git commit -F "$MSG_FILE"` 后再切分支——新分支从含 WIP commit 的 HEAD 切出，改动固化为新分支上的提交，review-code 审查对象不受污染；
+       - **提交（WIP commit）**：用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取 message 文件路径并写入完整 message（首行 `chore(wip): 切分支前暂存工作区改动`，正文按 `@lyx-commit` 规范写动机/改动/影响），执行 `git add -A -- ':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md' && git commit -F "$MSG_FILE"` 后再切分支（全量暂存但排除进行中 change 的未跟踪快照 `review-findings.md`，顶层锚定，见 `review-findings-snapshot`）——新分支从含 WIP commit 的 HEAD 切出，改动固化为新分支上的提交，review-code 审查对象不受污染；
        - **Stash**：`git stash push -u` → 切分支 → `git stash pop`——如实说明"pop 回来后改动仍在工作区，stash 仅提供日志留底"；
        - **原样保留**：不做任何处理——明示"改动会进入 review-code 审查范围（`git diff HEAD`），可能污染审查对象"；且若这些改动与后续 apply 的实施目标文件重叠，apply 会直接停止转人工（停止报告会回指此处处置选择）。
 
        三种选择均直接执行（风险已写入文案，不二次确认）；处置动作失败（提交失败、stash 失败等）→ **如实报错停止编排，不自动兜底**。
     3. 执行 `git checkout -b <开发分支名>`（从当前 HEAD 建新分支并切换）。本路径**不运行 baseline 验证**（同一工作目录、同一 env、同一 node_modules，baseline 验证的"全新 worktree 可用性"前提不成立）、**不切换会话工作目录**、**不打印兜底续接命令**（无目录切换即无会话断链风险）。分支名已存在或非法导致 `git checkout -b` 失败时，**如实报错停止编排转人工**（不自动改名、不自动 stash），change 尚未生成。
     4. 进入步骤 2，后续编排（opsx:propose → 自审 → commit → 流水线）在当前工作目录原位继续。
-  - **留在当前分支**：捕获 `ISOLATION=none`、`ISOLATION_SOURCE_BRANCH="$SOURCE_BRANCH"`、`DEVELOPMENT_BRANCH=null`；不创建 worktree、不切换分支，直接进入步骤 2。若 `git status --porcelain` 非空，触发与"本项目切新分支"相同的脏改动三选一处置询问（其中 Stash 选项因无切换动作**不自动 pop**——改动收进 stash 由用户日后 `git stash pop` 自取，执行时如实说明；WIP commit 选项将改动提交到当前分支，message 沿用同一文案）。
+  - **留在当前分支**：捕获 `ISOLATION=none`、`ISOLATION_SOURCE_BRANCH="$SOURCE_BRANCH"`、`DEVELOPMENT_BRANCH=null`；不创建 worktree、不切换分支，直接进入步骤 2。若 `git status --porcelain` 非空，触发与"本项目切新分支"相同的脏改动三选一处置询问（其中 Stash 选项因无切换动作**不自动 pop**——改动收进 stash 由用户日后 `git stash pop` 自取，执行时如实说明；WIP commit 选项将改动提交到当前分支，message 与暂存命令（含快照排除）沿用同一文案）。
 
 **隔离动作成功后的公共失败路径**：从步骤 1 捕获/创建隔离环境成功开始，步骤 2-4 任一后续中止、失败或用户取消时，命令 SHALL 报告 `ISOLATION`、`DEVELOPMENT_BRANCH`、`WORKTREE_PATH` 与“已保留、未清理”的状态，SHALL NOT 自动合并或删除。
 
@@ -78,6 +78,8 @@ argument-hint: '<需求描述>'
 读取 `@openspec-propose skill`（opsx propose 编排 prompt）并按其定义的完整流程，围绕 `参数`（需求描述）生成 proposal/design/tasks 全部 artifacts。生成过程中遵循该编排 prompt 的全部步骤与约束（本命令的步骤 4-9 在其后继续编排）。
 
 **解决的审查未修项声明（可选）**：若用户在本次讨论中明确本次 change 解决了某条历史 `review-findings.md` 的 Warning，SHALL 在生成的 `proposal.md` 末尾新增 `## 解决的审查未修项` 小节，每条以 `- <归档快照路径>#<节名>#<序号> — <一句解决说明>` 列出。节名仅允许 `方案审查` / `代码审查`（如 `...#方案审查#1` / `...#代码审查#2`），序号为该节 Warning 条目的 1 起连续编号，路径 SHALL 指向 `openspec/changes/archive/**/review-findings.md` 下的已归档快照。本次 change 不解决任何历史 Warning 时 SHALL 省略该小节，SHALL NOT 创建空小节。propose 阶段 SHALL NOT 直接改写历史快照——实际回写由 `@lyx-archive` 在归档时完成（见 `review-findings-snapshot` 的「追加式解决说明」）。
+
+**复审的审查未修项声明（可选）**：若用户在本次讨论中明确复审了某条历史 `review-findings.md` 中已带解决说明的 Warning 并给出结论，SHALL 在 `proposal.md` 末尾新增 `## 复审的审查未修项` 小节，每条以 `- <归档快照路径>#<节名>#<序号>（结论：成立|不成立）— <一句说明>` 独占一个列表项列出。该小节 SHALL 与 `## 解决的审查未修项` 分开声明、SHALL NOT 混用；节名仅允许 `方案审查` / `代码审查`，结论仅允许 `成立` / `不成立` 且 SHALL 来自用户的明确判断（SHALL NOT 自行推断），路径 SHALL 指向已归档快照。未复审任何历史 Warning 时 SHALL 省略该小节，SHALL NOT 创建空小节。propose 阶段同样 SHALL NOT 直接改写历史快照——复审说明由 `@lyx-archive` 在归档时追加（见 `review-findings-snapshot` 的「追加式复审说明」）。
 
 ### 4. 确定真实 change 名（前后快照比对）
 
