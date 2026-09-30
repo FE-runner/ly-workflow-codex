@@ -68,7 +68,7 @@
 
 若实施前工作区已存在该 change 目录之外的未提交改动（如审查修复残留），`/ly:apply` SHALL 先检查 `git status --porcelain`：存在与本次实施无关的预存改动时，`git add` 范围仅限本次实际改动的文件，SHALL NOT 将预存改动一并暂存/提交，并在报告中说明"预存改动未被提交"。
 
-`/ly:archive` SHALL **先执行归档前完整验证**（见 `archive-verification-gate`：测试 / 类型检查 / 构建，按项目实际提供的脚本选择、缺失项跳过并注明），全部通过后才调用 `opsx:archive` 并原样转发 `$ARGUMENTS`；归档完成后若 `openspec/` 下存在实际文件变动，SHALL 提交（commit message 采用 `chore(openspec): <subject>` + `Change-Stage: archive` + `Change-Name: <change-name>` trailer 结构）；无变动或提交本身失败则跳过并如实报告。验证失败 SHALL 停止归档，SHALL NOT 移动 `openspec/changes/<change-name>/`，并如实报告失败的脚本与原始错误输出。
+`/ly:archive` SHALL **先执行归档前完整验证**（见 `archive-verification-gate`：测试 / 类型检查 / 构建，按项目实际提供的脚本选择、缺失项跳过并注明），全部通过后才调用 `opsx:archive`：`$ARGUMENTS` 显式指定 change 名时原样转发；未指定时，归档前核对阶段（见 `review-findings-snapshot` 的「本 change 内修复标注」）按 `opsx:archive` 默认规则确定的目标 change 名 SHALL 作为参数交给 `opsx:archive`，SHALL NOT 让其二次推断或二次询问；归档完成后若 `openspec/` 下存在实际文件变动，SHALL 提交（commit message 采用 `chore(openspec): <subject>` + `Change-Stage: archive` + `Change-Name: <change-name>` trailer 结构）；无变动或提交本身失败则跳过并如实报告。验证失败 SHALL 停止归档，SHALL NOT 移动 `openspec/changes/<change-name>/`，并如实报告失败的脚本与原始错误输出。
 
 `/ly:propose` SHALL NOT 是纯委托——它是本能力集里唯一的编排入口：在调用 `opsx:propose` **之前** SHALL 先执行一次隔离方式询问（三选一：隔离 worktree / 本项目切新分支 / 留在当前分支，见 `worktree-create-before-propose`，仅当不在任何 worktree 内时询问，全局仅一次），再询问一次"本次收尾走全自动还是手动逐步确认"（也仅一次）；委托 `opsx:propose` 完成后 SHALL 先执行方案自审（四项检查 + 逐项结论清单，见 `ly-propose-flow`）与 context.md 产出（见 `review-context-artifact`）再对生成的 artifact `git add` 并**立即 commit**（message 采用 `docs(openspec): <subject>` + `Change-Stage: propose` + `Change-Name: <change-name>` trailer 结构），随后按自动/手动两路径分支：全自动路径 SHALL 依次自动调用 `/ly:review-plan <change-name>` → `/ly:apply <change-name>` → `/ly:review-code <change-name>`（任一非清零终止即停，见 `ly-propose-flow`）；手动路径 SHALL 询问一次"要不要跑 review-plan 审查"，选是则调用审查循环，选否则编排结束（方案已 commit）。具体分支细节见 `ly-propose-flow` 能力。
 
@@ -83,6 +83,10 @@
 #### Scenario: archive 命令归档后自动提交
 - **WHEN** 用户运行 `/ly:archive`，项目完整验证全部通过，归档移动了 `openspec/changes/<change-name>/` 到 `archive/` 目录
 - **THEN** 命令在归档前执行完整验证，通过后调用 `opsx:archive` 完成归档，并提交 `openspec/` 下的文件移动，commit message 带 `Change-Stage: archive` trailer
+
+#### Scenario: archive 未指定参数时传递已确定的 change 名
+- **WHEN** 用户运行 `/ly:archive` 未带参数，归档前核对阶段按默认规则确定（或经用户选择确定）目标 change 为 `foo`
+- **THEN** 命令以 `foo` 作为参数委托 `opsx:archive`，SHALL NOT 让 `opsx:archive` 再次推断或询问目标 change
 
 #### Scenario: archive 归档前验证失败阻断归档
 - **WHEN** 用户运行 `/ly:archive`，测试脚本执行失败
