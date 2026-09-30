@@ -158,6 +158,17 @@ export const codexAdapter: HostAdapter = {
     ...(await listPrefixedFiles(CODE_PROMPTS_DIR, 'ly-', '.md')),
   ],
 
+  // 与 uninstallList + uninstallExtras 的实际动作一一对应（确认提示 SHALL 反映完整范围）
+  describeUninstall: paths => [
+    `删除 ${paths.skillsDir}/lyx-*/`,
+    `删除旧安装残留 ${paths.skillsDir}/ly-*/ 与 ${CODE_PROMPTS_DIR}/ly-*.md`,
+    `删除角色词 ${paths.promptsDir}/codex/`,
+    `删除私有目录 ${paths.lyDir}/`,
+    `修改 ${CODEX_HOME_DIR}/AGENTS.md（剥离 LY 管理区块）`,
+    `修改 ${CODEX_HOME_DIR}/config.toml（移除旧版 ly 写入的注释行与 [features.multi_agent_v2]）`,
+    `删除 ${CODEX_HOME_DIR}/agents/ly-*.toml 中含 ly 写入标记的旧代理（无标记的同名文件保留）`,
+  ],
+
   uninstallExtras: async (ctx, report, options) => {
     // 旧安装位残留：<skillsDir>/ly-* 目录（lyx- 前缀启用前形态）
     try {

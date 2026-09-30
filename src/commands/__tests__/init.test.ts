@@ -155,3 +155,15 @@ describe('init — claude wizard (5.3)', () => {
     expect(write.config.paths.prompts.replace(/\\/g, '/')).toContain('/.claude/lyx')
   })
 })
+
+describe('init --host validation (W3)', () => {
+  it('invalid host prints a readable error and sets exit code, without a stack trace or install', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await init({ skipPrompt: true, host: 'foo' })
+    expect(process.exitCode).toBe(1)
+    expect(errSpy.mock.calls.map(c => String(c[0])).join('\n')).toContain('Unknown host: foo')
+    expect(state.writes).toEqual([])
+    expect(state.installs).toEqual([])
+    process.exitCode = undefined
+  })
+})

@@ -71,7 +71,9 @@ describe('main menu structure (codex 单宿主)', () => {
 describe('menu host picking (7.4 / 7.6)', () => {
   it('does not ask when at most one host is installed', async () => {
     const { pickInstalledHostsWith } = await import('../menu')
-    const ask = async () => { throw new Error('should not prompt') }
+    const ask = async (): Promise<never> => {
+      throw new Error('should not prompt')
+    }
     expect(await pickInstalledHostsWith(['codex'], ask, false)).toBeUndefined()
     expect(await pickInstalledHostsWith(['claude'], ask, true)).toEqual(['claude'])
     expect(await pickInstalledHostsWith([], ask, false)).toBeUndefined()
@@ -80,7 +82,10 @@ describe('menu host picking (7.4 / 7.6)', () => {
   it('asks with all installed hosts pre-checked when several are installed', async () => {
     const { pickInstalledHostsWith } = await import('../menu')
     let asked: any
-    const ask = async (q: any) => { asked = q; return ['claude' as const] }
+    const ask = async (q: any) => {
+      asked = q
+      return ['claude' as const]
+    }
     expect(await pickInstalledHostsWith(['codex', 'claude'], ask, false)).toEqual(['claude'])
     expect(asked.choices.map((c: any) => [c.value, c.checked])).toEqual([['codex', true], ['claude', true]])
   })

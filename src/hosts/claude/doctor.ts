@@ -2,7 +2,7 @@ import type { HostDoctorCheck, HostInspectContext } from '../../utils/host-adapt
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import { i18n } from '../../i18n'
-import { sanitizeExecutor } from '../../utils/config'
+import { sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort } from '../../utils/config'
 import { listPrefixedDirs } from '../../utils/fs-helpers'
 import { CLAUDE_AGENT_DEFINITIONS, renderAgentModelLines } from './adapter'
 import { CLAUDE_AGENTS_DIR } from './paths'
@@ -78,12 +78,29 @@ export async function claudeDoctorChecks(ctx: HostInspectContext): Promise<HostD
     }
   }
   for (const def of CLAUDE_AGENT_DEFINITIONS) {
-    const model = config[def.modelKey]?.trim()
-    const effort = config[def.effortKey]?.trim()
+    const model = sanitizeModelField(config[def.modelKey])
+    const effort = sanitizeReasoningEffort(config[def.effortKey])
     parts.push(i18n.t(model ? 'doctor:claude.modelSpecified' : 'doctor:claude.modelInherit', {
       agent: def.file.replace('.md', ''),
       model: model ?? '',
     }) + (effort ? ` effort=${effort}` : ''))
+  }
+
+  // 执行者为 main 时，已配置的模型 / 推理档不生效：与 codex 侧同口径输出 WARN（仅展示）
+  const PAIRS = [
+    { executorKey: 'reviewExecutor', fields: ['reviewModel', 'reviewReasoningEffort'] },
+    { executorKey: 'codingExecutor', fields: ['codingModel', 'codingReasoningEffort'] },
+  ] as const
+  for (const pair of PAIRS) {
+    if ((sanitizeExecutor(config[pair.executorKey]) ?? 'main') !== 'main')
+      continue
+    for (const key of pair.fields) {
+      const value = key.endsWith('Model') ? sanitizeModelField(config[key]) : sanitizeReasoningEffort(config[key])
+      if (value) {
+        warn = true
+        parts.push(i18n.t('doctor:modelConfig.warnIneffective', { key, model: value }))
+      }
+    }
   }
   const drift = await claudeDefinitionDrift(ctx)
   if (drift.length > 0) {

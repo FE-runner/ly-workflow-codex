@@ -464,7 +464,16 @@ export async function init(options: InitOptions = {}): Promise<void> {
   // ═══════════════════════════════════════════════════════
   // Step 2: 宿主集合（交互 = 多选；非交互 = 已安装 → 探测 → 兜底）
   // ═══════════════════════════════════════════════════════
-  const explicitHosts = parseHostList(options.host)
+  // 编程调用（菜单等）同样不抛堆栈：非法 --host 打印可读错误并设置退出码
+  let explicitHosts: HostId[] | undefined
+  try {
+    explicitHosts = parseHostList(options.host)
+  }
+  catch (error) {
+    console.error(ansis.red(`  ${error instanceof Error ? error.message : String(error)}`))
+    process.exitCode = 1
+    return
+  }
   const hosts = options.skipPrompt
     ? explicitHosts ?? resolveNonInteractiveHosts({ installed: installedHosts, detected: detectedHosts })
     : await pickHosts(explicitHosts ?? defaultInteractiveHosts({ installed: installedHosts, detected: detectedHosts }))

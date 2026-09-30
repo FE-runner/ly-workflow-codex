@@ -16,15 +16,18 @@ export async function resolveUninstallHosts(explicit?: HostId[]): Promise<HostId
   return installed.length > 0 ? installed : [...FALLBACK_HOSTS]
 }
 
-/** 卸载确认提示中列出的范围（按宿主）；OpenSpec 自有产物与共用 ~/.ly/worktrees/ 不在范围内 */
+/**
+ * 卸载确认提示中列出的范围（按宿主，逐项与实际删除 / 修改动作对应，由适配器提供）；
+ * OpenSpec 自有产物与共用 ~/.ly/worktrees/ 不在范围内。
+ */
 export function describeUninstallTargets(hosts: HostId[]): string[] {
-  return hosts.map((host) => {
-    const paths = getAdapter(host).defaultPaths()
-    const parts = [`${paths.skillsDir}/lyx-*`]
-    if (paths.agentsDir)
-      parts.push(`${paths.agentsDir}/lyx-*.md`)
-    parts.push(`${paths.lyDir}/`)
-    return `[${host}] ${parts.join(', ')}`
+  return hosts.flatMap((host) => {
+    const adapter = getAdapter(host)
+    const paths = adapter.defaultPaths()
+    const items = adapter.describeUninstall
+      ? adapter.describeUninstall(paths)
+      : [`${paths.skillsDir}/lyx-*/`, ...(paths.agentsDir ? [`${paths.agentsDir}/lyx-*.md`] : []), `${paths.lyDir}/`]
+    return [`[${host}]`, ...items.map(item => `  - ${item}`)]
   })
 }
 

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import fs from 'fs-extra'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { renderAgentModelLines } from '../../hosts/claude/adapter'
 import { claudeDefinitionDrift, claudeDoctorChecks } from '../../hosts/claude/doctor'
 import { codexDoctorChecks } from '../../hosts/codex/doctor'
 import { initI18n } from '../../i18n'
@@ -15,7 +16,7 @@ vi.mock('../../utils/config', async (importOriginal) => {
   return { ...mod, listInstalledHosts: async () => [...installedState.hosts] }
 })
 
-const { resolveUninstallHosts } = await import('../uninstall')
+const { describeUninstallTargets, resolveUninstallHosts } = await import('../uninstall')
 
 const base = mkdtempSync(join(tmpdir(), 'ly-host-ops-'))
 const codexPaths = { skillsDir: join(base, 'agents-skills'), lyDir: join(base, 'codex-lyx'), promptsDir: join(base, 'codex-lyx', 'prompts') }
@@ -153,5 +154,35 @@ describe('single-host entry for ops commands (7.6)', () => {
   it('nothing installed → fallback host (still cleans legacy residue)', async () => {
     installedState.hosts = []
     expect(await resolveUninstallHosts(undefined)).toEqual(['codex'])
+  })
+})
+
+describe('review-code fixes (add-claude-host W1–W4)', () => {
+  it('w1: claude doctor warns when models / efforts are configured but the executor is main', async () => {
+    await installBoth({ reviewModel: 'sonnet' })
+    const checks = await claudeDoctorChecks({ paths: claudePaths, config: { reviewModel: 'sonnet', codingReasoningEffort: 'high' } })
+    const sub = checks.find(c => c.label.includes('Claude'))!
+    expect(sub.status).toBe('warn')
+    expect(sub.detail).toContain('reviewModel=sonnet')
+    expect(sub.detail).toContain('codingReasoningEffort=high')
+    // 执行者为 subagent 时不报"不生效"
+    const ok = await claudeDoctorChecks({ paths: claudePaths, config: { reviewExecutor: 'subagent', reviewModel: 'sonnet' } })
+    expect(ok.find(c => c.label.includes('Claude'))!.status).toBe('ok')
+  })
+
+  it('w2: non-string model / effort values never crash rendering, doctor or drift detection', async () => {
+    const bad = { reviewModel: 5, reviewReasoningEffort: true, codingModel: { x: 1 } } as any
+    expect(renderAgentModelLines(5, true)).toBe('model: inherit')
+    await installBoth()
+    await expect(claudeDefinitionDrift({ paths: claudePaths, config: bad })).resolves.toEqual([])
+    await expect(claudeDoctorChecks({ paths: claudePaths, config: bad })).resolves.toBeDefined()
+  })
+
+  it('w4: codex uninstall description lists every removal / modification it performs', () => {
+    const lines = describeUninstallTargets(['codex', 'claude']).join('\n')
+    for (const needle of ['/lyx-*/', '/ly-*/', 'prompts/ly-*.md', '/prompts/codex/', 'AGENTS.md', 'config.toml', 'agents/ly-*.toml'])
+      expect(lines, needle).toContain(needle)
+    expect(lines).toContain('[claude]')
+    expect(lines).toContain('lyx-*.md')
   })
 })

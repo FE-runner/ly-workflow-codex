@@ -1,6 +1,7 @@
 import type { HostAdapter, HostAdapterConfig, HostAdapterContext } from '../../utils/host-adapters'
 import fs from 'fs-extra'
 import { basename, join } from 'pathe'
+import { sanitizeModelField, sanitizeReasoningEffort } from '../../utils/config'
 import { listPrefixedDirs, listPrefixedFiles } from '../../utils/fs-helpers'
 import { injectHostFragments, injectSharedVariables } from '../../utils/installer-template'
 import { CLAUDE_AGENTS_DIR, CLAUDE_HOME_DIR, CLAUDE_LY_DIR, CLAUDE_PROMPTS_DIR, CLAUDE_SKILLS_DIR } from './paths'
@@ -41,10 +42,13 @@ export function rewriteClaudeInvocations(content: string): string {
     .replace(/@openspec-([\w-]+)/g, 'openspec-$1')
 }
 
-/** 子代理定义 frontmatter 的模型 / 推理档行：未配置或空白 → `model: inherit`，不写 effort */
-export function renderAgentModelLines(model?: string, effort?: string): string {
-  const lines = [`model: ${model?.trim() || 'inherit'}`]
-  const cleanedEffort = effort?.trim()
+/**
+ * 子代理定义 frontmatter 的模型 / 推理档行：未配置、空白或非字符串（手改配置写错类型）
+ * → `model: inherit`，不写 effort；SHALL NOT 因取值类型异常而抛错。
+ */
+export function renderAgentModelLines(model?: unknown, effort?: unknown): string {
+  const lines = [`model: ${sanitizeModelField(model) ?? 'inherit'}`]
+  const cleanedEffort = sanitizeReasoningEffort(effort)
   if (cleanedEffort)
     lines.push(`effort: ${cleanedEffort}`)
   return lines.join('\n')
@@ -150,6 +154,12 @@ export const claudeAdapter: HostAdapter = {
   backupList: async ctx => [
     ...(await listPrefixedDirs(ctx.paths.skillsDir, 'lyx-')),
     ...(await listPrefixedFiles(ctx.paths.agentsDir ?? CLAUDE_AGENTS_DIR, 'lyx-', '.md')),
+  ],
+
+  describeUninstall: paths => [
+    `删除 ${paths.skillsDir}/lyx-*/`,
+    `删除子代理定义 ${paths.agentsDir ?? CLAUDE_AGENTS_DIR}/lyx-*.md`,
+    `删除私有目录 ${paths.lyDir}/`,
   ],
 
   uninstallExtras: async (ctx, report) => {

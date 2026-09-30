@@ -123,6 +123,9 @@ export async function setupCommands(cli: CAC): Promise<void> {
       if (options.lang) {
         await initI18n(options.lang)
       }
+      // 先校验 --host，非法取值与 doctor/status/uninstall 同样友好报错，不进入前置检查与安装
+      if (parseHostsOrExit(options.host) === null)
+        return
       await checkExternalDeps({ skipPrompt: options.skipPrompt, initOpenspec: options.initOpenspec })
       await init(options)
     })

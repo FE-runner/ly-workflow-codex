@@ -123,6 +123,8 @@ export interface HostAdapter {
   definitionDrift?: (ctx: HostInspectContext) => Promise<string[]>
   /** 可选：update 前需备份的本包产物（绝对路径；缺省 = uninstallList） */
   backupList?: (ctx: HostAdapterContext) => Promise<string[]>
+  /** 可选：卸载确认提示中该宿主的完整删除 / 修改范围（缺省由共享层按 skills / agents / lyDir 描述） */
+  describeUninstall?: (paths: HostPaths) => string[]
   /** 可选：宿主专属的附加卸载步骤（在删除私有目录之前执行） */
   uninstallExtras?: (ctx: HostAdapterContext, report: HostUninstallReport, options: HostUninstallOptions) => Promise<void>
 }
