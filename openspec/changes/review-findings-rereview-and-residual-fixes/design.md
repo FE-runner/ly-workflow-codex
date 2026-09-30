@@ -33,7 +33,7 @@
 复审说明不计入"已标注解决"。多次复审取最后一行，与"按归档先后追加"天然对齐，无需时间戳比较。
 
 **D5 全量暂存排除用 pathspec**
-`git add -A -- . ':(exclude,glob)openspec/changes/*/review-findings.md'`。显式加 `glob` 魔法使 `*` 不跨 `/`，只匹配 active change 一层，不波及 `archive/<日期>-<name>/` 下已跟踪快照。落点：`commit.md` 的 `--all` 分支、`propose.md` 两处 WIP commit（切新分支 / 留在当前分支共用同一段文案）。已被跟踪的快照不自动 `git rm --cached`，仅如实报告。
+`git add -A -- ':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md'`。正向 pathspec 用 `':/'`、排除 pathspec 带 `top` 魔法，二者都以仓库顶层为锚点——若写成 `.` / 不带 `top`，在子目录执行时暂存范围会缩到当前子目录、排除规则也失配，反而比原 `git add -A`（全仓）范围更小（已在临时仓库实测）。显式加 `glob` 魔法使 `*` 不跨 `/`，只匹配 active change 一层，不波及 `archive/<日期>-<name>/` 下已跟踪快照。落点：`commit.md` 的 `--all` 分支、`propose.md` 两处 WIP commit（切新分支 / 留在当前分支共用同一段文案）。已被跟踪的快照不自动 `git rm --cached`，仅如实报告。
 
 **D6 archive 传名**
 核对段"先确定目标 change"的结果记为 `<change-name>`，委托 `openspec-archive-change` 时作为参数传入；显式参数时行为不变。

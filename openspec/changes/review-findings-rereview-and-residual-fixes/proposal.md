@@ -4,7 +4,7 @@
 
 ## What Changes
 
-- **A 快照排除扩展到全量暂存**：`@lyx-commit --all`（暂存区为空时的 `git add -A`）与 `@lyx-propose` 的 WIP commit（`git add -A`）SHALL 排除进行中 change 目录下的 `review-findings.md`（`:(exclude,glob)openspec/changes/*/review-findings.md`）；"未归档快照保持未跟踪"约束从 review-plan / apply / review-code 三类提交扩展到所有 lyx 全量暂存路径。
+- **A 快照排除扩展到全量暂存**：`@lyx-commit --all`（暂存区为空时的 `git add -A`）与 `@lyx-propose` 的 WIP commit（`git add -A`）SHALL 排除进行中 change 目录下的 `review-findings.md`（`git add -A -- ':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md'`，以仓库顶层为锚点）；"未归档快照保持未跟踪"约束从 review-plan / apply / review-code 三类提交扩展到所有 lyx 全量暂存路径。
 - **B README.zh-CN.md 同步快照机制**：命令表 explore / review-plan / review-code 三行与架构段补齐快照写入、先询问后列出、跨 change 解决说明、就地标注与复审说明，对齐 `README.md`。
 - **C archive 传递已确定的 change 名**：`@lyx-archive` 未指定参数时，归档前核对阶段确定的目标 change 名 SHALL 作为参数交给 `openspec-archive-change`，SHALL NOT 让其二次推断。
 - **D 追加式复审说明**：新增 `proposal.md` 可选小节 `## 复审的审查未修项`（`- <归档快照路径>#<节名>#<序号>（结论：成立|不成立）— <说明>`）；`@lyx-archive` 归档时向已归档快照对应 Warning 追加 `- 复审：<change-name>（归档于 <YYYY-MM-DD>，结论：成立|不成立）— <说明>`，规则同解决说明（原文不改、按 change 名幂等、失败逐条跳过不阻断、不新增提交）。

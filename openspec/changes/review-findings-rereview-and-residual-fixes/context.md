@@ -22,6 +22,6 @@
 ## 已知坑
 
 - **归档前必须先更新本机已安装 skills**（重新 `init` / 菜单 update）：本机 `~/.claude/skills/lyx-archive` 与 `~/.agents/skills/lyx-archive` 仍是旧版，不识别 `## 复审的审查未修项`，直接归档会让 5 条复审说明不写入。
-- pathspec 必须带 `glob` 魔法（`:(exclude,glob)openspec/changes/*/review-findings.md`）：不带时默认 `*` 跨 `/`，会误排除 `archive/<日期>-<name>/` 下已跟踪快照的改动。
+- pathspec 写法固定为 `git add -A -- ':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md'`：必须带 `glob`（否则 `*` 跨 `/`，会误排除 `archive/` 下已跟踪快照）且以顶层锚定（`':/'` + `top`；写成 `.` 时在子目录执行只暂存当前子目录，属行为回退）。
 - explore 模板的既有示例 `其中 3 条已标注解决（3 条未复审）` 被测试断言引用，调整示例时保留或同步改断言。
 - 复审说明追加位置在该 Warning 现有全部子项之后（部分条目有两行解决说明，如方案审查 #2）。

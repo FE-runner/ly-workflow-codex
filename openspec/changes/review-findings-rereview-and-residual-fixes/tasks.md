@@ -1,6 +1,6 @@
 ## 1. 全量暂存排除进行中快照（A）
 
-- [ ] 1.1 `templates/skills/commit.md`：`--all` 分支由 `git add -A` 改为 `git add -A -- . ':(exclude,glob)openspec/changes/*/review-findings.md'`，并注明排除原因（进行中 change 快照须保持未跟踪、不波及 `archive/`）与"已被跟踪时如实报告、不自动 `git rm --cached`"
+- [ ] 1.1 `templates/skills/commit.md`：`--all` 分支由 `git add -A` 改为 `git add -A -- ':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md'`（顶层锚定，任意目录执行结果一致），并注明排除原因（进行中 change 快照须保持未跟踪、不波及 `archive/`）与"已被跟踪时如实报告、不自动 `git rm --cached`"
 - [ ] 1.2 `templates/skills/propose.md`：WIP commit 的 `git add -A` 同 1.1 改写（切新分支与留在当前分支共用同一段文案，确认两处均生效）
 
 ## 2. 归档模板（C + D 回写）
@@ -22,6 +22,6 @@
 
 ## 5. 测试与验证
 
-- [ ] 5.1 `src/utils/__tests__/host-adapters.test.ts`：新增断言——commit / propose 含 `:(exclude,glob)openspec/changes/*/review-findings.md`；archive 含复审说明格式与"传入已确定的 change 名"；propose 含 `## 复审的审查未修项`；explore 含"复审未通过"与新示例；确认既有断言（含 `其中 3 条已标注解决（3 条未复审）`）仍成立或按新口径调整
+- [ ] 5.1 `src/utils/__tests__/host-adapters.test.ts`：新增断言——commit / propose 含 `:(top,exclude,glob)openspec/changes/*/review-findings.md` 且不含 `git add -A -- .`；archive 含复审说明格式与"传入已确定的 change 名"；propose 含 `## 复审的审查未修项`；explore 含"复审未通过"与新示例；确认既有断言（含 `其中 3 条已标注解决（3 条未复审）`）仍成立或按新口径调整
 - [ ] 5.2 运行 `openspec validate review-findings-rereview-and-residual-fixes --strict` 与项目测试确认通过
 - [ ] 5.3 归档前置提醒：在 `context.md` 与报告中注明本 change 归档前须先更新本机已安装 skills（重新 `init` / 菜单 update），使 `@lyx-archive` 识别 `## 复审的审查未修项`
