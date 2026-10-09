@@ -104,7 +104,7 @@ propose 与 apply 提交 SHALL 共用同一套提交范围隔离协议：
 
 ### Requirement: lyx 生成提交统一复用 `@lyx-commit` 正文规范
 
-`@lyx-commit` SHALL 作为所有 lyx 显式生成 message 的提交的基础规范来源。“lyx 显式生成 message”指 message 由 `@lyx-commit` 或 lyx skill 模板写入的提交，包括 change 生命周期提交、propose 切分支前的 WIP commit、worktree `--local` 的 `.gitignore` commit、init/release/changelog/publish 提交。`git merge` / `git revert` / `git cherry-pick` 等由 git 原生生成默认 message 的结构性提交不在范围内，除非模板显式提供 message。基础规范 SHALL 至少定义：
+`@lyx-commit` SHALL 作为所有 lyx 显式生成 message 的提交的基础规范来源。“lyx 显式生成 message”指 message 由 `@lyx-commit` 或 lyx skill 模板写入的提交，包括 change 生命周期提交、propose 切分支前的 WIP commit、worktree `--local` 的 `.gitignore` commit、init/release/changelog/publish/fix 提交。`git merge` / `git revert` / `git cherry-pick` 等由 git 原生生成默认 message 的结构性提交不在范围内，除非模板显式提供 message。基础规范 SHALL 至少定义：
 
 1. 首行为 Conventional Commits 前缀 `<type>(<scope>): <subject>`；
 2. 正文 SHALL 至少包含三条 bullet：中文提交用 `- 动机：`、`- 改动：`、`- 影响：`，英文提交用 `- Motivation:`、`- Change:`、`- Impact:`；
@@ -158,7 +158,13 @@ change 生命周期自动提交（`Change-Stage` 为 `propose` / `apply` / `arch
 
 ### Requirement: 非 change 生命周期 lyx 提交遵守正文规范但不追加 Change trailer
 
-非 change 生命周期的 lyx 显式提交（包括 `@lyx-init`、`@lyx-release`、`@lyx-changelog`、`@lyx-publish`、propose WIP、worktree `.gitignore` 中由命令生成的提交）SHALL 遵守 `@lyx-commit` 正文规范，但 SHALL NOT 追加 `Change-Stage` / `Change-Name` trailer。`npm version` 或其他工具默认生成的短 commit SHALL NOT 绕过本规范；若工具默认 message 不含正文，命令 SHALL 改为 `--no-git-tag-version` 后按规范提交再打 tag，或提供等价的自定义 message。
+非 change 生命周期的 lyx 显式提交（包括 `@lyx-init`、`@lyx-release`、`@lyx-changelog`、`@lyx-publish`、`@lyx-fix`、propose WIP、worktree `.gitignore` 中由命令生成的提交）SHALL 遵守 `@lyx-commit` 正文规范，但 SHALL NOT 追加 `Change-Stage` / `Change-Name` trailer。`npm version` 或其他工具默认生成的短 commit SHALL NOT 绕过本规范；若工具默认 message 不含正文，命令 SHALL 改为 `--no-git-tag-version` 后按规范提交再打 tag，或提供等价的自定义 message。
+
+`@lyx-fix` 的提交在动机/改动/影响之后 SHALL 追加 `- spec：` / `- 自审：` / `- 验证：` 三条 bullet（见 `lightweight-fix-flow`），同样 SHALL NOT 追加 Change trailer；`Change-Stage` 取值集合不因此扩展。
+
+#### Scenario: fix 提交带附加正文且无 Change trailer
+- **WHEN** `@lyx-fix` 完成修复并提交
+- **THEN** 该 commit 包含动机、改动、影响与 spec、自审、验证正文，SHALL NOT 携带 `Change-Stage` / `Change-Name` trailer
 
 #### Scenario: release 版本提交包含正文
 - **WHEN** `@lyx-release` 更新版本号并创建版本提交
