@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: 配置摘要的 review 侧"不生效"标注按原因分流
-`lycx init` 与菜单配置入口的配置摘要 SHALL 对 review 侧模型字段（`reviewModel`）与推理档字段（`reviewReasoningEffort`）在"不生效"时按**真实原因**选择文案，SHALL NOT 把不同原因混用同一句：
+`lycx init` 的配置摘要 SHALL 对 review 侧模型字段（`reviewModel`）与推理档字段（`reviewReasoningEffort`）在"不生效"时按**真实原因**选择文案，SHALL NOT 把不同原因混用同一句（菜单配置入口不渲染"不生效"标注，不在本 Requirement 范围内）：
 
 - `reviewMode = "off"`（审查范围关闭；即使 `reviewExecutor = "subagent"`）：摘要 SHALL 以"审查范围 off，不生效"类文案标注该字段；未覆盖的推理档 SHALL 标注"审查范围 off，不生效（未覆盖）"。
 - `reviewMode` 非 `off` 但 `reviewExecutor = "main"`：摘要 SHALL 沿用既有"主 agent 执行时不生效"类文案。
