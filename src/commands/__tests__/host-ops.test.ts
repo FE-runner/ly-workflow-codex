@@ -44,8 +44,8 @@ describe('multi-host install / uninstall (7.1, 8.2)', () => {
     const result = await installBoth()
     expect(result.success, result.errors.join('\n')).toBe(true)
     expect(Object.keys(result.hosts ?? {}).sort()).toEqual(['claude', 'codex'])
-    expect(result.hosts!.codex!.installedCommands.length).toBe(14)
-    expect(result.hosts!.claude!.installedCommands.length).toBe(14)
+    expect(result.hosts!.codex!.installedCommands.length).toBe(15)
+    expect(result.hosts!.claude!.installedCommands.length).toBe(15)
   })
 
   it('uninstalling claude leaves every codex artifact untouched, and OpenSpec artifacts intact', async () => {

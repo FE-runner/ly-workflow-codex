@@ -53,6 +53,7 @@ const CORE_CONFIGS: WorkflowConfig[] = [
   cmd('propose', 21, 'opsx', '提出方案', 'Propose', '委托 opsx:propose，生成 proposal/design/tasks', 'Delegates to opsx:propose — generates proposal/design/tasks'),
   cmd('apply', 22, 'opsx', '实施方案', 'Apply', 'coding subagent 实施 tasks：读 tasks.md 逐任务实施+验证+勾选，回传主会话统一 commit', 'Implements tasks via a coding subagent: reads tasks.md, implements + verifies + checks, returns to the main session for commit'),
   cmd('archive', 23, 'opsx', '归档方案', 'Archive', '委托 opsx:archive，完成后归档', 'Delegates to opsx:archive — archives a completed change'),
+  cmd('fix', 24, 'opsx', '轻量修复', 'Quick Fix', '小需求/bug 轻量流程：spec 分流 + 自审 + 单 commit，不创建 change', 'Lightweight flow for small fixes: spec triage + self-review + single commit, no change created'),
 
   // ── Review gates (Codex-backed) ──────────────────────
   cmd('review-plan', 30, 'review', '方案审查', 'Review Plan', '按 reviewExecutor 决定审查主体（主 agent 直接审 / spawn 独立子代理），分级输出 Critical/Warning/Info', 'Review plan artifacts with a switchable executor (main agent or a dedicated subagent), graded Critical/Warning/Info'),

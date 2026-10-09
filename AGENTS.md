@@ -74,7 +74,7 @@ src/utils/                   共享层（不出现宿主名与宿主路径）
                              listInstalledHosts（配置文件存在即已安装）、字段清洗与合并
   installer.ts               安装 / 卸载主流程：按宿主遍历适配器，结果按宿主记录
   installer-template.ts      PACKAGE_ROOT 解析、宿主片段注入、~/ 展开、共享变量
-  installer-data.ts          14 个命令注册
+  installer-data.ts          15 个命令注册
   preflight.ts               OpenSpec 三层检查（CLI + skills + root）：skills 按宿主判定、整体取最差；
                              修复按宿主传 --tools；无宿主配置时只读诊断
   fs-helpers.ts platform.ts version.ts package-meta.ts
@@ -82,7 +82,7 @@ src/utils/                   共享层（不出现宿主名与宿主路径）
 src/i18n/                    i18next 文案（zh-CN / en）
 src/types/                   LyConfig（host 节）/ WorkflowConfig / CLI 类型
 
-templates/skills/            14 个 SKILL.md 共享正文
+templates/skills/            15 个 SKILL.md 共享正文
 templates/hosts/codex/       codex 片段 + 角色词（→ ~/.codex/lyx/prompts/codex/）
 templates/hosts/claude/      claude 片段 + 子代理定义（→ ~/.claude/agents/lyx-*.md）
 docs/codex-exec-contract.md  审查子会话调用契约（DEPRECATED，历史参考）
@@ -92,7 +92,7 @@ docs/codex-exec-contract.md  审查子会话调用契约（DEPRECATED，历史�
 
 ```bash
 npx ly-workflow-codex        # 一键安装/菜单（默认动作，含 preflight）
-npx ly-workflow-codex init   # 选择宿主并安装 14 个 skills + 配置；OpenSpec 默认 check-only（i 为别名）
+npx ly-workflow-codex init   # 选择宿主并安装 15 个 skills + 配置；OpenSpec 默认 check-only（i 为别名）
 npx ly-workflow-codex init --init-openspec  # 宿主确认后，为所选宿主初始化当前项目 OpenSpec root/skills
 lycx init --skip-prompt [--host codex,claude]  # 非交互：已安装宿主 → 探测宿主 → 兜底 codex
 lycx doctor / status [--host <hosts>]          # 体检 / 安装概览（按宿主分组）
@@ -150,13 +150,26 @@ spawnableModels = [...]    # 仅 codex：本机实测可 spawn 的模型清单�
 
 ## 关键设计决策
 
-1. **`propose` 是编排入口，`apply`/`archive` 各带自动 commit，`explore` 是纯薄壳**：`propose.md` 包含创建方案前的隔离方式三选一询问（隔离 worktree【不在 worktree 内才问，从当前分支 HEAD 用 `git worktree add` 切出，切后同会话 cd 进 worktree 续跑——会话不断链，cd 校验失败即停，续接命令降级为异常兜底】/ 本项目切新分支【`git checkout -b`，无 baseline/无 cd/无兜底】/ 留在当前分支）、全自动/手动询问、commit 前的方案自审（四项检查 + 逐项结论清单，机械断链直接修、业务判断类 AskUserQuestion 问用户）、每步 commit（`propose: <change-name>`）、全自动流水线（review-plan → apply → review-code）。`apply.md` 由 coding subagent 实施 + 主会话统一提交，`archive.md` 委托 opsx 技能后 commit，`explore.md` 只做参数转发 + 一句转向提示。
+1. **`propose` 是编排入口，`apply`/`archive` 各带自动 commit，`explore` 是纯薄壳**：`propose.md` 包含创建方案前的隔离方式三选一询问（隔离 worktree【不在 worktree 内才问，从当前分支 HEAD 用 `git worktree add` 切出，切后同会话 cd 进 worktree 续跑——会话不断链，cd 校验失败即停，续接命令降级为异常兜底】/ 本项目切新分支【`git checkout -b`，无 baseline/无 cd/无兜底】/ 留在当前分支）、全自动/手动询问、commit 前的方案自审（四项检查 + 逐项结论清单，机械断链直接修、业务判断类 AskUserQuestion 问用户）、每步 commit（`propose: <change-name>`）、全自动流水线（review-plan → apply → review-code）。`apply.md` 由 coding subagent 实施 + 主会话统一提交，`archive.md` 委托 opsx 技能后 commit，`explore.md` 只做参数转发 + 一句按规模分流的转向提示（小改动 → `@lyx-fix`，其余 → `@lyx-propose`）。
 2. **审查走单审查 subagent（非 fork）而非 wrapper/API/`codex exec` 子会话**：无 ly-wrapper、无 Go 二进制、无 Web UI、无 exec 契约维护面。非 fork spawn（宿主 V1 `fork_context` 默认 false / V2 `fork_turns: none`）不携带对话历史，token 成本约为双审 fork 模型的 1/4~1/6；软上下文经 change 目录 `context.md` 显式到达（可审计、随 commit 留痕），主会话逐条裁决（不认可须附可核验依据）+ 驳回硬线双口径补偿裁决质量；执行约定内联进模板，不随 codex CLI 版本漂移。
 3. **实施走 coding subagent 而非本会话自实施**：不存在 routing 概念与外部实施后端；coding subagent 非 fork spawn、只实施 change 范围、可指定模型、经 context.md 获取软上下文，改动回传主会话，由主会话确认后回写 context.md 并统一提交（提交权收归主会话）。
 4. **每宿主一个自包含配置文件**：`~/.codex/lyx/config.toml` 与 `~/.claude/lyx/config.toml`，配置文件存在即已安装（部分卸载 = 删该宿主配置与产物），`general.version` 按宿主记录；宿主配置节归一为 `[host]`（历史 `[codexHost]` 兼容读取）；执行者字段决定审查与实施主体（未配置等价 `main`），模型与推理档仅在对应执行者为 `subagent` 时生效；交互 init / 菜单可选择"不覆盖（清除字段）"或覆盖指定档位，非交互 update 与未触碰字段保留原值。
 5. **宿主包 + 共享正文 + 渲染期差异**：共享层只认适配器接口与注册表；模板正文单源（`templates/skills/`），宿主差异只在 `templates/hosts/<id>/` 片段与渲染阶段（命令前缀改写、`@openspec-*` 委托改写、配置路径与宿主 id 注入）产生，正文不写宿主条件块。多宿主共有的行为不变量由一组遍历注册表的测试断言守护；上游 ly-workflow 的 wrapper、Web UI、routing.* 不在本项目内。与上游的关系（v0.2.0 起 codex 安装位改为 `~/.agents/skills/lyx-*/`；旧安装位残留由 init/uninstall 自动清理）见 [README.md](./README.md)。
 6. **OpenSpec 依赖检查统一为共享三层模型，按宿主判定与修复**：`lycx init` / `@lyx-init` / `lycx doctor` 共用 CLI、skills、root 三层检查；skills 按 OpenSpec profile 推导，每个宿主只在自己的技能根里判定（codex：项目/全局 `.agents`、`.codex`；claude：项目/全局 `.claude/skills`），整体取最差；项目级修复按缺失技能的宿主执行 `openspec init --tools <宿主>`，不重建另一宿主产物；无任何宿主配置文件时只读诊断，写入型修复延后到宿主确认之后；`global-only` WARN 并继续，不自动固化。
 7. **Claude 侧以 main 为基线，子代理为可选增强**：子代理定义始终安装（执行者只决定是否使用），不启用 worktree 隔离（实施改动须留在主检出由主会话统一提交），审查子代理工具含 Bash 但正文限定只读 git / openspec；`@lyx-init` 在 Claude 宿主下额外产出导入 `AGENTS.md` 的 `CLAUDE.md`。
+
+8. **小改动走 `@lyx-fix` 轻量路径，spec 同步是它的强制职责**：不创建 OpenSpec change、不询问隔离与自动化档位、不读宿主配置（执行主体固定主 agent），一次完成定位 → spec 分流（A 对齐既有 spec / B 同一 commit 就地改主 spec，不走 delta / C 超出范围转 `@lyx-propose`）→ 先红后绿实施 → 五项自审（修对 / spec 一致 / 漏改 / 改多 / 回归测试）→ 最终验证门禁 → B 类提交前确认 → 单个非 change 生命周期 commit（正文追加 `- spec：` / `- 自审：` / `- 验证：`，无 Change trailer）。理由：流程越重越容易被绕开，绕开的改动才是 spec 漂移的主要来源；`git log -- openspec/specs/` 即可追溯轻流程的 spec 改动。
+
+## 改动对称清单
+
+改动以下任一侧时须同步另一侧（`@lyx-fix` 自审③逐项核对，全流程实施同样适用）：
+
+- 文案：`src/i18n/index.ts` 的 zh-CN ↔ en 文案键
+- 宿主片段：`templates/hosts/codex/fragments/<命令>/` ↔ `templates/hosts/claude/fragments/<命令>/`（片段集合一一对应）
+- 配置采集入口：`lycx init`（`src/commands/init.ts`）↔ 菜单配置（`src/commands/menu.ts`），以及 `lycx doctor` 对同一字段的展示与告警
+- 模板正文 ↔ 断言模板文本的测试（`src/utils/__tests__/host-adapters.test.ts`、`src/hosts/claude/__tests__/claude-host.test.ts`）
+- 命令增删 ↔ `installer-data.ts` 注册、测试中的命令数量断言、AGENTS.md / CLAUDE.md / README.md / README.zh-CN.md / `templates/CLAUDE.md` 的命令表与计数
+- 对外文档：README.md ↔ README.zh-CN.md
 
 ## 相关文件
 

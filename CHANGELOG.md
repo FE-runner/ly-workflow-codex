@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - 新增 `[host].reviewMode`（`full` / `plan-only` / `code-only` / `off`，未配置或非法取值等价 `full`）：按配置门控 `@lyx-propose` 编排入口执行哪些审查关卡（`plan-only` 跳过代码审查、`code-only` 跳过方案审查、`off` 两级都跳过；apply 始终执行），被跳过的关卡打印显式 `[跳过]` 状态行并跳过对应节点前置校验。直接调用 `@lyx-review-plan` / `@lyx-review-code` 与 `@lyx-apply` / 归档前验证不受影响。交互 `init` / 菜单把 `reviewMode` 作为子代理配置整段开头一问（`off` 跳过 review 侧提问、既有值保留），`lycx doctor` 展示该字段并对非法取值 / `off` + review 侧字段非空输出 WARN
+- 新增 `@lyx-fix` 轻量修复命令（第 15 个 skill）：小需求 / bug 不创建 OpenSpec change，一次完成定位 → spec 分流（A 代码对齐 spec / B 同一 commit 就地改主 spec / C 转 `@lyx-propose`）→ 先红后绿实施 → 主 agent 一轮五项自审（修对 / spec 一致 / 漏改 / 改多 / 回归测试）→ 最终验证门禁 → B 类提交前确认 → 单个 commit（正文追加 spec / 自审 / 验证，无 Change trailer）；不读宿主配置、不 spawn 子代理。AGENTS.md 新增「改动对称清单」供自审核对成对位置
+
+### Changed
+
+- `@lyx-explore` 讨论收敛时按规模分流提示：小改动提示 `@lyx-fix`，其余提示 `@lyx-propose`
 
 ## [0.8.0] - 2026-09-30
 

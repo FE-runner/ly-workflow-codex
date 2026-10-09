@@ -1,6 +1,6 @@
 ---
 name: lyx-explore
-description: '进入探索模式，想清楚再动手；讨论收敛到落地方案时引导走 @lyx-propose'
+description: '进入探索模式，想清楚再动手；讨论收敛到落地方案时按规模引导走 @lyx-fix（小改动）或 @lyx-propose'
 argument-hint: '[<想探索的问题或想法>]'
 ---
 
@@ -30,10 +30,18 @@ ls openspec/changes/archive/*/review-findings.md 2>/dev/null
 
 按 `@openspec-explore skill`（opsx explore 编排 prompt）定义的流程进入探索模式：作为思考伙伴，围绕 `参数` 讨论、调研代码库、澄清需求，保持纯讨论态，不直接创建 change artifact。
 
-opsx:explore 原生支持在讨论中直接创建 proposal/design/spec，但这样会跳过 `@lyx-propose` 的编排（隔离方式询问、全自动/手动询问、commit、review-plan 审查循环、worktree 询问）。当讨论收敛到"要落地方案"这一步时，不要直接创建 artifact，改为提示用户：
+opsx:explore 原生支持在讨论中直接创建 proposal/design/spec，但这样会跳过 `@lyx-propose` 的编排（隔离方式询问、全自动/手动询问、commit、review-plan 审查循环、worktree 询问）。当讨论收敛到"要落地方案"这一步时，不要直接创建 artifact，改为按规模提示用户：
 
-```
-讨论已收敛，建议用 @lyx-propose 落地方案（走完整的审查+commit 流程）
-```
+- 小改动（真 bug：代码对齐既有 spec；或只改变 / 新增少量 Scenario 级行为，即 `@lyx-fix` 的分流 A / B 范围）：
 
-由用户决定是否切换到 `@lyx-propose`。
+  ```
+  讨论已收敛，这是小改动，建议用 @lyx-fix 落地（spec 分流 + 自审 + 单 commit）
+  ```
+
+- 其余（新增 capability、多条 Requirement、跨模块设计取舍、需要产品决策等）：
+
+  ```
+  讨论已收敛，建议用 @lyx-propose 落地方案（走完整的审查+commit 流程）
+  ```
+
+提示只给建议，不自动切换命令、不创建 artifact，由用户决定是否切换。

@@ -14,7 +14,7 @@
 
 ```bash
 npx ly-workflow-codex        # 交互式菜单（裸命令）
-npx ly-workflow-codex init   # 选择宿主并安装 14 个 skills + 配置；OpenSpec 默认 check-only（不写当前项目）
+npx ly-workflow-codex init   # 选择宿主并安装 15 个 skills + 配置；OpenSpec 默认 check-only（不写当前项目）
 npx ly-workflow-codex init --init-openspec  # 宿主确认后为所选宿主初始化当前项目 OpenSpec root/skills
 lycx doctor / status [--host <hosts>]       # 体检 / 安装概览（按宿主分组）
 lycx openspec inspect --json [--host ...]  # 只读 OpenSpec 三层检查（skills 按宿主判定）
@@ -22,16 +22,17 @@ lycx openspec ensure --json [--host ...]   # 修复 OpenSpec CLI/skills/root（�
 lycx uninstall [--host <hosts>]             # 按宿主卸载（缺省 = 全部已安装宿主）
 ```
 
-安装产物（按宿主）：codex = `~/.agents/skills/lyx-*/`（14 个 skills）+ `~/.codex/lyx/prompts/codex/`（审查角色词）+ `~/.codex/lyx/config.toml`；claude = `~/.claude/skills/lyx-*/`（14 个 skills）+ `~/.claude/agents/lyx-*.md`（3 个子代理定义）+ `~/.claude/lyx/config.toml`。本包私有目录，不做任何自动迁移；lyx 不写 Claude Code 自身的 provider / settings，卸载不碰 OpenSpec 自有产物。
+安装产物（按宿主）：codex = `~/.agents/skills/lyx-*/`（15 个 skills）+ `~/.codex/lyx/prompts/codex/`（审查角色词）+ `~/.codex/lyx/config.toml`；claude = `~/.claude/skills/lyx-*/`（15 个 skills）+ `~/.claude/agents/lyx-*.md`（3 个子代理定义）+ `~/.claude/lyx/config.toml`。本包私有目录，不做任何自动迁移；lyx 不写 Claude Code 自身的 provider / settings，卸载不碰 OpenSpec 自有产物。
 
-## 14 个 @lyx-* skills
+## 15 个 @lyx-* skills
 
 | 命令 | 一句话说明 |
 |------|-----------|
 | `@lyx-init` | 生成项目 AGENTS.md（Claude Code 下额外产出导入它的 `CLAUDE.md`）+ `lycx openspec ensure --host <当前宿主>`（共享 CLI/skills/root 修复）+ 自动 commit |
-| `@lyx-explore` | 委托 `@openspec-explore skill`；委托前扫描 `review-findings.md` 审查未修项快照，有命中则先询问是否列出（纯薄壳 + 一次快照询问） |
+| `@lyx-explore` | 委托 `@openspec-explore skill`；委托前扫描 `review-findings.md` 审查未修项快照，有命中则先询问是否列出（纯薄壳 + 一次快照询问）；收敛时按规模提示 `@lyx-fix` / `@lyx-propose` |
 | `@lyx-propose` | 编排入口：隔离三选一 → 全自动/手动 → `@openspec-propose skill` → 记录 isolation metadata → 方案自审 → context.md 产出 → commit `propose:`；全自动 = review-plan → apply → review-code 流水线 |
 | `@lyx-apply` | 按 `codingExecutor` 实施（`main` = 主 agent 直接实施；`subagent` = spawn coding subagent，非 fork，经 context.md 获取软上下文）读 tasks.md 逐任务实施 + 验证 + 勾 checkbox，主会话确认后回写 context.md 并 commit `apply:` |
+| `@lyx-fix` | 小需求 / bug 轻量路径：不建 change，spec 分流（A 对齐 / B 就地改主 spec / C 转 propose）→ 先红后绿 → 主 agent 五项自审 → 验证门禁 → B 类确认 → 单 commit（无 Change trailer） |
 | `@lyx-archive` | 委托 `@openspec-archive-change skill` + 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
 | `@lyx-review-plan` | 按 `reviewExecutor` 审方案（`main` = 主 agent 直接自审，最多 2 轮；`subagent` = 单审查 subagent + 主会话逐条裁决 + 驳回硬线），清零统一提交；循环结束后写 `review-findings.md` 的 `## 方案审查` 节（只收 Warning） |
 | `@lyx-review-code` | 按 `reviewExecutor` 审代码（同上），Critical/Warning/Info 分级；循环结束后写 `review-findings.md` 的 `## 代码审查` 节（只收 Warning） |

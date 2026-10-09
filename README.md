@@ -11,7 +11,7 @@
 
 ```bash
 npx ly-workflow-codex        # Interactive menu with OpenSpec dependency preflight
-npx ly-workflow-codex init   # Choose hosts, install 14 skills + config; OpenSpec check-only by default
+npx ly-workflow-codex init   # Choose hosts, install 15 skills + config; OpenSpec check-only by default
 npx ly-workflow-codex init --init-openspec  # After host confirmation, initialize the current project's OpenSpec root/skills for the selected hosts
 lycx init --skip-prompt --host claude       # Non-interactive, limited to the given hosts
 ```
@@ -39,14 +39,15 @@ lycx init --skip-prompt --host claude       # Non-interactive, limited to the gi
 - **`@lyx-init` on Claude Code** additionally produces a `CLAUDE.md` that imports `AGENTS.md` (`@AGENTS.md`), because Claude Code only reads `AGENTS.md` when the project has no `CLAUDE.md`.
 - `@lyx-<command>` in the docs below is a command identifier; use `/lyx-<command>` on Claude Code.
 
-## Commands (14 `@lyx-*` Skills)
+## Commands (15 `@lyx-*` Skills)
 
 | Command | Purpose |
 |---------|---------|
 | `@lyx-init` | Generate project `AGENTS.md` + initialize the OpenSpec directory structure + auto commit |
-| `@lyx-explore` | Think before acting (delegates to `@openspec-explore skill`); before delegating, it scans for `review-findings.md` unresolved-review snapshots and **asks** before listing them; when the discussion converges, it points to `@lyx-propose` |
+| `@lyx-explore` | Think before acting (delegates to `@openspec-explore skill`); before delegating, it scans for `review-findings.md` unresolved-review snapshots and **asks** before listing them; when the discussion converges, it points small changes to `@lyx-fix` and everything else to `@lyx-propose` |
 | `@lyx-propose` | Ask once for isolation mode (three choices: isolated worktree [cut from the current branch HEAD, continue in the same session after `cd`; the resume command is only an exception fallback] / new branch in the current project [branch-only isolation, with dirty-worktree handling] / stay on the current branch) + ask "fully automatic / manual" → delegate to `@openspec-propose skill` → record `sourceBranch` / `developmentBranch` / `worktreePath` metadata → proposal self-review (four checks + itemized conclusion list; mechanical gaps are fixed directly, business decisions are asked to the user) → commit `propose: <change>`; fully automatic = review-plan → apply → review-code pipeline, manual = confirm step by step |
 | `@lyx-apply` | **Implement according to `codingExecutor`**: `main` (default) = the main agent directly reads `tasks.md`, implements each task, verifies, and checks the checkbox; `subagent` = spawn a coding subagent (non-fork; soft context comes from `context.md`; only the change scope is implemented; model follows `codingModel`). Both paths return to the main session for confirmation, update `context.md`, and commit `apply: <change>` under the main session. If the subagent path is unavailable at the environment level, it falls back to the main agent; business failures stop for human handling. |
+| `@lyx-fix` | Lightweight path for small requirements / bug fixes: no change is created; spec triage (A aligns code with the spec / B edits the main spec in place in the same commit / C hands off to `@lyx-propose`) → test-first fix → one main-agent self-review round (five checks) → final verification gate → user confirmation for B → a single commit without Change trailers |
 | `@lyx-archive` | Archive a completed change (delegates to `@openspec-archive-change skill`) + auto commit + prompt to merge back to `sourceBranch` and clean up the worktree / development branch according to isolation metadata |
 | `@lyx-review-plan` | Review the proposal: the executor is chosen by `reviewExecutor`. `main` (default) = the main agent reviews directly, with no itemized adjudication / rejection stop line and at most 2 rounds; `subagent` = a single review subagent (role prompt `plan-reviewer.md`, non-fork + `context.md` path reference, model follows `reviewModel`) produces severity-graded findings, and the main session adjudicates each item until Critical is cleared or a termination condition is hit (global round limit 5, clearing takes priority). Fixes are committed once after clearing. After the loop it writes the `## 方案审查` section of `review-findings.md` (Warning only). |
 | `@lyx-review-code` | Review code: same model as above (role prompt `reviewer.md`), with Critical / Warning / Info severity levels. After the loop it writes the `## 代码审查` section of `review-findings.md` (Warning only). |
@@ -66,6 +67,9 @@ Review-fix loop details (executor branches, `send_input` reuse and incremental p
 @lyx-apply                               # Coding subagent implements + main session commits
 @lyx-review-code                         # Review the code (single non-fork review subagent)
 @lyx-archive
+
+# Small requirement or bug fix
+@lyx-fix "what to fix"
 ```
 
 ## Architecture

@@ -28,3 +28,10 @@
 - `host-adapters.test.ts` 用"模板文件集合 == 注册命令集合"做断言，所以模板和注册必须同步新增。
 - 模板正文里用 `@lyx-` 标识命令，claude 宿主会把它渲染成 `/lyx-`。测试断言要用 `t()` 改写前缀。
 - 本仓库验证命令：`pnpm typecheck && pnpm build && pnpm test`。
+
+## 实施决策（apply 阶段回写）
+
+- `fix.md` 的调用方式行必须沿用标准句式（`（如 \`@lyx-xxx\` 带需求描述/选项）；无参数时直接 \`@lyx-xxx\`。`），否则 claude 适配器的正则不会改写这一行，`mention` 字样会残留（claude-host 测试会拦下）。"无参数时先询问"因此单独写成一段。
+- `fix.md` 正文刻意不出现 `reviewExecutor` / `reviewMode` / `config.toml` 等字面量，改用"不读取宿主配置文件"来表述，好让测试用 `not.toMatch` 机械守住"不读配置"这条约束；同理，trailer 约束写成 `` `Change-Stage` / `Change-Name` trailer ``，不带冒号。
+- explore 的 frontmatter description 也同步改成"按规模引导走 @lyx-fix / @lyx-propose"，避免 skill 列表里的描述与正文不一致。
+- AGENTS.md 里没有独立的命令表，所以 `@lyx-fix` 落在"关键设计决策 8"和新增的「改动对称清单」小节中；README 双语的"典型工作流"代码块里补了 `@lyx-fix` 的示例。

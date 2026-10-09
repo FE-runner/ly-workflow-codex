@@ -29,9 +29,9 @@ const TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'skills')
 // A. Workflow registry consistency
 // ─────────────────────────────────────────────────────────────
 describe('workflow registry', () => {
-  it('getAllCommandIds returns the 14 core commands', () => {
+  it('getAllCommandIds returns the 15 core commands', () => {
     const ids = getAllCommandIds()
-    expect(ids.length).toBe(14)
+    expect(ids.length).toBe(15)
   })
 
   it('every command ID has a matching codex template file', () => {
@@ -237,7 +237,7 @@ describe('installWorkflows — prompts installation', () => {
       { hostPaths: { codex: { promptsDir: lyPromptsDir, skillsDir: codexSkillsDir } } },
     )
     expect(result.success).toBe(true)
-    expect(result.installedCommands.length).toBe(14)
+    expect(result.installedCommands.length).toBe(15)
     expect(result.installedPrompts.length).toBeGreaterThan(0)
 
     // 只装 codex 共享角色词；claude/gemini/grok 不得存在
@@ -280,9 +280,9 @@ describe('installWorkflows — non-force skip counting', () => {
   })
 
   it('non-force install over existing files counts only truly-written files', async () => {
-    // 预置全部 14 个目标文件（模拟 ly-workflow 旧安装残留）
+    // 预置全部 15 个目标文件（模拟 ly-workflow 旧安装残留）
     const templateFiles = readdirSync(join(TEMPLATES_DIR)).filter(f => f.endsWith('.md'))
-    expect(templateFiles.length).toBe(14)
+    expect(templateFiles.length).toBe(15)
     await fs.ensureDir(codexSkillsDir)
     for (const f of templateFiles) {
       const dir = join(codexSkillsDir, `lyx-${f.replace('.md', '')}`)
@@ -295,10 +295,10 @@ describe('installWorkflows — non-force skip counting', () => {
     })
 
     expect(result.success).toBe(true)
-    // 没有真正写入 → 不得报"已装 14 个命令"
+    // 没有真正写入 → 不得报"已装 15 个命令"
     expect(result.installedCommands.length).toBe(0)
     // 全部因目标已存在而跳过，记录在 skippedCommands
-    expect(result.skippedCommands?.length).toBe(14)
+    expect(result.skippedCommands?.length).toBe(15)
     expect(result.errors).toEqual([])
     // 旧文件内容未被覆盖
     expect(readFileSync(join(codexSkillsDir, 'lyx-commit', 'SKILL.md'), 'utf-8')).toBe('# old content\n')
@@ -309,7 +309,7 @@ describe('installWorkflows — non-force skip counting', () => {
       hostPaths: { codex: { promptsDir: lyPromptsDir, skillsDir: codexSkillsDir } },
     })
     expect(result.success).toBe(true)
-    expect(result.installedCommands.length).toBe(14)
+    expect(result.installedCommands.length).toBe(15)
     expect(result.skippedCommands?.length ?? 0).toBe(0)
   })
 })

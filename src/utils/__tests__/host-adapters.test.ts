@@ -53,12 +53,12 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
   /** 断言文本中的命令标识按宿主前缀改写（@lyx-<cmd> 是命令标识，见 multi-host-install） */
   const t = (text: string) => text.replace(/@lyx-/g, `${getAdapter(host).commandPrefix}lyx-`)
 
-  it('has exactly the 14 core commands as shared templates', () => {
+  it('has exactly the 15 core commands as shared templates', () => {
     const files = readdirSync(SKILLS_TEMPLATES_DIR).filter(f => f.endsWith('.md'))
     const codexCommands = getAllCommandIds()
       .flatMap(id => getWorkflowById(id)!.commands)
     expect(files.sort()).toEqual(codexCommands.map(c => `${c}.md`).sort())
-    expect(files.length).toBe(14)
+    expect(files.length).toBe(15)
   })
 
   it('every template has argument-hint frontmatter', () => {
@@ -257,6 +257,40 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(content).toContain('原样转发')
     // 读取失败容错
     expect(content).toContain('跳过该条并如实注明')
+  })
+
+  it('fix template is a lightweight single-commit flow with spec triage and self-review', () => {
+    const fix = read('fix.md')
+    // A/B/C 分流（含无 spec 基线与用户坚持）
+    for (const marker of ['A（代码对齐 spec）', 'B（小幅行为变化）', 'C（超出轻流程）', '无 spec 基线', '用户坚持轻流程'])
+      expect(fix, marker).toContain(marker)
+    expect(fix).toContain(t('@lyx-propose'))
+    // 先红后绿回归测试
+    expect(fix).toContain('确认其失败')
+    // 五项自审 + 对称清单
+    for (const item of ['① 修对了吗', '② spec 一致吗', '③ 漏改了吗', '④ 改多了吗', '⑤ 有回归测试吗'])
+      expect(fix, item).toContain(item)
+    expect(fix).toContain('改动对称清单')
+    // 验证门禁与 B 类确认
+    expect(fix).toContain('连续失败 2 次')
+    expect(fix).toContain('展示主 spec 的改动')
+    // 单 commit：正文附加三条，无 Change trailer，按路径暂存
+    for (const bullet of ['- spec：', '- 自审：', '- 验证：'])
+      expect(fix, bullet).toContain(bullet)
+    expect(fix).toContain('git rev-parse --git-path COMMIT_EDITMSG')
+    expect(fix).not.toContain('Change-Stage:')
+    expect(fix).not.toContain('Change-Name: <change-name>')
+    expect(fix).not.toMatch(/git add -A(?!`)/)
+    // 不读取宿主配置、不 spawn
+    expect(fix).not.toMatch(/reviewExecutor|codingExecutor|reviewMode|config\.toml/)
+    expect(fix).not.toContain('{{')
+  })
+
+  it('explore convergence hint routes small changes to fix and others to propose', () => {
+    const explore = read('explore.md')
+    expect(explore).toContain(t('建议用 @lyx-fix 落地'))
+    expect(explore).toContain(t('建议用 @lyx-propose 落地方案'))
+    expect(explore).toContain('不自动切换')
   })
 
   it('archive template notes review-findings snapshot rides along with openspec add', () => {
@@ -489,7 +523,7 @@ describe('installWorkflows — codex host', () => {
     expect(result.errors).toEqual([])
 
     const installed = readdirSync(codexSkillsDir)
-    expect(installed.length).toBe(14)
+    expect(installed.length).toBe(15)
     expect(installed).toContain('lyx-apply')
     expect(installed).toContain('lyx-review-plan')
     expect(fs.existsSync(join(codexSkillsDir, 'lyx-apply', 'SKILL.md'))).toBe(true)
