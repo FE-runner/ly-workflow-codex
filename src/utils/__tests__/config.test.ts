@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPAWNABLE_MODELS_DEFAULT } from '../../hosts/codex/schema'
-import { createDefaultConfig, getConfigPath, getHostConfigPath, getHostLyDir, getLyDir, listInstalledHosts, mergeCodexHostConfig, readLyConfig, sanitizeCodexHostExtras, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, sanitizeSpawnableModels, writeLyConfig } from '../config'
+import { createDefaultConfig, getConfigPath, getHostConfigPath, getHostLyDir, getLyDir, listInstalledHosts, mergeCodexHostConfig, readLyConfig, sanitizeCodexHostExtras, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, sanitizeSpawnableModels, writeLyConfig } from '../config'
 
 // 模块顶层常量（CONFIG_FILE / LY_DIR 等）在 import 时基于 homedir() 求值，
 // 因此 hoisted 阶段就创建固定临时 home，再 mock homedir() 指向它——
@@ -583,5 +583,38 @@ describe('per-host config files (add-claude-host)', () => {
 
   it('lists no installed hosts when no config file exists', async () => {
     expect(await listInstalledHosts()).toEqual([])
+  })
+})
+
+describe('sanitizeReviewMode', () => {
+  const baseOptions = {
+    language: 'zh-CN' as const,
+    installedWorkflows: ['init-project'],
+  }
+
+  it('accepts the four valid values (trimmed)', () => {
+    expect(sanitizeReviewMode('full')).toBe('full')
+    expect(sanitizeReviewMode('plan-only')).toBe('plan-only')
+    expect(sanitizeReviewMode('code-only')).toBe('code-only')
+    expect(sanitizeReviewMode(' off ')).toBe('off')
+  })
+
+  it('returns undefined for blank / invalid / non-string', () => {
+    expect(sanitizeReviewMode('')).toBeUndefined()
+    expect(sanitizeReviewMode('   ')).toBeUndefined()
+    expect(sanitizeReviewMode('sometimes')).toBeUndefined()
+    expect(sanitizeReviewMode(42)).toBeUndefined()
+    expect(sanitizeReviewMode(undefined)).toBeUndefined()
+  })
+
+  it('createDefaultConfig carries reviewMode when set, omits otherwise', () => {
+    expect(createDefaultConfig({ ...baseOptions, host: { reviewMode: 'plan-only' } }).host).toEqual({ reviewMode: 'plan-only' })
+    expect(createDefaultConfig(baseOptions).host).toBeUndefined()
+  })
+
+  it('mergeCodexHostConfig preserves existing reviewMode and honours explicit override/clear', () => {
+    expect(mergeCodexHostConfig({ reviewMode: 'code-only' }, {})).toEqual({ reviewMode: 'code-only' })
+    expect(mergeCodexHostConfig({ reviewMode: 'full' }, { reviewMode: 'off' })).toEqual({ reviewMode: 'off' })
+    expect(mergeCodexHostConfig({ reviewMode: 'off' }, { reviewMode: undefined })).toBeUndefined()
   })
 })

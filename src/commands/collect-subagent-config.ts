@@ -1,4 +1,4 @@
-import type { ExecutorKind } from '../types'
+import type { ExecutorKind, ReviewMode } from '../types'
 import ansis from 'ansis'
 import inquirer from 'inquirer'
 import { i18n } from '../i18n'
@@ -14,13 +14,15 @@ import {
 
 // ═══════════════════════════════════════════════════════
 // 子代理配置采集（init 与 menu 共用；两宿主同口径）
-// 采集面：执行者二连 → 模型二连 → 推理档二连。
+// 采集面：审查范围（reviewMode）→ 执行者二连 → 模型二连 → 推理档二连。
+// reviewMode = off 时跳过 review 侧执行者/模型/推理档提问（既有值保留），coding 侧始终采集。
 // 宿主差异只有两处，均由调用方传入：① 执行者提示文案键；② 推理档建议档位清单（宿主适配层提供）。
 // 共享层不出现宿主名分支。
 // ═══════════════════════════════════════════════════════
 
-/** 采集结果：执行者二连 + 模型二连 + 推理档二连（undefined = 未配置） */
+/** 采集结果：审查范围 + 执行者二连 + 模型二连 + 推理档二连（undefined = 未配置） */
 export interface SubagentConfigCollected {
+  reviewMode?: ReviewMode
   reviewExecutor?: ExecutorKind
   codingExecutor?: ExecutorKind
   reviewModel?: string
@@ -28,6 +30,14 @@ export interface SubagentConfigCollected {
   reviewReasoningEffort?: string
   codingReasoningEffort?: string
 }
+
+// 审查范围候选（顺序与取值见 ReviewMode）
+const REVIEW_MODE_FIELDS = [
+  { value: 'full', labelKey: 'init:reviewMode.full' },
+  { value: 'plan-only', labelKey: 'init:reviewMode.planOnly' },
+  { value: 'code-only', labelKey: 'init:reviewMode.codeOnly' },
+  { value: 'off', labelKey: 'init:reviewMode.off' },
+] as const
 
 // 模型字段的驱动元数据（i18n 键 + 持久化清洗归属：reviewModel 白名单、codingModel 仅 trim）。
 // 仅在对应执行者为 subagent 时提示采集；main 路径下保留既有值但不采集。
@@ -47,6 +57,21 @@ const EXECUTOR_FIELDS = [
   { key: 'reviewExecutor', labelKey: 'init:executor.reviewExecutor' },
   { key: 'codingExecutor', labelKey: 'init:executor.codingExecutor' },
 ] as const
+
+/**
+ * 审查范围（reviewMode）list 选择：候选 = full / plan-only / code-only / off。
+ * 未配置或既有值非法时默认选中 full。
+ */
+async function pickReviewModeField(current?: ReviewMode): Promise<ReviewMode> {
+  const { pick } = await inquirer.prompt([{
+    type: 'list',
+    name: 'pick',
+    message: i18n.t('init:reviewMode.prompt'),
+    choices: REVIEW_MODE_FIELDS.map(f => ({ name: i18n.t(f.labelKey), value: f.value })),
+    default: current ?? 'full',
+  }])
+  return (REVIEW_MODE_FIELDS.some(f => f.value === pick) ? pick : 'full') as ReviewMode
+}
 
 /**
  * 执行者字段 list 选择：候选 = 主 agent 直接执行（默认）/ spawn 独立子代理。
@@ -159,6 +184,15 @@ export async function collectSubagentConfig(options: {
   const { defaults, executorHintKey, suggestions } = options
   const collected: SubagentConfigCollected = {}
 
+  // ── 审查范围（整段开头一问）──
+  console.log()
+  console.log(ansis.cyan.bold(`  ${i18n.t('init:reviewMode.title')}`))
+  console.log()
+  console.log(ansis.gray(`  ${i18n.t('init:reviewMode.hint')}`))
+  console.log()
+  collected.reviewMode = await pickReviewModeField(defaults.reviewMode)
+  const reviewSideActive = collected.reviewMode !== 'off'
+
   // ── 执行者二连 ──
   console.log()
   console.log(ansis.cyan.bold(`  ${i18n.t('init:executor.title')}`))
@@ -166,6 +200,10 @@ export async function collectSubagentConfig(options: {
   console.log(ansis.gray(`  ${i18n.t(executorHintKey)}`))
   console.log()
   for (const field of EXECUTOR_FIELDS) {
+    if (field.key === 'reviewExecutor' && !reviewSideActive) {
+      collected[field.key] = defaults[field.key]
+      continue
+    }
     collected[field.key] = await pickExecutorField({
       field,
       current: defaults[field.key],
@@ -179,6 +217,10 @@ export async function collectSubagentConfig(options: {
   console.log(ansis.gray(`  ${i18n.t('init:model.trioCandidatesHint')}`))
   console.log()
   for (const field of MODEL_FIELDS) {
+    if (field.executorKey === 'reviewExecutor' && !reviewSideActive) {
+      collected[field.key] = defaults[field.key]?.trim() || undefined
+      continue
+    }
     if (collected[field.executorKey] !== 'subagent') {
       collected[field.key] = defaults[field.key]?.trim() || undefined
       continue
@@ -190,6 +232,10 @@ export async function collectSubagentConfig(options: {
 
   // ── 推理档二连（仅在对应执行者为 subagent 时提示；main 下保留既有值）──
   for (const field of REASONING_FIELDS) {
+    if (field.executorKey === 'reviewExecutor' && !reviewSideActive) {
+      collected[field.key] = defaults[field.key]?.trim() || undefined
+      continue
+    }
     if (collected[field.executorKey] !== 'subagent') {
       collected[field.key] = defaults[field.key]?.trim() || undefined
       continue

@@ -1,5 +1,5 @@
 import type { CodexModelProvider } from '../hosts/codex/provider'
-import type { ExecutorKind, InitOptions, InstallResult, LyConfig, SupportedLang } from '../types'
+import type { ExecutorKind, InitOptions, InstallResult, LyConfig, ReviewMode, SupportedLang } from '../types'
 import type { HostId } from '../utils/host-adapters'
 import type { SubagentConfigCollected } from './collect-subagent-config'
 import ansis from 'ansis'
@@ -18,6 +18,7 @@ import {
   sanitizeExecutor,
   sanitizeModelField,
   sanitizeReasoningEffort,
+  sanitizeReviewMode,
   sanitizeReviewModel,
   writeLyConfig,
 } from '../utils/config'
@@ -216,17 +217,25 @@ function printSummary(input: { host: HostId, models: SubagentConfigCollected, co
       : ansis.gray(i18n.t('init:summary.reasoningUnset'))
   }
   const reviewEffective = models.reviewExecutor === 'subagent'
+  const reviewActive = models.reviewMode !== 'off'
   const codingEffective = models.codingExecutor === 'subagent'
+  const reviewModeLabel: Record<ReviewMode, string> = {
+    'full': i18n.t('init:reviewMode.full'),
+    'plan-only': i18n.t('init:reviewMode.planOnly'),
+    'code-only': i18n.t('init:reviewMode.codeOnly'),
+    'off': i18n.t('init:reviewMode.off'),
+  }
   console.log()
   console.log(ansis.yellow('━'.repeat(50)))
   console.log(ansis.bold(`  ${i18n.t('init:summary.title')}`))
   console.log()
   console.log(`  ${ansis.cyan(i18n.t('init:summary.host'))}  ${ansis.green(host)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewMode'))}  ${ansis.green(reviewModeLabel[models.reviewMode ?? 'full'])}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewExecutor'))}  ${executorLabel(models.reviewExecutor)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingExecutor'))}  ${executorLabel(models.codingExecutor)}`)
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))}  ${modelLabel(models.reviewModel, reviewEffective)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))}  ${modelLabel(models.reviewModel, reviewEffective && reviewActive)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))}  ${modelLabel(models.codingModel, codingEffective)}`)
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewReasoningEffort'))}  ${reasoningLabel(models.reviewReasoningEffort, reviewEffective)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewReasoningEffort'))}  ${reasoningLabel(models.reviewReasoningEffort, reviewEffective && reviewActive)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingReasoningEffort'))}  ${reasoningLabel(models.codingReasoningEffort, codingEffective)}`)
   if (inheritsByDefinition)
     console.log(ansis.gray(`  ${i18n.t('init:claude.noProviderNote')}`))
@@ -313,6 +322,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
   for (const host of hosts) {
     const existing = existingConfigs.get(host)?.host
     const defaults: SubagentConfigCollected = {
+      reviewMode: sanitizeReviewMode(existing?.reviewMode),
       reviewExecutor: sanitizeExecutor(existing?.reviewExecutor),
       codingExecutor: sanitizeExecutor(existing?.codingExecutor),
       reviewModel: sanitizeReviewModel(existing?.reviewModel),
@@ -355,6 +365,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     for (const host of hosts) {
       const collected = collectedByHost.get(host)!
       const hostSection = mergeHostConfig(existingConfigs.get(host)?.host, {
+        reviewMode: collected.reviewMode,
         reviewExecutor: collected.reviewExecutor,
         codingExecutor: collected.codingExecutor,
         reviewModel: collected.reviewModel,

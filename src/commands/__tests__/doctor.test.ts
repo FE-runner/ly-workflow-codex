@@ -109,4 +109,35 @@ describe('assessSubagentModelConfig (switchable-executor-flow)', () => {
     expect(result.fields[1].reasoningEffort).toBe('not-a-standard-tier')
     expect(result.status).toBe('ok')
   })
+
+  it('reviewMode 未配置 / 空白 → full，不告警', () => {
+    const unset = assessSubagentModelConfig(undefined)
+    expect(unset.reviewMode).toBe('full')
+    expect(unset.reviewModeInvalid).toBe(false)
+    expect(unset.reviewOffWarn).toBe(false)
+    const blank = assessSubagentModelConfig({ reviewMode: '   ' as never })
+    expect(blank.reviewMode).toBe('full')
+    expect(blank.reviewModeInvalid).toBe(false)
+  })
+
+  it('reviewMode 非法取值 → reviewModeInvalid 且整体 warn', () => {
+    const result = assessSubagentModelConfig({ reviewMode: 'sometimes' as never })
+    expect(result.reviewMode).toBe('full')
+    expect(result.reviewModeInvalid).toBe(true)
+    expect(result.status).toBe('warn')
+  })
+
+  it('reviewMode=off 单独存在（review 侧字段全空）→ ok', () => {
+    const result = assessSubagentModelConfig({ reviewMode: 'off' })
+    expect(result.reviewMode).toBe('off')
+    expect(result.reviewOffWarn).toBe(false)
+    expect(result.status).toBe('ok')
+  })
+
+  it('reviewMode=off 且 review 侧字段非空 → reviewOffWarn 且整体 warn', () => {
+    const result = assessSubagentModelConfig({ reviewMode: 'off', reviewExecutor: 'subagent', reviewModel: 'glm-5.3-flash' })
+    expect(result.reviewMode).toBe('off')
+    expect(result.reviewOffWarn).toBe(true)
+    expect(result.status).toBe('warn')
+  })
 })

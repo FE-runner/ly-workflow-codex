@@ -1,4 +1,4 @@
-import type { ExecutorKind, HostSection, LyConfig, SupportedLang } from '../types'
+import type { ExecutorKind, HostSection, LyConfig, ReviewMode, SupportedLang } from '../types'
 import type { HostId } from './host-adapters'
 import fs from 'fs-extra'
 import { join } from 'pathe'
@@ -129,6 +129,7 @@ export function createDefaultConfig(options: {
     },
   }
   const reviewExecutor = sanitizeExecutor(options.host?.reviewExecutor)
+  const reviewMode = sanitizeReviewMode(options.host?.reviewMode)
   const codingExecutor = sanitizeExecutor(options.host?.codingExecutor)
   const reviewModel = sanitizeReviewModel(options.host?.reviewModel)
   // 模型字段统一仅 trim（sanitizeReviewModel 与 sanitizeModelField 同口径）、空白视为未配置
@@ -140,7 +141,8 @@ export function createDefaultConfig(options: {
   // 避免"重装即丢失非法值、下次 doctor 不再告警"掩盖配置问题
   const spawnableModels = options.host?.spawnableModels
   if (
-    reviewExecutor
+    reviewMode
+    || reviewExecutor
     || codingExecutor
     || reviewModel
     || codingModel
@@ -149,6 +151,7 @@ export function createDefaultConfig(options: {
     || spawnableModels !== undefined
   ) {
     config.host = {
+      ...(reviewMode ? { reviewMode } : {}),
       ...(reviewExecutor ? { reviewExecutor } : {}),
       ...(codingExecutor ? { codingExecutor } : {}),
       ...(reviewModel ? { reviewModel } : {}),
@@ -171,6 +174,21 @@ export function sanitizeExecutor(value: unknown): ExecutorKind | undefined {
     return undefined
   const cleaned = value.trim()
   return cleaned === 'main' || cleaned === 'subagent' ? cleaned : undefined
+}
+
+/** 全部合法审查范围取值（doctor 提示与清洗共用，避免口径漂移） */
+export const REVIEW_MODES = ['full', 'plan-only', 'code-only', 'off'] as const
+
+/**
+ * 审查范围字段清洗（[host].reviewMode）：
+ * 非字符串 → undefined；trim 后仅接受 full / plan-only / code-only / off，其余（含空白）视为未配置。
+ * 未配置等价 'full'（编排入口照常跑两级审查），由运行时按此默认值解析。
+ */
+export function sanitizeReviewMode(value: unknown): ReviewMode | undefined {
+  if (typeof value !== 'string')
+    return undefined
+  const cleaned = value.trim()
+  return (REVIEW_MODES as readonly string[]).includes(cleaned) ? (cleaned as ReviewMode) : undefined
 }
 
 /**
@@ -213,7 +231,7 @@ export function sanitizeReasoningEffort(value: unknown): string | undefined {
 
 export type HostExtras = Pick<
   HostSection,
-  'reviewExecutor' | 'codingExecutor' | 'codingModel' | 'reviewReasoningEffort' | 'codingReasoningEffort' | 'spawnableModels'
+  'reviewMode' | 'reviewExecutor' | 'codingExecutor' | 'codingModel' | 'reviewReasoningEffort' | 'codingReasoningEffort' | 'spawnableModels'
 >
 
 /**
@@ -225,12 +243,14 @@ export function sanitizeHostExtras(hostSection: LyConfig['host']): HostExtras {
     return {}
 
   const reviewExecutor = sanitizeExecutor(hostSection.reviewExecutor)
+  const reviewMode = sanitizeReviewMode(hostSection.reviewMode)
   const codingExecutor = sanitizeExecutor(hostSection.codingExecutor)
   const codingModel = sanitizeModelField(hostSection.codingModel)
   const reviewReasoningEffort = sanitizeReasoningEffort(hostSection.reviewReasoningEffort)
   const codingReasoningEffort = sanitizeReasoningEffort(hostSection.codingReasoningEffort)
 
   return {
+    ...(reviewMode ? { reviewMode } : {}),
     ...(reviewExecutor ? { reviewExecutor } : {}),
     ...(codingExecutor ? { codingExecutor } : {}),
     ...(codingModel ? { codingModel } : {}),
@@ -242,6 +262,7 @@ export function sanitizeHostExtras(hostSection: LyConfig['host']): HostExtras {
 
 /** init/menu 写回 codexHost 时的字段覆盖集合；key 存在即视为权威值，undefined 表示清除该字段 */
 export interface HostOverride {
+  reviewMode?: ReviewMode
   reviewExecutor?: ExecutorKind
   codingExecutor?: ExecutorKind
   reviewModel?: string
@@ -264,6 +285,7 @@ export function mergeHostConfig(
     Object.prototype.hasOwnProperty.call(override, key)
 
   const reviewExecutor = sanitizeExecutor(has('reviewExecutor') ? override.reviewExecutor : existing?.reviewExecutor)
+  const reviewMode = sanitizeReviewMode(has('reviewMode') ? override.reviewMode : existing?.reviewMode)
   const codingExecutor = sanitizeExecutor(has('codingExecutor') ? override.codingExecutor : existing?.codingExecutor)
   const reviewModel = sanitizeReviewModel(has('reviewModel') ? override.reviewModel : existing?.reviewModel)
   const codingModel = sanitizeModelField(has('codingModel') ? override.codingModel : existing?.codingModel)
@@ -271,6 +293,7 @@ export function mergeHostConfig(
   const codingReasoningEffort = sanitizeReasoningEffort(has('codingReasoningEffort') ? override.codingReasoningEffort : existing?.codingReasoningEffort)
 
   const merged: HostSection = {
+    ...(reviewMode ? { reviewMode } : {}),
     ...(reviewExecutor ? { reviewExecutor } : {}),
     ...(codingExecutor ? { codingExecutor } : {}),
     ...(reviewModel ? { reviewModel } : {}),

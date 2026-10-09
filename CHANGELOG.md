@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- 新增 `[host].reviewMode`（`full` / `plan-only` / `code-only` / `off`，未配置或非法取值等价 `full`）：按配置门控 `@lyx-propose` 编排入口执行哪些审查关卡（`plan-only` 跳过代码审查、`code-only` 跳过方案审查、`off` 两级都跳过；apply 始终执行），被跳过的关卡打印显式 `[跳过]` 状态行并跳过对应节点前置校验。直接调用 `@lyx-review-plan` / `@lyx-review-code` 与 `@lyx-apply` / 归档前验证不受影响。交互 `init` / 菜单把 `reviewMode` 作为子代理配置整段开头一问（`off` 跳过 review 侧提问、既有值保留），`lycx doctor` 展示该字段并对非法取值 / `off` + review 侧字段非空输出 WARN
+
 ## [0.8.0] - 2026-09-30
 
 `lycx init` 与菜单的配置入口统一为同一采集面（执行者二连 → 模型二连 → 推理档二连）：Claude Code 宿主不再只能配执行者，推理档建议档位改为按宿主提供。审查未修项快照新增复审说明通道。

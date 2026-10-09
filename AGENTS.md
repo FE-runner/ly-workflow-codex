@@ -119,6 +119,7 @@ prompts  = "..."
 backup   = "..."
 
 [host]                     # 宿主配置节（历史节名 [codexHost] 兼容读取，下次写入归一为 [host]）
+reviewMode = "full"        # full（方案+代码审查，默认/未配置）| plan-only（仅方案审查）| code-only（仅代码审查）| off（跳过审查）
 reviewExecutor = "main"    # main（主 agent 直接执行，默认/未配置）| subagent
 codingExecutor = "main"
 reviewModel = "..."        # 仅 reviewExecutor = "subagent" 时生效；未配置回退当前会话模型
@@ -136,6 +137,7 @@ spawnableModels = [...]    # 仅 codex：本机实测可 spawn 的模型清单�
 
 ## 审查执行模型（核心）
 
+- 审查范围 = **按 `reviewMode` 门控**（`full` / `plan-only` / `code-only` / `off`，未配置 / 空白 / 非法等价 `full`）：只决定编排入口 `@lyx-propose` 触发哪些审查关卡（全自动流水线与手动路径的 review-plan 询问），**不影响被直接调用的 `@lyx-review-plan` / `@lyx-review-code`**，也不影响 `@lyx-apply` 与 `@lyx-archive` 的归档前完整验证；被跳过的关卡打印显式状态行（`[跳过] review-plan（reviewMode=<取值>）`），其节点前置校验一并跳过；`lycx init` / 菜单把 `reviewMode` 作为子代理配置整段开头一问（`off` 时跳过 review 侧提问、既有值保留），`lycx doctor` 展示该字段并对非法取值 / `off` + review 侧字段非空输出 WARN
 - 审查关卡 = **执行者可切换**（两个宿主语义一致；子代理机制按宿主落实：codex = 宿主 spawn + `send_input` 复用；claude = `Agent` 工具调用 `~/.claude/agents/lyx-*` 自定义子代理 + `SendMessage` 续跑，交互模式默认后台运行，等待语义表述为"结果必须被消费并如实报告"，不声称本轮同步阻塞）：`reviewExecutor = "main"`（默认）= 主 agent 直接自审，无 spawn、无逐条裁决、无驳回硬线，最多 2 轮；`reviewExecutor = "subagent"` = review-plan / review-code 各 spawn 1 个审查 subagent（非 fork spawn、只携带 TASK + 只审 change 范围），每条 Critical 由主会话逐条裁决——认可即修复，不认可必须附**可核验依据**（泛泛"误报"视为未完成裁决）；subagent 路径第 2 轮起默认 `send_input` 复用同一子代理，复用失败才重新 spawn
 - 软上下文载体 = **change 目录 `context.md`**：propose 阶段产出（内容边界自检）、apply 阶段维护（实施决策回写）、subagent 路径消费（TASK 只传路径）；执行者为 `main` 时主 agent 保有完整上下文，`context.md` 仅作决策留痕
 - 审查未修项快照 = **change 目录 `review-findings.md`**（快照式留痕，非台账）：review-plan / review-code 循环结束时按节 upsert 写入最后一轮 **Warning**（不收 Info / Critical），Warning 条目连续编号；正常清零在统一 commit **之后**写（保持未跟踪），随 `@lyx-archive` 的 `git add -- openspec/` 落库并搬入 `archive/`；`@lyx-explore` 进入时扫描并**先询问后只列出未解决条目**（有 `- 解决：` 子项即视为已解决、不展示不计数；全部已解决时不询问）；该文件被排除在审查范围与中间 commit 之外。历史 Warning 被后续 change 解决时，在新 change 的 `proposal.md` 用 `## 解决的审查未修项` 声明锚点，由 `@lyx-archive` 向已归档快照追加追加式解决说明（原文不改、幂等、失败不阻断归档）；同一 change 内修复的 Warning 在 active 快照就地标注 `- 解决：本 change 内修复（commit <短 hash>）— …`（审查后同会话修复并提交后标注，或 `@lyx-archive` 归档前核对未标注条目、用户逐条确认后标注；必带 commit hash、按 hash 幂等、不新增提交）；`@lyx-commit --all` 与 propose WIP commit 的全量暂存以 `':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md'` 排除进行中快照

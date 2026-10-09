@@ -131,6 +131,17 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     }
   })
 
+  it('only the propose template gates review gates by reviewMode (review/apply/archive stay config-independent)', () => {
+    const propose = read('propose.md')
+    expect(propose).toContain('reviewMode')
+    expect(propose).toContain('[跳过] review-plan')
+    expect(propose).toContain('[跳过] review-code')
+    expect(propose).toContain('plan-only')
+    expect(propose).toContain('code-only')
+    for (const name of ['review-plan.md', 'review-code.md', 'apply.md', 'archive.md'])
+      expect(read(name), name).not.toMatch(/reviewMode(?![a-zA-Z])/)
+  })
+
   it('templates declare and write back review-findings resolution notes', () => {
     const propose = read('propose.md')
     expect(propose).toContain('## 解决的审查未修项')

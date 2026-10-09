@@ -30,3 +30,13 @@
 - **MODIFIED delta 场景名必须逐字保留**：`openspec validate` 会报 "omits scenario(s) the current spec still has"。本次首轮把「全自动流水线走到审完代码」改了名而失败，改回原名后通过；改既有 Requirement 时务必保留全部既有场景名，只新增不重命名。
 - **不要把 `reviewMode` 引入 review-plan / review-code / apply / archive 模板**：直接调用与 apply / 归档验证必须不受影响（tasks 4.3 守护）。
 - **本机安装产物落后**：`~/.agents/skills/lyx-*` 比仓库 `templates/` 旧（用户刚改 explore 尚未重装）。本次改 `templates/skills/propose.md` 后，本地要重装（`lycx init` / update）才按新行为生效测试。
+
+## 实施决策（apply 阶段回写）
+
+- 配置层：`sanitizeReviewMode` + `REVIEW_MODES` 落在 `src/utils/config.ts`；`createDefaultConfig` / `mergeHostConfig` / `HostExtras` / `sanitizeCodexHostExtras` 全链路携带 `reviewMode`。
+- `HostAdapterConfig`（`src/utils/host-adapters.ts`）同步加 `reviewMode`（claude doctor 的 `ctx.config` 类型需要）。
+- 采集：`collectSubagentConfig` 新增 `pickReviewModeField` 作为整段开头一问；`reviewMode === 'off'` 时以 `reviewSideActive` 门控，review 侧执行者 / 模型 / 推理档跳过并保留既有默认值，coding 侧照常。
+- 菜单变更检测对 `reviewMode` 做 `undefined ≡ 'full'` 归一——否则"既有配置没有 reviewMode、用户接受默认 full"会被判成改动而触发写回（破坏既有"未改动不写回"行为）。
+- doctor：codex `assessSubagentModelConfig` 新增 `reviewMode` / `reviewModeInvalid` / `reviewOffWarn` 并并入 `status`；claude doctor 同口径展示与两处 WARN。
+- 模板：仅 `templates/skills/propose.md` 步骤 8/9 做门控；review-plan / review-code / apply / archive 模板不含 `reviewMode`（由 `host-adapters.test.ts` 断言守护）。
+- 验证：`pnpm typecheck`、`pnpm build`、`pnpm test`（370 passed）全绿。

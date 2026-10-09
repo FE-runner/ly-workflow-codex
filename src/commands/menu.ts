@@ -10,7 +10,7 @@ import { join } from 'pathe'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import { getConfigPath, getHostConfigPath, listInstalledHosts, mergeHostConfig, readLyConfig, sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import { getConfigPath, getHostConfigPath, listInstalledHosts, mergeHostConfig, readLyConfig, sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, writeLyConfig } from '../utils/config'
 import { DEFAULT_HOST, getAdapter, listRegisteredHosts } from '../utils/host-adapters'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows } from '../utils/installer'
 import { PACKAGE_NAME } from '../utils/package-meta'
@@ -211,6 +211,7 @@ export async function showMainMenu(): Promise<void> {
     if (sanitizeReviewModel(config?.host?.reviewModel)) {
       statusParts.push(ansis.green(`review model: ${config?.host?.reviewModel}`))
     }
+    statusParts.push(ansis.cyan(`review: ${sanitizeReviewMode(config?.host?.reviewMode) ?? 'full'}`))
 
     drawHeader(statusParts)
 
@@ -343,6 +344,7 @@ export async function configExecutorsAndModels(): Promise<void> {
   }
 
   const current: SubagentConfigCollected = {
+    reviewMode: sanitizeReviewMode(config.host?.reviewMode),
     reviewExecutor: sanitizeExecutor(config.host?.reviewExecutor),
     codingExecutor: sanitizeExecutor(config.host?.codingExecutor),
     reviewModel: sanitizeReviewModel(config.host?.reviewModel),
@@ -356,8 +358,11 @@ export async function configExecutorsAndModels(): Promise<void> {
     suggestions: getAdapter(host).reasoningEffortSuggestions,
   })
 
+  // reviewMode 未配置 ≡ 'full'：归一后比较，避免"用户只是接受了默认值"被当成改动而写回
+  const normalize = (key: keyof SubagentConfigCollected, value: string | undefined): string | undefined =>
+    key === 'reviewMode' ? (value ?? 'full') : value
   const changed = (Object.keys(current) as Array<keyof SubagentConfigCollected>)
-    .some(key => next[key] !== current[key])
+    .some(key => normalize(key, next[key]) !== normalize(key, current[key]))
   if (!changed) {
     console.log(ansis.gray(`  ${i18n.t('common:configNotModified')}`))
     return
@@ -368,7 +373,7 @@ export async function configExecutorsAndModels(): Promise<void> {
     console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized (${host})`)
     return
   }
-  // 写回全部六个字段（未触碰者已由采集默认值回填）；spawnableModels 等范围外字段由 mergeHostConfig 保留。
+  // 写回全部字段（未触碰者已由采集默认值回填）；spawnableModels 等范围外字段由 mergeHostConfig 保留。
   fresh.host = mergeHostConfig(fresh.host, next)
   await writeLyConfig(fresh, host)
 
@@ -380,6 +385,13 @@ export async function configExecutorsAndModels(): Promise<void> {
     value
       ? ansis.green(i18n.t('init:summary.reasoningConfigured', { value }))
       : ansis.gray(i18n.t('init:summary.reasoningUnset'))
+  const reviewModeLabel: Record<string, string> = {
+    'full': i18n.t('init:reviewMode.full'),
+    'plan-only': i18n.t('init:reviewMode.planOnly'),
+    'code-only': i18n.t('init:reviewMode.codeOnly'),
+    'off': i18n.t('init:reviewMode.off'),
+  }
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewMode'))} ${ansis.green(reviewModeLabel[next.reviewMode ?? 'full'])}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))} ${modelLine(next.reviewModel)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))} ${modelLine(next.codingModel)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewReasoningEffort'))} ${effortLine(next.reviewReasoningEffort)}`)

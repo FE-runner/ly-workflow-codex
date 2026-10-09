@@ -2,7 +2,7 @@ import type { HostDoctorCheck, HostInspectContext } from '../../utils/host-adapt
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import { i18n } from '../../i18n'
-import { sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort } from '../../utils/config'
+import { sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode } from '../../utils/config'
 import { listPrefixedDirs } from '../../utils/fs-helpers'
 import { CLAUDE_AGENT_DEFINITIONS, renderAgentModelLines } from './adapter'
 import { CLAUDE_AGENTS_DIR } from './paths'
@@ -66,6 +66,19 @@ export async function claudeDoctorChecks(ctx: HostInspectContext): Promise<HostD
   const config = ctx.config ?? {}
   const parts: string[] = []
   let warn = false
+  const reviewModeRaw = config.reviewMode
+  const reviewMode = sanitizeReviewMode(reviewModeRaw) ?? 'full'
+  if (typeof reviewModeRaw === 'string' && reviewModeRaw.trim() !== '' && !sanitizeReviewMode(reviewModeRaw)) {
+    warn = true
+    parts.push(i18n.t('doctor:modelConfig.warnInvalidReviewMode'))
+  }
+  parts.push(i18n.t('doctor:modelConfig.reviewMode', { mode: reviewMode }))
+  const rawConfig = config as Record<string, unknown>
+  const rawNonEmpty = (key: string): boolean => typeof rawConfig[key] === 'string' && (rawConfig[key] as string).trim() !== ''
+  if (reviewMode === 'off' && (rawNonEmpty('reviewExecutor') || rawNonEmpty('reviewModel') || rawNonEmpty('reviewReasoningEffort'))) {
+    warn = true
+    parts.push(i18n.t('doctor:modelConfig.warnReviewOff'))
+  }
   for (const key of ['reviewExecutor', 'codingExecutor'] as const) {
     const raw = config[key] as unknown
     const kind = sanitizeExecutor(raw)

@@ -70,6 +70,7 @@ describe('menu 子代理配置入口 (host-subagent-model-config)', () => {
     state.installed = ['codex']
     state.host = { reviewExecutor: 'main', codingExecutor: 'main' }
     state.answers = [
+      { pick: 'full' },
       { pick: 'subagent' },
       { pick: 'subagent' },
       { pick: 'glm-5.3-flash' },
@@ -82,6 +83,7 @@ describe('menu 子代理配置入口 (host-subagent-model-config)', () => {
     expect(state.writes).toHaveLength(1)
     expect(state.writes[0].host).toBe('codex')
     expect(state.writes[0].hostSection).toEqual({
+      reviewMode: 'full',
       reviewExecutor: 'subagent',
       codingExecutor: 'subagent',
       reviewModel: 'glm-5.3-flash',
@@ -103,6 +105,7 @@ describe('menu 子代理配置入口 (host-subagent-model-config)', () => {
       codingReasoningEffort: 'low',
     }
     state.answers = [
+      { pick: 'full' },
       { pick: 'subagent' },
       { pick: 'main' },
       { pick: 'claude-sonnet-5-5' },
@@ -110,9 +113,10 @@ describe('menu 子代理配置入口 (host-subagent-model-config)', () => {
     ]
     await configExecutorsAndModels()
     expect(state.answers).toEqual([])
-    // main 执行者下编码侧不提问：四个提示 = 执行者二连 + 审查模型 + 审查推理档
-    expect(state.prompts.map(p => p.name)).toEqual(['pick', 'pick', 'pick', 'pick'])
+    // main 执行者下编码侧不提问：五个提示 = 审查范围 + 执行者二连 + 审查模型 + 审查推理档
+    expect(state.prompts.map(p => p.name)).toEqual(['pick', 'pick', 'pick', 'pick', 'pick'])
     expect(state.writes[0].hostSection).toEqual({
+      reviewMode: 'full',
       reviewExecutor: 'subagent',
       codingExecutor: 'main',
       reviewModel: 'claude-sonnet-5-5',
@@ -126,6 +130,7 @@ describe('menu 子代理配置入口 (host-subagent-model-config)', () => {
     state.installed = ['claude']
     state.host = { reviewExecutor: 'subagent', codingExecutor: 'main', reviewReasoningEffort: 'high' }
     state.answers = [
+      { pick: 'full' },
       { pick: 'subagent' },
       { pick: 'main' },
       { pick: '\u0000lyx:unset' },
@@ -150,6 +155,7 @@ describe('menu 子代理配置入口 (host-subagent-model-config)', () => {
       reviewReasoningEffort: 'xhigh',
     }
     state.answers = [
+      { pick: 'full' },
       { pick: 'subagent' },
       { pick: 'subagent' },
       { pick: 'claude-sonnet-5-5' },
@@ -163,6 +169,7 @@ describe('menu 子代理配置入口 (host-subagent-model-config)', () => {
     const reviewEffortPrompt = state.prompts.find(p => String(p.message).includes('reviewReasoningEffort'))!
     expect(reviewEffortPrompt.default).toBe('xhigh')
     expect(state.writes[0].hostSection).toEqual({
+      reviewMode: 'full',
       reviewExecutor: 'subagent',
       codingExecutor: 'subagent',
       reviewModel: 'claude-sonnet-5-5',
@@ -175,6 +182,7 @@ describe('menu 子代理配置入口 (host-subagent-model-config)', () => {
     state.installed = ['claude']
     state.host = { reviewExecutor: 'main', codingExecutor: 'main' }
     state.answers = [
+      { pick: 'full' },
       { pick: 'main' },
       { pick: 'main' },
     ]
