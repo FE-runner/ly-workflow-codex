@@ -147,9 +147,6 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(archive).toContain('幂等')
     expect(archive).toContain('SHALL NOT 阻断归档')
     expect(archive).toContain('SHALL NOT 引入 open/closed 状态字段')
-
-    const explore = read('explore.md')
-    expect(explore).toContain('已标注解决')
   })
 
   it('templates pin snapshot minimal structure and write-back lifecycle', () => {
@@ -184,7 +181,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
   })
 
   it('templates support in-change resolution notes on the active snapshot', () => {
-    const note = '- 解决：本 change 内修复（未复审，commit <短 hash>）'
+    const note = '- 解决：本 change 内修复（commit <短 hash>）'
     for (const name of ['review-plan.md', 'review-code.md']) {
       const content = read(name)
       expect(content, name).toContain('审查后同会话修复的就地标注')
@@ -206,10 +203,8 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     // 口径收窄：不改写 active 快照只约束跨 change 回写
     expect(archive).toContain('只约束跨 change 回写')
     expect(archive).toContain('不属于对当前 change 快照的重新生成或重建')
-
-    const explore = read('explore.md')
-    expect(explore).toContain('未复审')
-    expect(explore).toContain('其中 3 条已标注解决（3 条未复审）')
+    // 核对阶段确定的 change 名传给后续归档委托
+    expect(archive).toContain('作为参数传入，SHALL NOT 让其再次推断或询问目标 change')
   })
 
   it('full-tree staging excludes in-progress review-findings snapshots', () => {
@@ -228,25 +223,17 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(read('commit.md')).toContain('没有可提交的改动（进行中快照已按规则排除）')
   })
 
-  it('templates declare and write back re-review notes', () => {
-    const propose = read('propose.md')
-    expect(propose).toContain('## 复审的审查未修项')
-    expect(propose).toContain('（结论：成立|不成立）')
-    expect(propose).toContain('SHALL NOT 混用')
-
-    const archive = read('archive.md')
-    expect(archive).toContain('回写审查未修项复审说明')
-    expect(archive).toContain('- 复审：<change-name>（归档于 <YYYY-MM-DD>，结论：成立|不成立）')
-    expect(archive).toContain('无可复审的解决说明')
-    expect(archive).toContain('以最后一行为当前复审结论')
-    expect(archive).toContain('冻结后仅允许追加式解决说明与追加式复审说明')
-    // 核对阶段确定的 change 名传给后续归档委托
-    expect(archive).toContain('作为参数传入，SHALL NOT 让其再次推断或询问目标 change')
-
+  it('explore lists only unresolved warnings and re-review mechanism is removed', () => {
     const explore = read('explore.md')
-    expect(explore).toContain('复审未通过')
-    expect(explore).toContain('其中 3 条已标注解决（1 条复审未通过）')
-    expect(explore).toContain('（X 条未复审，Y 条复审未通过）')
+    expect(explore).toContain('只展示未解决条目')
+    expect(explore).toContain('所有可读快照都没有未解决条目')
+    expect(explore).toContain('SHALL NOT 提供展开已隐藏条目的入口')
+    expect(explore).not.toContain('已标注解决')
+    expect(explore).not.toContain('复审')
+
+    for (const name of ['archive.md', 'propose.md', 'review-plan.md', 'review-code.md']) {
+      expect(read(name), name).not.toContain('复审')
+    }
   })
 
   it('explore template asks before listing review-findings snapshots', () => {

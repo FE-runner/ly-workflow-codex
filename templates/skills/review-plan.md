@@ -160,7 +160,7 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 
 快照写入后，若同一会话内用户要求修复 `## 方案审查` 节中的 Warning，修复**提交之后** SHALL 在 active 快照（`openspec/changes/<change-name>/review-findings.md`）对应 Warning 顶层条目之下追加就地标注（见 `review-findings-snapshot` 的「本 change 内修复标注」）：
 
-- **格式**：缩进子项 `- 解决：本 change 内修复（未复审，commit <短 hash>）— <一句说明>`；一律带"未复审"，SHALL NOT 产出不带"未复审"的变体。
+- **格式**：缩进子项 `- 解决：本 change 内修复（commit <短 hash>）— <一句说明>`。
 - **先提交后标注**：修复尚未提交（仅存在于工作区）时 SHALL NOT 标注，并提示需先提交修复；`<短 hash>` SHALL 指向可解析的 commit。
 - **修复提交排除快照**：该修复提交 SHALL 由主会话只按路径暂存修复文件（`git add -- <修复文件>`），message 参照 `@lyx-commit` 格式；SHALL NOT 委托 `@lyx-commit --all`，SHALL NOT 使用 `git add -A` 等会把未跟踪 `review-findings.md` 纳入的方式；快照若已被意外跟踪，SHALL 如实报告，就地标注照常追加、随后续提交落库。
 - **标注前确认**：标注前 SHALL 列出拟标注的条目编号与对应 commit，由用户确认一次后再写入，避免把只修了部分的条目误标。
