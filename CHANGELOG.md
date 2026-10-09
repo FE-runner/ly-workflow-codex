@@ -9,16 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.9.0] - 2026-10-09
+
+新增轻量修复路径 `@lyx-fix` 与可配置审查范围 `reviewMode`；把审查未修项快照从"复审台账"简化回"只列未解决条目"。
 
 ### Added
 
-- 新增 `[host].reviewMode`（`full` / `plan-only` / `code-only` / `off`，未配置或非法取值等价 `full`）：按配置门控 `@lyx-propose` 编排入口执行哪些审查关卡（`plan-only` 跳过代码审查、`code-only` 跳过方案审查、`off` 两级都跳过；apply 始终执行），被跳过的关卡打印显式 `[跳过]` 状态行并跳过对应节点前置校验。直接调用 `@lyx-review-plan` / `@lyx-review-code` 与 `@lyx-apply` / 归档前验证不受影响。交互 `init` / 菜单把 `reviewMode` 作为子代理配置整段开头一问（`off` 跳过 review 侧提问、既有值保留），`lycx doctor` 展示该字段并对非法取值 / `off` + review 侧字段非空输出 WARN
 - 新增 `@lyx-fix` 轻量修复命令（第 15 个 skill）：小需求 / bug 不创建 OpenSpec change，一次完成定位 → spec 分流（A 代码对齐 spec / B 同一 commit 就地改主 spec / C 转 `@lyx-propose`）→ 先红后绿实施 → 主 agent 一轮五项自审（修对 / spec 一致 / 漏改 / 改多 / 回归测试）→ 最终验证门禁 → B 类提交前确认 → 单个 commit（正文追加 spec / 自审 / 验证，无 Change trailer）；不读宿主配置、不 spawn 子代理。AGENTS.md 新增「改动对称清单」供自审核对成对位置
+- 新增 `[host].reviewMode`（`full` / `plan-only` / `code-only` / `off`，未配置或非法取值等价 `full`）：按配置门控 `@lyx-propose` 编排入口执行哪些审查关卡（`plan-only` 跳过代码审查、`code-only` 跳过方案审查、`off` 两级都跳过；apply 始终执行），被跳过的关卡打印显式 `[跳过]` 状态行并跳过对应节点前置校验。直接调用 `@lyx-review-plan` / `@lyx-review-code` 与 `@lyx-apply` / 归档前验证不受影响。交互 `init` / 菜单把 `reviewMode` 作为子代理配置整段开头一问（`off` 跳过 review 侧提问、既有值保留），`lycx doctor` 展示该字段并对非法取值 / `off` + review 侧字段非空输出 WARN
 
 ### Changed
 
+- **BREAKING（展示口径）** `@lyx-explore` 列出审查未修项快照时只展示**未解决**条目：Warning 顶层条目下有任意 `- 解决：` 子项即视为已解决并隐藏，某 change 无剩余未解决条目时整体不出现，全部已解决时不发出询问；删除"已标注解决 / 未复审 / 复审未通过"三项计数
 - `@lyx-explore` 讨论收敛时按规模分流提示：小改动提示 `@lyx-fix`，其余提示 `@lyx-propose`
+- 本 change 内修复的就地标注格式去掉"未复审"：`- 解决：本 change 内修复（未复审，commit <短 hash>）— …` → `- 解决：本 change 内修复（commit <短 hash>）— …`
+- `@lyx-fix` 的 B 类提交前确认：用户要求修改后须重新执行最终验证（仅对新增 diff 重跑自审③④）再重新确认，未通过验证不得提交
+
+### Removed
+
+- 删除审查未修项**复审机制**：`proposal.md` 的 `## 复审的审查未修项` 声明、`@lyx-archive` 的复审说明回写与 `- 复审：` 子项格式；已归档快照中的既有 `- 复审：` 子项行一次性清理
+
+### Fixed
+
+- `lycx init` 配置摘要中 review 侧模型 / 推理档的"不生效"标注按真实原因分流：`reviewMode = "off"` 时标注"审查范围 off，不生效"（未覆盖时"审查范围 off，不生效（未覆盖）"），不再错标为"主 agent 执行时不生效"
 
 ## [0.8.0] - 2026-09-30
 
