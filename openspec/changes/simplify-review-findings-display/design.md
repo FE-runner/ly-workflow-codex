@@ -2,7 +2,7 @@
 
 `review-findings.md` 快照目前有三类子项：`- 解决：`（跨 change 解决说明，或本 change 内带"未复审"的就地标注）、`- 复审：`（后续 change 的复审结论）。`@lyx-explore` 列出时会统计全部 Warning、已标注解决数，以及"未复审 / 复审未通过"数。讨论结论是：用户只关心还有什么没处理，已解决条目一律不展示；复审机制随之失去用途，整体删除。
 
-当前已归档快照中有 5 条 `- 复审：` 行（全在 `2026-09-30-in-change-review-findings-resolution`），以及 7 条带"未复审，"的就地标注（同一份 5 条、`2026-09-30-host-subagent-model-config` 1 条、`2026-09-30-review-findings-rereview-and-residual-fixes` 1 条）。
+当前已归档快照中有 5 条 `- 复审：` 行（全在 `2026-09-30-in-change-review-findings-resolution`），以及 8 条带"未复审，"的就地标注（同一份 6 条、`2026-09-30-host-subagent-model-config` 1 条、`2026-09-30-review-findings-rereview-and-residual-fixes` 1 条）。
 
 ## Goals / Non-Goals
 
@@ -33,7 +33,7 @@ OpenSpec 归档时，MODIFIED 不允许丢弃基线 Scenario；原 Requirement �
 
 ### D4 一次性清理已归档快照，作为冻结规则的显式例外
 
-spec 规定归档 commit 后原文冻结、只允许追加。本 change 在 apply 阶段直接编辑上述三份归档快照：删除 `- 复审：` 行，把 `（未复审，commit` 改成 `（commit`。不在 spec 中新增"允许清理"的条款（例外只发生一次，写进 spec 会变成长期口子），只在本 design 与 tasks 中记录。清理随 apply commit 落库，git 历史可回溯。原 Warning 原文、编号、`- 解决：` 的其余文字保持不变。
+spec 规定归档 commit 后原文冻结、只允许追加。本 change 在 apply 阶段直接编辑上述三份归档快照：删除 `- 复审：` 行，把 `（未复审，commit` 改成 `（commit`。不在 spec 中新增"允许清理"的条款（例外只发生一次，写进 spec 会变成长期口子），只在本 design 与 tasks 中记录。清理随 apply commit 落库，git 历史可回溯。原 Warning 原文、编号、`- 解决：` 的其余文字保持不变；Warning 原文中本身含有的"复审"字样（如 rereview 快照方案审查 #1、in-change 快照方案审查 #3）属于原文，保留不动。
 
 ### D5 主 spec Purpose 直接编辑
 

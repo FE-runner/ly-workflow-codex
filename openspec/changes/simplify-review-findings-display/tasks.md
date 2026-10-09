@@ -20,6 +20,6 @@
 
 ## 4. 一次性清理已归档快照（冻结规则的显式例外，见 design D4）
 
-- [ ] 4.1 `openspec/changes/archive/2026-09-30-in-change-review-findings-resolution/review-findings.md`：删除全部 5 行 `- 复审：…`；把 `（未复审，commit` 改为 `（commit`（5 处）
+- [ ] 4.1 `openspec/changes/archive/2026-09-30-in-change-review-findings-resolution/review-findings.md`：删除全部 5 行 `- 复审：…`；把 `（未复审，commit` 改为 `（commit`（6 处）
 - [ ] 4.2 `openspec/changes/archive/2026-09-30-host-subagent-model-config/review-findings.md` 与 `openspec/changes/archive/2026-09-30-review-findings-rereview-and-residual-fixes/review-findings.md`：各把 1 处 `（未复审，commit` 改为 `（commit`
-- [ ] 4.3 验证：`grep -rn "复审" openspec/changes/archive/*/review-findings.md` 零命中；`git diff --stat` 只涉及上述三个快照文件中的这些行，Warning 原文与编号不变
+- [ ] 4.3 验证：`grep -rnE "^ +- 复审：|（未复审，commit" openspec/changes/archive/*/review-findings.md` 零命中（Warning 原文中本身含有的"复审"字样保留，不作为命中）；`git diff --stat` 只涉及上述三个快照文件中的这些行，Warning 原文与编号不变
