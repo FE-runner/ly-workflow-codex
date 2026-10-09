@@ -70,7 +70,7 @@
 
 `/ly:archive` SHALL **先执行归档前完整验证**（见 `archive-verification-gate`：测试 / 类型检查 / 构建，按项目实际提供的脚本选择、缺失项跳过并注明），全部通过后才调用 `opsx:archive`：`$ARGUMENTS` 显式指定 change 名时原样转发；未指定时，归档前核对阶段（见 `review-findings-snapshot` 的「本 change 内修复标注」）按 `opsx:archive` 默认规则确定的目标 change 名 SHALL 作为参数交给 `opsx:archive`，SHALL NOT 让其二次推断或二次询问；归档完成后若 `openspec/` 下存在实际文件变动，SHALL 提交（commit message 采用 `chore(openspec): <subject>` + `Change-Stage: archive` + `Change-Name: <change-name>` trailer 结构）；无变动或提交本身失败则跳过并如实报告。验证失败 SHALL 停止归档，SHALL NOT 移动 `openspec/changes/<change-name>/`，并如实报告失败的脚本与原始错误输出。
 
-`/ly:propose` SHALL NOT 是纯委托——它是本能力集里唯一的编排入口：在调用 `opsx:propose` **之前** SHALL 先执行一次隔离方式询问（三选一：隔离 worktree / 本项目切新分支 / 留在当前分支，见 `worktree-create-before-propose`，仅当不在任何 worktree 内时询问，全局仅一次），再询问一次"本次收尾走全自动还是手动逐步确认"（也仅一次）；委托 `opsx:propose` 完成后 SHALL 先执行方案自审（四项检查 + 逐项结论清单，见 `ly-propose-flow`）与 context.md 产出（见 `review-context-artifact`）再对生成的 artifact `git add` 并**立即 commit**（message 采用 `docs(openspec): <subject>` + `Change-Stage: propose` + `Change-Name: <change-name>` trailer 结构），随后按自动/手动两路径分支：全自动路径 SHALL 依次自动调用 `/ly:review-plan <change-name>` → `/ly:apply <change-name>` → `/ly:review-code <change-name>`（任一非清零终止即停，见 `ly-propose-flow`）；手动路径 SHALL 询问一次"要不要跑 review-plan 审查"，选是则调用审查循环，选否则编排结束（方案已 commit）。具体分支细节见 `ly-propose-flow` 能力。
+`/ly:propose` SHALL NOT 是纯委托——它是本能力集里唯一的编排入口：在调用 `opsx:propose` **之前** SHALL 先执行一次隔离方式询问（三选一：隔离 worktree / 本项目切新分支 / 留在当前分支，见 `worktree-create-before-propose`，仅当不在任何 worktree 内时询问，全局仅一次），再询问一次"本次收尾走全自动还是手动逐步确认"（也仅一次）；委托 `opsx:propose` 完成后 SHALL 先执行方案自审（四项检查 + 逐项结论清单，见 `ly-propose-flow`）与 context.md 产出（见 `review-context-artifact`）再对生成的 artifact `git add` 并**立即 commit**（message 采用 `docs(openspec): <subject>` + `Change-Stage: propose` + `Change-Name: <change-name>` trailer 结构），随后按自动/手动两路径分支，且审查关卡的执行与否 SHALL 由当前宿主的 `reviewMode`（见 `subagent-agent-config`；未配置、空白或非法取值等价 `full`）门控：**全自动路径** SHALL 按 `reviewMode` 决定执行哪些审查关卡——`full` 为 `/ly:review-plan` → `/ly:apply` → `/ly:review-code`，`plan-only` 跳过 `/ly:review-code`，`code-only` 跳过 `/ly:review-plan`，`off` 两个审查关卡都跳过（`/ly:apply` 在任何取值下都执行；任一被执行的审查关卡非清零终止即停；被跳过的关卡 SHALL 打印显式状态行，见 `ly-propose-flow`）；**手动路径**在 `full` / `plan-only` 时 SHALL 询问一次"要不要跑 review-plan 审查"（选是则调用审查循环、选否则编排结束，方案已 commit），在 `code-only` / `off` 时 SHALL NOT 发起该询问、propose commit 完成后即结束。`reviewMode` SHALL NOT 影响被直接调用的 `@lyx-review-plan` / `@lyx-review-code`（见 `ly-review-gates`）。具体分支细节见 `ly-propose-flow` 能力。
 
 #### Scenario: explore 命令原样转发参数
 - **WHEN** 用户运行 `/ly:explore "real-time collaboration"`
@@ -117,8 +117,12 @@
 - **THEN** 命令先询问隔离方式三选一；选择"隔离 worktree"则 `git worktree add` 切出并同会话 cd 进 worktree 续跑；选择"本项目切新分支"/"留在当前分支"则按 `worktree-create-before-propose` 处置后，再询问"全自动 or 手动"，随后以原样参数调用 `opsx:propose`；委托完成后先方案自审，再 `git add` 该 change 目录并立即提交，message 带 `Change-Stage: propose` trailer
 
 #### Scenario: propose 命令全自动路径下的编排
-- **WHEN** 用户运行 `/ly:propose`，选择"全自动"，propose 阶段 commit 完成
+- **WHEN** 用户运行 `/ly:propose`，选择"全自动"，`reviewMode` 为 `full`（含未配置），propose 阶段 commit 完成
 - **THEN** 命令自动调用 `/ly:review-plan`（审查对象为 propose 阶段 commit，按 `ly-review-gates` 的执行者语义执行，清零时由循环统一提交修复）；清零后自动进入 `/ly:apply`（按 `codingExecutor` 决定实施主体）→ 自动进入 `/ly:review-code`（审查对象为 apply 阶段 commit）；任一环节非清零终止则停止流水线并报告；全程无 worktree 询问、无 `/ly:worktree switch` 调用，不自动归档
+
+#### Scenario: propose 全自动路径按 reviewMode 决定审查关卡
+- **WHEN** 用户配置 `reviewMode = "code-only"` 并运行 `/ly:propose` 选择"全自动"，propose 阶段 commit 完成
+- **THEN** 命令跳过 `/ly:review-plan` 并打印显式状态行，执行 `/ly:apply`，随后执行 `/ly:review-code`；SHALL NOT 在 `reviewMode = "code-only"` 下仍调用 review-plan
 
 ### Requirement: 生命周期命令自动提交使用增强正文
 
