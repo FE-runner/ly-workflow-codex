@@ -27,3 +27,10 @@
 - `i18n/index.ts` 有 zh-CN 与 en 两处，需成对新增文案键。
 - 推理档有独立的"未覆盖"文案（`reasoningIneffectiveUnset`），`off` 场景需要单独的"未覆盖"变体，不能只改"已覆盖"那一支。
 - 本机 `~/.agents/skills/lyx-*` 与 `~/.codex/lyx/prompts/codex/*` 仍落后于仓库 `templates/`；本次改 `propose.md` / `review-*.md` 后需重装才在本地生效。
+
+## 实施决策（apply 阶段回写）
+
+- `printSummary` 用 `Effectiveness = 'effective' | 'executorMain' | 'reviewModeOff'` 表达不生效原因；review 侧按 `reviewMode === 'off'` 优先判定（关闭审查时与执行者无关），否则由 `reviewExecutor` 决定；coding 侧仍只由 `codingExecutor` 决定。
+- 新增 3 个 i18n 文案键（zh-CN / en 成对）：`summary.modelInactiveReviewMode`、`summary.reasoningInactiveReviewMode`、`summary.reasoningInactiveReviewModeUnset`。
+- 未改动 doctor、菜单输出、配置写入与门控。
+- 验证：`pnpm typecheck`、`pnpm build`、`pnpm test`（373 passed）全绿。

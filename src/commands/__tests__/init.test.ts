@@ -302,6 +302,72 @@ describe('init — claude wizard (host-subagent-model-config)', () => {
   })
 })
 
+describe('init — reviewMode 摘要不生效口径 (fix-review-mode-summary-label)', () => {
+  const lineOf = (label: string): string =>
+    state.logs.join('\n').split('\n').find(l => l.includes(label)) ?? ''
+
+  it('reviewMode=off + reviewExecutor=subagent：review 侧标注"审查范围 off，不生效"', async () => {
+    state.detected = ['claude']
+    state.existing = {
+      host: {
+        reviewExecutor: 'subagent',
+        reviewModel: 'gpt-6-sol',
+        reviewReasoningEffort: 'high',
+      },
+    }
+    state.answers = [
+      { selectedLang: 'zh-CN' },
+      { hosts: ['claude'] },
+      { pick: 'off' },
+      { pick: 'main' },
+      { confirm: true },
+    ]
+    await init()
+    const modelLine = lineOf('审查 agent A 模型')
+    const effortLine = lineOf('审查推理档')
+    expect(modelLine).toContain('gpt-6-sol')
+    expect(modelLine).toContain('审查范围 off，不生效')
+    expect(modelLine).not.toContain('主 agent 执行时不生效')
+    expect(effortLine).toContain('high')
+    expect(effortLine).toContain('审查范围 off，不生效')
+    expect(effortLine).not.toContain('主 agent 执行时不生效')
+  })
+
+  it('reviewMode=off 且 review 推理档未覆盖：标注"审查范围 off，不生效（未覆盖）"', async () => {
+    state.detected = ['claude']
+    state.existing = { host: { reviewExecutor: 'subagent' } }
+    state.answers = [
+      { selectedLang: 'zh-CN' },
+      { hosts: ['claude'] },
+      { pick: 'off' },
+      { pick: 'main' },
+      { confirm: true },
+    ]
+    await init()
+    const effortLine = lineOf('审查推理档')
+    expect(effortLine).toContain('审查范围 off，不生效（未覆盖）')
+    expect(effortLine).not.toContain('主 agent 执行时不生效')
+  })
+
+  it('reviewMode 非 off 且 reviewExecutor=main：既有"主 agent 执行时不生效"文案不回退', async () => {
+    state.detected = ['claude']
+    state.existing = { host: { reviewModel: 'gpt-6-sol' } }
+    state.answers = [
+      { selectedLang: 'zh-CN' },
+      { hosts: ['claude'] },
+      { pick: 'full' },
+      { pick: 'main' },
+      { pick: 'main' },
+      { confirm: true },
+    ]
+    await init()
+    const modelLine = lineOf('审查 agent A 模型')
+    expect(modelLine).toContain('gpt-6-sol')
+    expect(modelLine).toContain('主 agent 执行时不生效')
+    expect(modelLine).not.toContain('审查范围 off')
+  })
+})
+
 describe('init --host validation (W3)', () => {
   it('invalid host prints a readable error and sets exit code, without a stack trace or install', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

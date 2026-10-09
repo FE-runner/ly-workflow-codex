@@ -199,15 +199,24 @@ function printSummary(input: { host: HostId, models: SubagentConfigCollected, co
     kind === 'subagent'
       ? ansis.green(i18n.t('init:summary.executorSubagent'))
       : ansis.gray(i18n.t('init:summary.executorMain'))
-  const modelLabel = (value: string | undefined, effective: boolean): string => {
+  // 不生效原因：'effective' 生效 | 'executorMain' 执行者为主 agent | 'reviewModeOff' 审查范围关闭
+  type Effectiveness = 'effective' | 'executorMain' | 'reviewModeOff'
+  const modelLabel = (value: string | undefined, reason: Effectiveness): string => {
     if (!value)
       return ansis.gray(i18n.t(inheritsByDefinition ? 'init:claude.modelInherit' : 'init:host.reviewModelUnset'))
-    if (!effective)
+    if (reason === 'reviewModeOff')
+      return ansis.yellow(i18n.t('init:summary.modelInactiveReviewMode', { model: value }))
+    if (reason === 'executorMain')
       return ansis.yellow(i18n.t('init:summary.modelIneffective', { model: value }))
     return ansis.green(value)
   }
-  const reasoningLabel = (value: string | undefined, effective: boolean): string => {
-    if (!effective) {
+  const reasoningLabel = (value: string | undefined, reason: Effectiveness): string => {
+    if (reason === 'reviewModeOff') {
+      return value
+        ? ansis.yellow(i18n.t('init:summary.reasoningInactiveReviewMode', { value }))
+        : ansis.gray(i18n.t('init:summary.reasoningInactiveReviewModeUnset'))
+    }
+    if (reason === 'executorMain') {
       return value
         ? ansis.yellow(i18n.t('init:summary.reasoningIneffective', { value }))
         : ansis.gray(i18n.t('init:summary.reasoningIneffectiveUnset'))
@@ -216,9 +225,11 @@ function printSummary(input: { host: HostId, models: SubagentConfigCollected, co
       ? ansis.green(i18n.t('init:summary.reasoningConfigured', { value }))
       : ansis.gray(i18n.t('init:summary.reasoningUnset'))
   }
-  const reviewEffective = models.reviewExecutor === 'subagent'
-  const reviewActive = models.reviewMode !== 'off'
-  const codingEffective = models.codingExecutor === 'subagent'
+  // review 侧不生效原因按 reviewMode 优先（关闭审查时与执行者无关），否则由执行者决定；coding 侧只由执行者决定
+  const reviewReason: Effectiveness = models.reviewMode === 'off'
+    ? 'reviewModeOff'
+    : models.reviewExecutor === 'subagent' ? 'effective' : 'executorMain'
+  const codingReason: Effectiveness = models.codingExecutor === 'subagent' ? 'effective' : 'executorMain'
   const reviewModeLabel: Record<ReviewMode, string> = {
     'full': i18n.t('init:reviewMode.full'),
     'plan-only': i18n.t('init:reviewMode.planOnly'),
@@ -233,10 +244,10 @@ function printSummary(input: { host: HostId, models: SubagentConfigCollected, co
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewMode'))}  ${ansis.green(reviewModeLabel[models.reviewMode ?? 'full'])}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewExecutor'))}  ${executorLabel(models.reviewExecutor)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingExecutor'))}  ${executorLabel(models.codingExecutor)}`)
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))}  ${modelLabel(models.reviewModel, reviewEffective && reviewActive)}`)
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))}  ${modelLabel(models.codingModel, codingEffective)}`)
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewReasoningEffort'))}  ${reasoningLabel(models.reviewReasoningEffort, reviewEffective && reviewActive)}`)
-  console.log(`  ${ansis.cyan(i18n.t('init:summary.codingReasoningEffort'))}  ${reasoningLabel(models.codingReasoningEffort, codingEffective)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))}  ${modelLabel(models.reviewModel, reviewReason)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))}  ${modelLabel(models.codingModel, codingReason)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewReasoningEffort'))}  ${reasoningLabel(models.reviewReasoningEffort, reviewReason)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.codingReasoningEffort'))}  ${reasoningLabel(models.codingReasoningEffort, codingReason)}`)
   if (inheritsByDefinition)
     console.log(ansis.gray(`  ${i18n.t('init:claude.noProviderNote')}`))
   console.log(`  ${ansis.cyan(i18n.t('init:summary.commandCount'))}  ${ansis.yellow(commandCount.toString())}`)
