@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.1] - 2026-10-12
+
+`@lyx-archive` 委托 OpenSpec 归档流程时默认采用推荐的 delta spec 同步项，不再就该项询问。
+
+### Changed
+
+- `@lyx-archive` 委托 `@openspec-archive-change skill` 时直接采用推荐的 delta spec 同步项（有 delta 变更 → `Sync now (recommended)`；已同步 → `Archive now`），不再就该同步决策询问用户；其余归档交互与流程步骤不变
+
 ## [0.9.0] - 2026-10-09
 
 新增轻量修复路径 `@lyx-fix` 与可配置审查范围 `reviewMode`；把审查未修项快照从"复审台账"简化回"只列未解决条目"。
