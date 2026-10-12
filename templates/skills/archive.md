@@ -10,6 +10,8 @@ argument-hint: '[<change-name>]'
 
 按 `@openspec-archive-change skill`（opsx archive 编排 prompt）定义的流程归档指定 change（`参数` 显式指定 change 名时原样转发；未指定时，由下方「归档前核对」段按 opsx:archive 流程的默认规则确定目标 change，并以该名字作为参数委托，SHALL NOT 让其二次推断或二次询问）。
 
+> **delta spec 同步决策默认项（SHALL）**：委托 `@openspec-archive-change skill` 时 SHALL 约定：当该流程就 delta spec 同步方式询问用户时，直接采用推荐项——有 delta 变更时选 `Sync now (recommended)`，已同步时选 `Archive now`——SHALL NOT 就该同步决策向用户提问；流程其余步骤照常。
+
 ## 归档前完整验证（SHALL，先于任何归档动作）
 
 在委托 OpenSpec 归档流程**之前**，对当前工作区执行一次项目完整验证，覆盖测试 / 类型检查 / 构建三类：

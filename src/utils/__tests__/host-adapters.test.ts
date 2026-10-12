@@ -160,6 +160,13 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(archive).toContain('SHALL NOT 引入 open/closed 状态字段')
   })
 
+  it('archive template defaults the delta-spec sync decision without asking', () => {
+    const archive = read('archive.md')
+    expect(archive).toContain('Sync now (recommended)')
+    expect(archive).toContain('Archive now')
+    expect(archive).toContain('SHALL NOT 就该同步决策向用户提问')
+  })
+
   it('templates pin snapshot minimal structure and write-back lifecycle', () => {
     const archive = read('archive.md')
     // 冻结口径：只冻结原 Warning 原文与编号，后续仍允许追加解决说明
