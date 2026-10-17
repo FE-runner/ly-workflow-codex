@@ -117,6 +117,9 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       expect(content, name).toContain('SHALL NOT 收录 Info')
       // 节级 upsert：重跑后该类零 Warning 时移除旧节，不保留过期内容
       expect(content, name).toContain('SHALL NOT 保留过期节内容')
+      // 快照只收「未被自动修复的 Warning」，三类情形并列写明
+      expect(content, name).toContain('只收未被自动修复的 Warning')
+      expect(content, name).toContain('已在本 change 内修复并进入统一 commit 的 SHALL NOT 收录')
       // 写入失败不改变审查结论
       expect(content, name).toContain('写入失败容错')
       // 排除规则：不被当审查对象、不进统一 commit，且两条执行者路径一致
@@ -129,6 +132,36 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       expect(content, name).toContain('连续编号')
       expect(content, name).toContain(anchors[name])
     }
+  })
+
+  it('review templates declare the auto-fixable warning axis with first-round-only bounds', () => {
+    for (const name of ['review-plan.md', 'review-code.md']) {
+      const content = read(name)
+      // 标注字段与判据落在共享模板（main 路径不读角色词也拿得到）
+      expect(content, name).toContain('可自动修复：是 / 否')
+      expect(content, name).toContain('目标唯一')
+      expect(content, name).toContain('不新造决策')
+      expect(content, name).toContain('改法机械')
+      expect(content, name).toContain('SHALL NOT 半修')
+      // 正常清零定义扩展
+      expect(content, name).toContain('且首轮标注为「可自动修复：是」的 Warning 条目已全部确认修复')
+      // 只消费首轮 + 未修好即降级
+      expect(content, name).toContain('自动修复条目的范围与降级（只消费首轮）')
+      expect(content, name).toContain('将其降级为「否」')
+      // 覆盖标注须留痕
+      expect(content, name).toContain('SHALL 可覆盖审查者的标注')
+      // TASK 层同样要求标注，避免判据在 TASK 层落空
+      expect(content, name).toContain('每条 Warning 还须附')
+      // 报告分级结构未被破坏：既有 Warning 小节标题保留
+      expect(content, name).toContain('## Warning（建议修复，最后一轮结果）')
+    }
+  })
+
+  it('archive and explore keep their unresolved-warning calibers unchanged', () => {
+    // 归档前核对按「没有任何解决子项」计数
+    expect(read('archive.md')).toContain('没有任何解决子项')
+    // explore 按「存在至少一条 - 解决：子项」判定已解决
+    expect(read('explore.md')).toContain('存在至少一条 `- 解决：` 子项')
   })
 
   it('only the propose template gates review gates by reviewMode (review/apply/archive stay config-independent)', () => {

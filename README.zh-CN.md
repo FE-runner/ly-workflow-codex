@@ -34,7 +34,7 @@ lycx init --skip-prompt --host claude       # 非交互，只装指定宿主
 | 配置 | `~/.codex/lyx/config.toml` | `~/.claude/lyx/config.toml` |
 | 子代理模型 / 推理档 | 按 `[host]` 取值随每次 spawn 传入 | 渲染进子代理定义（未配置 = `model: inherit`）；配置改动后 `lycx doctor` 提示偏差，`lycx update` 重渲染 |
 
-- **两个宿主都有两条审查路径**：`main`（默认）= 主 agent 直接审查 / 实施，保留完整语义（分级、Critical 清零准出、自审最多 2 轮、快照留痕）；`subagent`（可选）= 非 fork 独立子代理。Claude Code 侧用 `Agent` 工具调用自定义子代理、`SendMessage` 续跑；交互模式默认后台运行，"等待"语义为"结果必须被消费并如实报告"，不冒充本轮同步阻塞。子代理不可用时输出 `[回退] subagent 不可用: <原始报错>` 并回退主 agent。
+- **两个宿主都有两条审查路径**：`main`（默认）= 主 agent 直接审查 / 实施，保留完整语义（分级、正常清零准出、自审最多 2 轮、快照留痕）；`subagent`（可选）= 非 fork 独立子代理。Claude Code 侧用 `Agent` 工具调用自定义子代理、`SendMessage` 续跑；交互模式默认后台运行，"等待"语义为"结果必须被消费并如实报告"，不冒充本轮同步阻塞。子代理不可用时输出 `[回退] subagent 不可用: <原始报错>` 并回退主 agent。
 - **宿主边界**：共享安装层只认适配器接口与宿主注册表，宿主专属内容在 `src/hosts/<id>/` 与 `templates/hosts/<id>/`。lyx 不写 Claude Code 自身的 provider / settings；卸载不触碰 OpenSpec 自有产物（`.claude/commands/opsx/`、`.claude/skills/openspec-*`）与共用的 `~/.ly/worktrees/`。
 - **Claude Code 下的 `@lyx-init`** 额外产出导入 `AGENTS.md` 的 `CLAUDE.md`（`@AGENTS.md`）——Claude Code 仅在项目无 `CLAUDE.md` 时读取 `AGENTS.md`。
 - 下文的 `@lyx-<command>` 是命令标识；在 Claude Code 中请用 `/lyx-<command>`。
@@ -49,8 +49,8 @@ lycx init --skip-prompt --host claude       # 非交互，只装指定宿主
 | `@lyx-apply` | **按 `codingExecutor` 实施**：`main`（默认）= 主 agent 直接读 tasks.md 逐任务实施 + 验证 + 勾 checkbox；`subagent` = spawn coding subagent（非 fork，经 context.md 获取软上下文 + 只实施 change 范围，模型按 `codingModel`）。两条路径均由主会话确认后回写 context.md 并统一 commit `apply: <change>`；subagent 路径环境级不可用回退主 agent，业务失败转人工 |
 | `@lyx-fix` | 小需求 / bug 轻量路径：不建 change；spec 分流（A 代码对齐 spec / B 同一 commit 就地改主 spec / C 转 `@lyx-propose`）→ 先红后绿 → 主 agent 一轮五项自审 → 最终验证门禁 → B 类提交前确认 → 单个 commit（无 Change trailer） |
 | `@lyx-archive` | 归档完成的 change（委托 `@openspec-archive-change skill`）+ 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
-| `@lyx-review-plan` | 审方案：按 `reviewExecutor` 决定主体——`main`（默认）= 主 agent 直接自审，无逐条裁决 / 驳回硬线，最多 2 轮；`subagent` = 单审查 subagent（角色词 `plan-reviewer.md`，非 fork + context.md 路径引用，模型按 `reviewModel`）分级审查 + 主会话逐条裁决，循环直到 Critical 清零或触发终止条件（全局轮数上限 5，清零优先）。清零统一提交修复；循环结束后写 `review-findings.md` 的 `## 方案审查` 节（只收 Warning） |
-| `@lyx-review-code` | 审代码：同上（角色词 `reviewer.md`），Critical/Warning/Info 分级；循环结束后写 `review-findings.md` 的 `## 代码审查` 节（只收 Warning） |
+| `@lyx-review-plan` | 审方案：按 `reviewExecutor` 决定主体——`main`（默认）= 主 agent 直接自审，无逐条裁决 / 驳回硬线，最多 2 轮；`subagent` = 单审查 subagent（角色词 `plan-reviewer.md`，非 fork + context.md 路径引用，模型按 `reviewModel`）分级审查 + 主会话逐条裁决，循环直到正常清零（Critical 为 0 且首轮「可自动修复：是」条目已修完）或触发终止条件（全局轮数上限 5，清零优先）。清零统一提交修复；循环结束后写 `review-findings.md` 的 `## 方案审查` 节（只收未被自动修复的 Warning） |
+| `@lyx-review-code` | 审代码：同上（角色词 `reviewer.md`），Critical/Warning/Info 分级；循环结束后写 `review-findings.md` 的 `## 代码审查` 节（只收未被自动修复的 Warning） |
 | `@lyx-release` | GitFlow 四场景发版（feature/release/hotfix/dev-offline），SemVer 自动推导版本号；上线合并二选一（远端 PR 默认 / 本地直接合并）+ 主分支名检测（master/main） |
 | `@lyx-changelog` | 按 commit 前缀分组生成/更新 Keep a Changelog 格式的 CHANGELOG.md |
 | `@lyx-publish` | npm 包发布四场景（bmc 私域 Nexus / GitHub Packages / npmjs + GitHub Release / CI 自动发布），前置检查→版本号推导→构建→发布→验证 |

@@ -37,3 +37,11 @@
 - 归档快照：`openspec/changes/archive/*/review-findings.md` 共 7 份，22 条 Warning。
 - 轮数分布：`git log --all --format='%s' | grep 反馈修复`，19 条，1 轮 ×3、2 轮 ×5、3 轮 ×6、4 轮 ×1，从未触及 5 轮上限。
 - 审查者方差实证：`2026-09-30-add-claude-host` 快照记录"第 1 轮 Critical 0；第 2 轮发现 3 条 Critical（1 条误报）"。
+
+## 实施决策（apply 阶段回写）
+
+- 判级标准的「可自动修复」文本在代码族与方案族使用**同一份逐字文本**（不因审查族改写措辞）；一致性仍按族校验：codex 角色词 / claude 子代理定义 / 共享模板三方逐字相等，两个族各自成立（实测两个哈希各命中 3 个文件）。
+- 术语统一为「审查」：初稿曾写「复审」，被既有不变量断言挡下（模板 SHALL NOT 出现「复审」——旧"未复审 / 复审未通过"机制已在更早的 change 中删除），模板与 delta spec 统一改回「审查」。
+- `CHANGELOG.md` 未改：本仓库按发版时写版本节（无 `[Unreleased]` 惯例，历次 `fix(...)` 提交均不改该文件），条目随下一次发版 commit 写入；tasks 5.2 已改写为该判断的记录。
+- tasks 6.1 / 6.2 未执行：运行时读的是**已装副本**（`~/.agents/skills/`、`~/.codex/lyx/prompts/`），需 `lycx update` 后才能在真实审查里验证这两条行为断言；已在 tasks 中显式标注未执行与前置条件，不做静默勾选。
+- 断言落在 `host-adapters.test.ts` 既有的跨宿主不变量块内：新增「自动修复轴 + 首轮限定 + 覆盖留痕 + TASK 层标注要求 + 报告小节标题保留」与「archive / explore 口径未变」两组断言（测试数 385 → 389）。
