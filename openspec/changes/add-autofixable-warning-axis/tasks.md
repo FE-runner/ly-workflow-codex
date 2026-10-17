@@ -12,6 +12,7 @@
 - [ ] 2.3 两模板明确熔断 / 驳回硬线 / 无法安全自动修复 / 修复后验证失败 / 审查调用失败 / 审查对象类型持续系统性误判仍只以 Critical 为判定对象，全局 5 轮上限与"清零优先于轮数上限"不变
 - [ ] 2.4 两模板的第 2 轮起增量 TASK 构造补「首轮全部「是」条目的逐字原文」（与 Critical 逐字原文同一增量语义），并说明未携带原文的条目 SHALL NOT 被当作已修复
 - [ ] 2.5 `templates/skills/propose.md` 全自动流水线的 review-plan / review-code 两处推进条件与对应节点前置校验的判据表述同步为新的正常清零定义
+- [ ] 2.6 `templates/skills/review-code.md` 的 `OUTPUT 约定` 行与 `templates/skills/review-plan.md` 的 `OUTPUT 约束` 行补「每条 Warning 须附 `可自动修复：是 / 否`」的输出契约，避免 TASK 层不要求标注而使角色词的判据落空；以渲染产物包含该输出契约断言验证
 
 ## 3. 报告与留痕
 

@@ -29,6 +29,7 @@
 
 - `ly-review-gates`: 「审查-修复循环与终止条件（review-code / review-plan 共用）」扩展正常清零定义、新增「自动修只消费第 1 轮」与「未修好即降级」语义、明确熔断与驳回硬线仍只适用 Critical、明确增量 TASK 需携带首轮「是」条目逐字原文；「循环结束后统一提交, `--no-commit` 关闭最终提交」修正空 commit 判据（"仅修「是」条目、无 Critical 修复"同样必须统一提交）；新增「审查发现的自动修复标注」与「自动修只消费首轮发现且不返工」两条 Requirement 承载标注契约、判据与循环进入条件。
 - `review-findings-snapshot`: 「快照文件的位置与格式」的收录口径由"只收录 Warning"改为"只收录未被自动修复的 Warning"，并补对应 Scenario（含因轮数上限等非清零终止而未被修完的「是」条目录入快照）；「审查关卡在循环结束时按节写入快照」的节移除判据同步为"该类型无可收录条目"。
+- `ly-propose-flow`: 「全自动路径 = 自动流水线直到审完代码」中 review-plan / review-code 两处关卡推进条件由"以 Critical 清零结束"改为"以正常清零结束"，并显式引用 `ly-review-gates` 的正常清零定义（Critical 数为 0 且首轮「是」条目已全部确认修复）。
 
 ## Impact
 
