@@ -94,11 +94,11 @@
 ### Requirement: 全自动路径 = 自动流水线直到审完代码
 当且仅当用户在开始时选择"全自动"，`/ly:propose` SHALL 在 propose commit 完成后，读取当前宿主的 `reviewMode`（未配置、空白或非法取值等价 `"full"`；见 `subagent-agent-config`）决定执行哪些审查关卡，并按下列顺序自动执行：
 
-1. **review-plan 关卡（仅 `full` / `plan-only`）**：自动调用 `/ly:review-plan <change-name>`（审查对象为 propose 阶段 commit；按 `ly-review-gates` 的机制执行）。以 Critical 清零结束时自动进入下一步；以其余任一种终止（熔断、驳回硬线、无法安全修复、验证失败、审查调用失败、提交失败、达到全局轮数上限）时，SHALL 停止流水线，复用该循环已产出的终止报告（SHALL NOT 重新生成或重复一份）报告终止原因，SHALL NOT 继续执行 apply。`reviewMode = "code-only"` 或 `"off"` 时 SHALL 跳过本关卡，并打印显式状态行（形如 `[跳过] review-plan（reviewMode=<取值>）`），SHALL NOT 静默跳过。
+1. **review-plan 关卡（仅 `full` / `plan-only`）**：自动调用 `/ly:review-plan <change-name>`（审查对象为 propose 阶段 commit；按 `ly-review-gates` 的机制执行）。以**正常清零**结束时自动进入下一步——"正常清零"的定义以 `ly-review-gates` 为准（Critical 数为 0 **且**首轮标注为「是」的 Warning 条目已全部确认修复）；以其余任一种终止（熔断、驳回硬线、无法安全修复、验证失败、审查调用失败、提交失败、达到全局轮数上限）时，SHALL 停止流水线，复用该循环已产出的终止报告（SHALL NOT 重新生成或重复一份）报告终止原因，SHALL NOT 继续执行 apply。`reviewMode = "code-only"` 或 `"off"` 时 SHALL 跳过本关卡，并打印显式状态行（形如 `[跳过] review-plan（reviewMode=<取值>）`），SHALL NOT 静默跳过。
 2. **节点前置校验（进入 apply 前，仅 `full` / `plan-only`）**：进入 apply 之前 SHALL 校验 review-plan 是否以"正常清零结束"收尾——判据为**本会话记录的 review-plan 循环终止类型 == 正常清零**且无未决人工介入项（不依赖清零报告文件等会话外 artifact）。校验 SHALL 在该节点显式打印一行校验结论（含依据：终止类型、是否无未决项），校验不过时复用 review-plan 已产出的终止报告说明阻断原因，SHALL NOT 硬闯 apply。第 1 步跳过 review-plan 时本节一并跳过。
 3. **apply**：自动执行 `/ly:apply <change-name>`（实施主体按 `codingExecutor` 决定，见 `ly-lifecycle-commands`；apply 在任何 `reviewMode` 取值下都执行）。apply 实施完成并提交后，主会话 SHALL 记录本次 apply 提交后的 HEAD SHA（`git rev-parse HEAD`）。
 4. **节点前置校验（进入 review-code 前，仅 `full` / `code-only`）**：进入 `/ly:review-code <change-name>` 之前 SHALL 按 `commit-conventions` 的定位规约取最近一期 apply 阶段 commit 的 SHA（trailer 优先，旧前缀 `^apply: <change-name>` 回退），并校验其**等于本次 apply 运行记录的 SHA**——历史存在旧 apply commit 不得绕过本次校验。校验不过（SHA 不符、commit 缺失或实施阶段未正常收尾）SHALL 停在该节点如实报告，SHALL NOT 硬闯 review-code。review-code 关卡被跳过时本节一并跳过。
-5. **review-code 关卡（仅 `full` / `code-only`）**：自动进入 `/ly:review-code <change-name>`（审查对象为 apply 阶段 commit；同样按 `ly-review-gates` 的机制执行）。以 Critical 清零结束；以其余任一种终止时，SHALL 停止流水线，报告终止原因。`reviewMode = "plan-only"` 或 `"off"` 时 SHALL 跳过本关卡，并打印显式状态行（形如 `[跳过] review-code（reviewMode=<取值>）`），SHALL NOT 静默跳过。
+5. **review-code 关卡（仅 `full` / `code-only`）**：自动进入 `/ly:review-code <change-name>`（审查对象为 apply 阶段 commit；同样按 `ly-review-gates` 的机制执行）。以**正常清零**结束（定义同上）；以其余任一种终止时，SHALL 停止流水线，报告终止原因。`reviewMode = "plan-only"` 或 `"off"` 时 SHALL 跳过本关卡，并打印显式状态行（形如 `[跳过] review-code（reviewMode=<取值>）`），SHALL NOT 静默跳过。
 
 `reviewMode = "off"` 时两个审查关卡均被跳过，apply 仍执行，流水线在 apply 阶段 commit 后结束。流水线执行过程中 SHALL NOT 出现任何 worktree 询问或 `/ly:worktree switch` 调用；`/ly:archive` SHALL 仍由用户手动触发，propose 不自动归档。
 
@@ -137,6 +137,11 @@
 #### Scenario: 全自动路径下 review-code 非清零终止即停
 - **WHEN** 全自动路径下 `reviewMode` 含代码审查，实施完成后 `/ly:review-code` 的审查-修复循环非清零终止
 - **THEN** 命令停止，报告终止原因，不再继续；未自动归档
+
+#### Scenario: 首轮零 Critical 但存在「是」条目时仍按正常清零推进
+
+- **WHEN** 全自动路径下 review-plan（或 review-code）首轮 Critical 数为 0，但存在 1 条标注为「是」的 Warning，当前会话修复后第 2 轮复审确认已解决
+- **THEN** 该循环以正常清零结束，流水线按正常清零推进（进入 apply 或结束流水线），SHALL NOT 因"首轮零 Critical"或"本轮曾出现 Warning"而误判为非正常终止
 
 ### Requirement: 手动路径下询问是否要跑 review-plan，且全程不再问 worktree
 `/ly:propose` 在"手动"路径下，propose 阶段 commit 完成后 SHALL 按当前宿主的 `reviewMode`（未配置、空白或非法取值等价 `"full"`；见 `subagent-agent-config`）决定是否发起 review-plan 询问：
