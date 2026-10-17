@@ -22,6 +22,32 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 循环执行期间默认不提交；仅当循环以"正常清零"结束时，才对审查目标全部文件（该 change 的 artifact 与 delta spec，含编排方已暂存的产物与循环修复）统一提交一次（见步骤 5）。传入 `--no-commit` 时，连这次最终的统一提交也不做。
 
+## 判级标准（先定级，再写条目）
+
+同一类问题两次跑出不同级别会让流程行为不可预期，因此按下面规则定级；判断对象始终是文档本身，不是"实施还没开始"。
+
+**Critical（必须修复；不修不放行）——满足任一即判 Critical：**
+
+1. **行为声明完全未覆盖**：`proposal.md` 的 What Changes 里声明了某项行为，但对应 delta spec 的 Requirement/Scenario 完全找不到覆盖它的条目（"spec 写得简略"不算，须确认是完全未覆盖）。
+2. **缺失 delta spec**：Capabilities 段落声明了至少一个 New/Modified Capability，但该 change 目录下没有任何 delta spec 文件。
+3. **文档互相矛盾**：`proposal.md` / `design.md` / `tasks.md` / delta spec 对同一行为给出互相冲突的结论。
+4. **方案不可实施**：依赖的接口 / 数据 / 权限在现有系统中不存在，且文档没有给出任何获取路径或替代方案。
+5. **可证实的范围缺口**：文档已明确会改动 X，却遗漏 X 的下游受影响面（调用方 / 迁移 / 回滚），且该遗漏可由文档内信息直接证实。
+
+**Warning（建议修复，不阻断）——不满足 Critical 但值得改：**
+
+风险点或 Trade-off 交代不足、`tasks.md` 拆解粒度不理想、需要人工决策的开放问题未在文档中显式标注、spec 的 Scenario 不够具体（但 Requirement 已覆盖）、术语或结构不统一。
+
+**Info（供参考，不影响交付判断）——**
+
+润色类建议与可选补充。
+
+**防漂移约束：**
+
+- "代码库尚未实现该方案条目"、"`tasks.md` 中某任务未勾选"、"还没跑起来 / 还没测试通过"都是方案审查阶段的正常状态，SHALL NOT 判 Critical。
+- 无法在文档自身范围内证实的问题（缺信息、需要额外上下文才能判断），SHALL NOT 判 Critical；降为 Warning 并写明缺什么信息。
+- 同一问题只报一次，取最高适用级别，SHALL NOT 跨级重复列出。
+
 ## 步骤
 
 ### 1. 解析目标 change
