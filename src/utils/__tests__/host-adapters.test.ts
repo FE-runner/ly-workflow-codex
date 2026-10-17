@@ -435,6 +435,29 @@ describe('host-specific role prompt source', () => {
     for (const name of ['review-plan', 'review-code'])
       expect(renderHostCommand('claude', name)).not.toContain('prompts/codex')
   })
+
+  const ROLE_PROMPT_RUBRIC_PAIRS: Array<[string, string, string]> = [
+    ['代码审查', 'templates/hosts/codex/prompts/reviewer.md', 'templates/hosts/claude/agents/lyx-reviewer.md'],
+    ['方案审查', 'templates/hosts/codex/prompts/plan-reviewer.md', 'templates/hosts/claude/agents/lyx-plan-reviewer.md'],
+  ]
+
+  /** 抽取 `## 判级标准` 小节正文（到下一个 `## ` 标题为止），用于跨宿主一致性比对 */
+  function rubricSection(markdown: string): string {
+    const start = markdown.indexOf('## 判级标准')
+    expect(start, '角色词缺少 `## 判级标准` 小节').toBeGreaterThanOrEqual(0)
+    const rest = markdown.slice(start)
+    const end = rest.indexOf('\n## ', 1)
+    return (end === -1 ? rest : rest.slice(0, end)).trim()
+  }
+
+  it.each(ROLE_PROMPT_RUBRIC_PAIRS)('%s 角色词在两个宿主声明同一份判级标准', (_label, codexPath, claudePath) => {
+    const codexRubric = rubricSection(readFileSync(join(PACKAGE_ROOT, codexPath), 'utf-8'))
+    const claudeRubric = rubricSection(readFileSync(join(PACKAGE_ROOT, claudePath), 'utf-8'))
+    expect(claudeRubric).toBe(codexRubric)
+    // rubric 必须真的定义三级与防漂移约束，而不是空壳标题
+    for (const heading of ['**Critical', '**Warning', '**Info']) expect(codexRubric, heading).toContain(heading)
+    expect(codexRubric).toContain('SHALL NOT 判 Critical')
+  })
 })
 
 // ─────────────────────────────────────────────────────────────
