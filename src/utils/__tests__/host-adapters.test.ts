@@ -154,6 +154,9 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       expect(content, name).toContain('必须判「否」')
       expect(content, name).toContain('第 3 轮起新增影响项')
       expect(content, name).not.toContain('只消费首轮')
+      // 判同键必须显式指向终止条件 2，而不是悬空的"上一条 Critical"
+      expect(content, name).toContain('判同键见终止条件 2')
+      expect(content, name).not.toContain('上一条 Critical')
       // 覆盖标注须留痕
       expect(content, name).toContain('SHALL 可覆盖审查者的标注')
       // TASK 层同样要求标注，避免判据在 TASK 层落空

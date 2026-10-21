@@ -178,6 +178,35 @@ describe('menu 子代理配置入口 (host-subagent-model-config)', () => {
     })
   })
 
+  it('reviewMode=off：跳过 review 侧提问、既有值原样保留，coding 侧照常采集', async () => {
+    state.installed = ['claude']
+    state.host = {
+      reviewMode: 'plan-only',
+      reviewExecutor: 'subagent',
+      reviewModel: 'claude-sonnet-5-5',
+      reviewReasoningEffort: 'xhigh',
+      codingExecutor: 'main',
+    }
+    state.answers = [
+      { pick: 'off' },
+      { pick: 'main' },
+    ]
+    await configExecutorsAndModels()
+    expect(state.answers).toEqual([])
+    const messages = state.prompts.map(p => String(p.message))
+    expect(messages.some(m => m.includes('reviewExecutor'))).toBe(false)
+    expect(messages.some(m => m.includes('reviewModel'))).toBe(false)
+    expect(messages.some(m => m.includes('reviewReasoningEffort'))).toBe(false)
+    expect(state.writes).toHaveLength(1)
+    expect(state.writes[0].hostSection).toMatchObject({
+      reviewMode: 'off',
+      reviewExecutor: 'subagent',
+      reviewModel: 'claude-sonnet-5-5',
+      reviewReasoningEffort: 'xhigh',
+      codingExecutor: 'main',
+    })
+  })
+
   it('未修改任何字段时不写回、不重渲染', async () => {
     state.installed = ['claude']
     state.host = { reviewExecutor: 'main', codingExecutor: 'main' }
