@@ -79,7 +79,7 @@ argument-hint: '<需求描述>'
 
 读取 `@openspec-propose skill`（opsx propose 编排 prompt）并按其定义的完整流程，围绕 `参数`（需求描述）生成 proposal/design/tasks 全部 artifacts。生成过程中遵循该编排 prompt 的全部步骤与约束（本命令的步骤 4-9 在其后继续编排）。
 
-**测试模式与风险策略适配（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 的 `[host].testMode`；配置缺失、不可读或解析失败时停止并提示运行 `lycx doctor`。
+**测试模式与风险策略适配（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 的 `[host].testMode`；配置缺失、不可读或解析失败时停止并提示运行 `lycx doctor`。配置文件可读但字段缺失、空白或非法时按 `normal` 处理。
 
 `testMode = "off"` 时 SHALL NOT 生成测试文件、测试修改或测试命令任务；行为或契约所需 spec 仍照常生成，tasks 的验证限定为 typecheck、build、视觉检查或其他非测试检查。
 

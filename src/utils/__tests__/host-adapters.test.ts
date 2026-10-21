@@ -367,6 +367,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(fix).toContain('testMode = "off"')
     expect(fix).toContain('SHALL NOT 运行任何测试命令')
     expect(fix).toContain('配置缺失、不可读或解析失败时 SHALL 停止')
+    expect(fix).toContain('字段缺失、空白或非法时按 `normal` 处理')
     // 五项自审 + 对称清单
     for (const item of ['① 修对了吗', '② spec 一致吗', '③ 漏改了吗', '④ 改多了吗', '⑤ 验证充分吗'])
       expect(fix, item).toContain(item)
@@ -396,12 +397,14 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(propose).toContain('仍按机械断链处理')
     expect(propose).toContain('testMode = "off"')
     expect(propose).toContain('SHALL NOT 生成测试文件、测试修改或测试命令任务')
+    expect(propose).toContain('字段缺失、空白或非法时按 `normal` 处理')
   })
 
   it('apply and archive templates honor no-test mode', () => {
     const apply = read('apply.md')
     expect(apply).toContain('testMode = "off"')
     expect(apply).toContain('测试专用任务跳过并输出 `[跳过] <任务>（testMode=off）`')
+    expect(apply).toContain('`- [x]` 且注明 `（testMode=off，已跳过）`')
     expect(apply).toContain('混合任务只跳过测试部分')
 
     const archive = read('archive.md')
@@ -409,6 +412,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(archive).toContain('跳过测试类别')
     expect(archive).toContain('testMode=off，测试已跳过')
     expect(archive).toContain('仍执行类型检查 / 构建')
+    expect(archive).toContain('字段缺失、空白或非法时按 `normal` 处理')
   })
 
   it('explore convergence hint routes small changes to fix and others to propose', () => {

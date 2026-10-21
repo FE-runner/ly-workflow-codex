@@ -14,7 +14,7 @@ argument-hint: '[<change-name>]'
 
 ## 归档前完整验证（SHALL，先于任何归档动作）
 
-在委托 OpenSpec 归档流程**之前**，读取 `{{LYX_CONFIG_FILE}}` 的 `[host].testMode`。配置缺失、不可读或解析失败时 SHALL 停止归档并提示运行 `lycx doctor`。
+在委托 OpenSpec 归档流程**之前**，读取 `{{LYX_CONFIG_FILE}}` 的 `[host].testMode`。配置缺失、不可读或解析失败时 SHALL 停止归档并提示运行 `lycx doctor`；配置文件可读但字段缺失、空白或非法时按 `normal` 处理。
 
 - `testMode = "normal"`：对当前工作区执行一次项目完整验证，覆盖测试 / 类型检查 / 构建三类。
 - `testMode = "off"`：跳过测试类别，仍执行类型检查 / 构建，并在报告中明确注明“testMode=off，测试已跳过”。

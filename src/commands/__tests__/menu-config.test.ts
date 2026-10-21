@@ -66,6 +66,24 @@ beforeEach(() => {
 })
 
 describe('menu 子代理配置入口 (host-subagent-model-config)', () => {
+  it('testMode=off：独立写回无测试模式，不影响审查配置采集', async () => {
+    state.installed = ['codex']
+    state.host = { reviewExecutor: 'main', codingExecutor: 'main' }
+    state.answers = [
+      { pick: 'off' },
+      { pick: 'full' },
+      { pick: 'main' },
+      { pick: 'main' },
+    ]
+    await configExecutorsAndModels()
+    expect(state.writes[0].hostSection).toEqual({
+      testMode: 'off',
+      reviewMode: 'full',
+      reviewExecutor: 'main',
+      codingExecutor: 'main',
+    })
+  })
+
   it('codex：采集六个字段并写回，写回后重渲染产物', async () => {
     state.installed = ['codex']
     state.host = { reviewExecutor: 'main', codingExecutor: 'main' }

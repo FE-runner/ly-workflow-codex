@@ -42,7 +42,7 @@ SHALL NOT 在未给出分流结论的情况下开始实施。
 
 ### 3. 实施（按测试风险执行）
 
-实施前 SHALL 读取 `{{LYX_CONFIG_FILE}}` 的 `[host].testMode`。配置缺失、不可读或解析失败时 SHALL 停止并提示运行 `lycx doctor`，SHALL NOT 静默按 `normal` 继续。
+实施前 SHALL 读取 `{{LYX_CONFIG_FILE}}` 的 `[host].testMode`。配置缺失、不可读或解析失败时 SHALL 停止并提示运行 `lycx doctor`，SHALL NOT 静默按 `normal` 继续；配置文件可读但字段缺失、空白或非法时按 `normal` 处理。
 
 - `testMode = "off"`：SHALL NOT 新增或修改测试文件、SHALL NOT 生成测试任务、SHALL NOT 运行任何测试命令；行为或契约改动仍正常实施，并改用类型检查、构建或其他非测试验证。混合任务只跳过测试部分，不跳过实现部分。
 - `testMode = "normal"`：按 `risk-based-testing-policy` 对改动单元分类并记录测试策略：

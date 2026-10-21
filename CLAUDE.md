@@ -44,7 +44,7 @@ lycx uninstall [--host <hosts>]             # 按宿主卸载（缺省 = 全部�
 ## 审查执行模型（速览）
 
 - 审查关卡 = **执行者可切换**（两个宿主语义一致；子代理机制按宿主：codex = spawn + `send_input`，Claude Code = `Agent` 工具调用 `lyx-*` 自定义子代理 + `SendMessage`，交互模式后台运行时等待语义为"结果被消费并如实报告"）：`reviewExecutor = "main"`（默认）= 主 agent 直接自审，无 spawn、无逐条裁决、无驳回硬线，最多 2 轮；`reviewExecutor = "subagent"` = 每关 spawn 1 个审查 subagent（非 fork、只携带 TASK、只审 change 范围），每条 Critical 由主会话逐条裁决——认可即修复，不认可必须附**可核验依据**；subagent 路径第 2 轮起默认 `send_input` 复用同一子代理
-- 审查范围 = **按 `reviewMode` 门控**（`full` / `plan-only` / `code-only` / `off`，未配置等价 `full`）：只决定 `@lyx-propose` 编排入口跑哪些审查关卡（`plan-only` 跳过 review-code、`code-only` 跳过 review-plan、`off` 两级都跳过；apply 始终执行），被跳过的关卡打印 `[跳过]` 状态行、其节点前置校验一并跳过；直接调用 `@lyx-review-plan` / `@lyx-review-code` 与 `@lyx-apply` / 归档前验证不受影响；`lycx init` / 菜单把 `reviewMode` 作为采集段开头一问（`off` 跳过 review 侧提问），`lycx doctor` 展示并告警非法取值与 `off` + review 侧字段非空
+- 审查范围 = **按 `reviewMode` 门控**（`full` / `plan-only` / `code-only` / `off`，未配置等价 `full`）：只决定 `@lyx-propose` 编排入口跑哪些审查关卡（`plan-only` 跳过 review-code、`code-only` 跳过 review-plan、`off` 两级都跳过；apply 始终执行），被跳过的关卡打印 `[跳过]` 状态行、其节点前置校验一并跳过；直接调用 `@lyx-review-plan` / `@lyx-review-code` 与 `@lyx-apply` / 归档前验证不受影响；`lycx init` / 菜单先采集 `testMode`，再采集 `reviewMode`（`off` 跳过 review 侧提问），`lycx doctor` 展示并告警非法取值与 `off` + review 侧字段非空
 - 软上下文 = **change 目录 `context.md`**：propose 产出（内容边界自检：无整段重复、决策可溯源、≤100 行）→ apply 维护（实施决策回写，只增不删）→ review-plan / review-code / coding subagent 消费（TASK 只传路径）
 - 测试策略 = **`risk-based-testing-policy`**：行为或契约与逻辑缺陷要求相称测试；纯 UI、文案、样式在不改变状态、事件、分支、数据流、计算或契约时可免新增测试；补充边界只记录为 `可自动修复：否` / `影响落地：否`，不自动补、不阻塞清零。archive 完整验证不变
 - 无测试模式 = **`[host] testMode = "off"`**：fix/propose/apply 不写测试、不生成测试任务、不跑测试；review 不报测试缺失类发现；archive 跳过 test 但保留 typecheck/build。配置不可读/解析失败时停止并提示 doctor，默认 `normal`

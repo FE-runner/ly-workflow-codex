@@ -48,7 +48,7 @@ argument-hint: '[<change-name>]'
 4. **范围点名（只实施 change 范围）**：任务点名"只实施 change 范围"——读取 `openspec/changes/<change-name>/tasks.md`，按需读取同目录 `proposal.md`/`design.md`/`context.md` 及任务引用的上下文文件，理解现有模式；SHALL NOT 改动范围外文件。
 5. **实施规范**（coding subagent 内部执行）：
    - 自顶向下逐任务实施，每完成一个任务立即验证：只修改任务列出的文件，不添加任务之外的功能/重构/注释；按 tasks.md 指定的验证方式运行验证（如 typecheck/build/test），失败则修复后重试，每个任务最多 3 次修复尝试；验证通过后，把 tasks.md 中对应条目从 `- [ ]` 改为 `- [x]`，继续下一个任务。
-   - `testMode = "off"` 时不新增或修改测试文件、不执行测试命令。测试专用任务跳过并输出 `[跳过] <任务>（testMode=off）`；混合任务只跳过测试部分，实现部分照常执行。
+   - `testMode = "off"` 时不新增或修改测试文件、不执行测试命令。测试专用任务跳过、输出 `[跳过] <任务>（testMode=off）`，并把 `tasks.md` 对应条目标为 `- [x]` 且注明 `（testMode=off，已跳过）`；混合任务只跳过测试部分，实现部分照常执行。
    - 不询问——任务描述有歧义时按最简方案处理，直接落地并在回传结果中说明选择。
 6. **回传不 commit**：coding subagent SHALL NOT 自行执行任何 git commit——实施完成后，将实际改动的文件清单、验证结果与逐任务完成情况回传主会话。
 
