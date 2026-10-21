@@ -49,7 +49,7 @@ lycx init --skip-prompt --host claude       # 非交互，只装指定宿主
 | `@lyx-apply` | **按 `codingExecutor` 实施**：`main`（默认）= 主 agent 直接读 tasks.md 逐任务实施 + 验证 + 勾 checkbox；`subagent` = spawn coding subagent（非 fork，经 context.md 获取软上下文 + 只实施 change 范围，模型按 `codingModel`）。两条路径均由主会话确认后回写 context.md 并统一 commit `apply: <change>`；subagent 路径环境级不可用回退主 agent，业务失败转人工 |
 | `@lyx-fix` | 小需求 / bug 轻量路径：不建 change；spec 分流（A 代码对齐 spec / B 同一 commit 就地改主 spec / C 转 `@lyx-propose`）→ 先红后绿 → 主 agent 一轮五项自审 → 最终验证门禁 → B 类提交前确认 → 单个 commit（无 Change trailer） |
 | `@lyx-archive` | 归档完成的 change（委托 `@openspec-archive-change skill`）+ 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
-| `@lyx-review-plan` | 审方案：按 `reviewExecutor` 决定主体——`main`（默认）= 主 agent 直接自审，无逐条裁决 / 驳回硬线，最多 2 轮；`subagent` = 单审查 subagent（角色词 `plan-reviewer.md`，非 fork + context.md 路径引用，模型按 `reviewModel`）分级审查 + 主会话逐条裁决，循环直到正常清零（Critical 为 0 且首轮「可自动修复：是」条目已修完）或触发终止条件（全局轮数上限 5，清零优先）。清零统一提交修复；循环结束后写 `review-findings.md` 的 `## 方案审查` 节（只收未被自动修复的 Warning） |
+| `@lyx-review-plan` | 审方案：按 `reviewExecutor` 决定主体——`main`（默认）= 主 agent 直接自审，无逐条裁决 / 驳回硬线，最多 2 轮；`subagent` = 单审查 subagent（角色词 `plan-reviewer.md`，非 fork + context.md 路径引用，模型按 `reviewModel`）分级审查 + 主会话逐条裁决，循环直到正常清零（Critical 为 0 且所有 `影响落地=是` 的 Warning 都已解决）或触发终止条件（全局轮数上限 5，清零优先）。清零统一提交修复；循环结束后写 `review-findings.md` 的 `## 方案审查` 节（只收未被自动修复的 Warning） |
 | `@lyx-review-code` | 审代码：同上（角色词 `reviewer.md`），Critical/Warning/Info 分级；循环结束后写 `review-findings.md` 的 `## 代码审查` 节（只收未被自动修复的 Warning） |
 | `@lyx-release` | GitFlow 四场景发版（feature/release/hotfix/dev-offline），SemVer 自动推导版本号；上线合并二选一（远端 PR 默认 / 本地直接合并）+ 主分支名检测（master/main） |
 | `@lyx-changelog` | 按 commit 前缀分组生成/更新 Keep a Changelog 格式的 CHANGELOG.md |

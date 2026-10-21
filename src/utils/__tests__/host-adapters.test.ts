@@ -144,14 +144,20 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       expect(content, name).toContain('改法机械')
       expect(content, name).toContain('SHALL NOT 半修')
       // 正常清零定义扩展
-      expect(content, name).toContain('且首轮标注为「可自动修复：是」的 Warning 条目已全部确认修复')
+      expect(content, name).toContain('所有 `影响落地=是` 的 Warning 都已自动修复')
       // 只消费首轮 + 未修好即降级
-      expect(content, name).toContain('自动修复条目的范围与降级（只消费首轮）')
-      expect(content, name).toContain('将其降级为「否」')
+      expect(content, name).toContain('消费判据（四象限）')
+      expect(content, name).toContain('立即停止循环转人工')
+      // 影响落地轴与四条刹车
+      expect(content, name).toContain('影响落地：是 / 否')
+      expect(content, name).toContain('必须判「是」')
+      expect(content, name).toContain('必须判「否」')
+      expect(content, name).toContain('第 3 轮起新增影响项')
+      expect(content, name).not.toContain('只消费首轮')
       // 覆盖标注须留痕
       expect(content, name).toContain('SHALL 可覆盖审查者的标注')
       // TASK 层同样要求标注，避免判据在 TASK 层落空
-      expect(content, name).toContain('每条 Warning 还须附')
+      expect(content, name).toContain('每条 Warning 还须同时附')
       // 报告分级结构未被破坏：既有 Warning 小节标题保留
       expect(content, name).toContain('## Warning（建议修复，最后一轮结果）')
     }
