@@ -346,12 +346,12 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 - **WHEN** `/ly:review-plan` 第 2 轮重新 spawn 一个全新审查 subagent（非 fork, 无会话历史）
 - **THEN** TASK 仍包含上一轮全部 Critical 逐字原文 + 路径清单 + `context.md` 路径引用（增量），不整段重新传入基线 artifact 全文；上一轮原文是审查 agent 判断"问题是否已解决"的唯一依据, SHALL NOT 因 TASK 精简而省略
 
-#### Scenario: 首轮 Critical 为 0 但存在「是」条目时进入验证轮
+#### Scenario: 首轮 Critical 为 0 但存在影响项时进入验证轮
 
 - **WHEN** 首轮 Critical 数为 0 且存在 1 条 `影响落地=是` 且 `可自动修复=是` 的 Warning，当前会话修复该条后进入下一轮
 - **THEN** 下一轮按正常清零判定（Critical 为 0 且所有影响项已解决）结束循环，并在报告与统一提交中体现该条修复
 
-#### Scenario: 首轮「是」条目在次轮仍存在时降级并结束
+#### Scenario: 首轮影响项在次轮仍存在时停止转人工
 
 - **WHEN** 首轮 1 条 `影响落地=是` 条目经修复后，下一轮审查仍判定其存在，且 Critical 数为 0（无其他 Critical）
 - **THEN** 触发条件 7（影响项熔断），循环停止转人工；该条 SHALL NOT 被降级为「否」，也不再以正常清零结束

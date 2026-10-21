@@ -166,6 +166,18 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     }
   })
 
+  it('review-code and review-plan share the same four-quadrant section', () => {
+    const extract = (name: string) => {
+      const text = read(name)
+      const start = text.indexOf('**消费判据（四象限）**')
+      const end = text.indexOf('\n### 循环终止条件', start)
+      expect(start, name).toBeGreaterThanOrEqual(0)
+      expect(end, name).toBeGreaterThan(start)
+      return text.slice(start, end).trim()
+    }
+    expect(extract('review-plan.md')).toBe(extract('review-code.md'))
+  })
+
   it('archive and explore keep their unresolved-warning calibers unchanged', () => {
     // 归档前核对按「没有任何解决子项」计数
     expect(read('archive.md')).toContain('没有任何解决子项')

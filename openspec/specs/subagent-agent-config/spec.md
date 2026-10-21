@@ -182,7 +182,7 @@
 
 ### Requirement: init 向导按"提供方 → 模型三连"采集三个模型字段
 
-**采集集合变更（自本 change 起）**：本 Requirement 标题中"模型三连/三个模型字段"为历史措辞——向导实际采集**执行者二连 + 模型二连 + 推理档覆盖选择**（`reviewExecutor`、`codingExecutor`、`reviewModel`、`codingModel` 与对应推理档覆盖选择），语义以正文为准。
+**采集集合变更（自本 change 起）**：本 Requirement 标题中"模型三连/三个模型字段"为历史措辞——向导实际采集 **`reviewMode`（审查范围）+ 执行者二连 + 模型二连 + 推理档覆盖选择**（`reviewMode`、`reviewExecutor`、`codingExecutor`、`reviewModel`、`codingModel` 与对应推理档覆盖选择），语义以正文为准。
 
 **两宿主共用的采集面**：交互 `lycx init` SHALL 对每个选定的已安装宿主采集 **执行者二连 → 模型二连 → 推理档二连**，两个宿主的候选语义、采集条件与清洗规则一致。
 
@@ -282,7 +282,7 @@
 
 ### Requirement: doctor 校验子代理模型配置（提示型）
 
-`lycx doctor` SHALL 提供"Codex 子代理模型配置"检查项，展示两个执行者字段与相关模型 / 推理档字段的当前状态，只做提示不做清单强校验。
+`lycx doctor` SHALL 提供"Codex 子代理模型配置"检查项，展示 `reviewMode`（审查范围）、两个执行者字段与相关模型 / 推理档字段的当前状态，只做提示不做清单强校验。
 
 **执行者字段**：`reviewExecutor` / `codingExecutor` 留空或 `"main"` = 通过，标注"主 agent 直接执行"；`"subagent"` = 通过，标注"spawn 独立子代理"。取值非法（非 `main` / `subagent` 的非空字符串）SHALL 输出 WARN 提示取值非法并按 `main` 处理。
 
@@ -375,7 +375,7 @@ claude 宿主的安装向导 SHALL 与 codex 宿主采用同一采集面：执�
 
 #### Scenario: reviewMode 为 off 且 review 侧字段存在时 doctor 告警
 - **WHEN** 用户配置 `reviewMode = "off"` 且 `reviewModel`（或 `reviewExecutor` / `reviewReasoningEffort`）非空，运行 `lycx doctor`
-- **THEN** 检查项展示 `reviewMode = off` 并输出 WARN 提示该 review 侧字段不生效，整体判定不因此变化
+- **THEN** 检查项展示 `reviewMode = off` 并输出 WARN 提示该 review 侧字段不生效；该检查项判定为 warn，整体判定随之变为 warn（不报 FAIL）
 
 ### Requirement: 配置摘要的 review 侧"不生效"标注按原因分流
 `lycx init` 的配置摘要 SHALL 对 review 侧模型字段（`reviewModel`）与推理档字段（`reviewReasoningEffort`）在"不生效"时按**真实原因**选择文案，SHALL NOT 把不同原因混用同一句（菜单配置入口不渲染"不生效"标注，不在本 Requirement 范围内）：

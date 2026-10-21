@@ -10,6 +10,7 @@
 1. [openspec/changes/impact-based-autofix-gate/specs/ly-review-gates/spec.md:154,159] — 两条旧 Scenario 的**名称**仍写"首轮「是」条目…"与"降级并结束"，内容已改为影响项语义；`openspec validate` 要求 MODIFIED 保留原 Scenario 名，故无法在本 change 内改名
    问题细节：名称与内容轻微不一致，读者可能误以为"降级"仍是有效路径；实际 THEN 已明确"触发条件 7，停止转人工，SHALL NOT 降级"
    建议: 归档后由后续 change 在重命名 Scenario 时一并修正（改名属于 REMOVED + ADDED，需单独 change）
+   - 解决：lyx-fix（commit 062c7f1，2026-10-21）— 主 spec 的两条 Scenario 已改名为"首轮影响项…"（主 spec 直接改，不再受 MODIFIED 保名限制）
 
 ## 代码审查
 
