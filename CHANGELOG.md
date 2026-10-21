@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0] - 2026-10-21
+
+测试义务改为按改动风险确定：纯展示改动可免新增测试，补充边界覆盖只记录不阻塞；逻辑缺陷、核心行为与契约风险仍保留原门禁。
+
+### Added
+
+- 新增共享 `risk-based-testing-policy` 能力，统一定义行为或契约改动、逻辑缺陷修复、纯展示改动与补充边界覆盖的测试义务
+- `@lyx-propose` 按风险策略生成 spec/tasks：纯展示改动可使用空 Capabilities 与 `skip_specs: true`，不机械生成 delta spec 或测试任务
+
+### Changed
+
+- `@lyx-fix` 改为按风险实施与验证：逻辑 bug 仍先红后绿，纯 UI、文案、样式可免新增自动化测试，但须执行相称的既有验证
+- `@lyx-review-plan` / `@lyx-review-code` 不再把补充边界与测试补齐作为必须自动修复项；该类 Warning 固定 `可自动修复：否` / `影响落地：否`
+- 同步 Codex / Claude 双宿主 plan-reviewer / reviewer 角色词、模板断言、AGENTS / CLAUDE 与 README 双语说明
+- `@lyx-archive` 的完整测试、类型检查与构建验证保持不变
+
+### Fixed
+
+- 补齐 review-plan 对纯展示改动与 `skip_specs` 的审查口径，消除“纯展示缺测试”应记为 Warning 还是不形成发现的文档冲突
+
 ## [0.11.0] - 2026-10-21
 
 审查自动修复改为按影响面消费；审查未修项台账清零，并修掉 2026-10 工作流问题清单。
