@@ -10,6 +10,8 @@
 
 `normal` SHALL 保持现有测试义务；`off` SHALL 启用无测试模式。该字段按宿主生效，SHALL NOT 从一个宿主的配置文件推断另一个宿主的模式。
 
+工作流读取当前宿主配置文件失败或 YAML/TOML 解析失败时，SHALL 视为“测试模式未知”并在执行任何测试文件写入、测试任务生成或测试命令前停止，明确提示运行 `lycx doctor` 检查；SHALL NOT 静默按 `normal` 继续，以免用户配置的无测试模式被绕过。
+
 #### Scenario: 未配置默认正常测试模式
 - **WHEN** 宿主配置没有 `testMode`
 - **THEN** 工作流按 `normal` 执行，现有测试义务不变
@@ -21,6 +23,10 @@
 #### Scenario: 非法值按正常模式处理并告警
 - **WHEN** `testMode` 为非空非法字符串
 - **THEN** 运行时按 `normal` 处理，`lycx doctor` 输出 WARN
+
+#### Scenario: 配置不可读时停止而不是默认运行测试
+- **WHEN** 当前宿主配置文件缺失、不可读或解析失败
+- **THEN** 工作流在测试相关动作前停止并提示运行 `lycx doctor`，不得静默按 `normal` 执行
 
 ### Requirement: testMode 的采集与展示
 
@@ -42,6 +48,8 @@
 
 行为或契约改动仍 SHALL 按需要更新 spec 或说明行为变化，但测试义务 SHALL 归零；审查 SHALL NOT 产生“缺少测试、缺少边界测试、测试覆盖不足”类 Critical / Warning / Info。`testMode = "normal"` 时 SHALL 继续适用 `risk-based-testing-policy`。
 
+若实施任务同时包含非测试实现步骤与测试步骤，`off` 时 SHALL 保留并执行非测试实现部分，只跳过测试部分；SHALL NOT 因同一任务含测试字样而跳过整个实现任务。
+
 #### Scenario: fix 在无测试模式不写测试
 - **WHEN** `testMode = "off"` 且用户运行 `@lyx-fix`
 - **THEN** 命令不新增或修改测试文件、不运行测试命令，改用类型检查或构建验证实现改动
@@ -53,6 +61,10 @@
 #### Scenario: apply 跳过已有的测试专用任务
 - **WHEN** `testMode = "off"` 且 tasks 中仍有测试专用步骤
 - **THEN** `@lyx-apply` 跳过该步骤、输出显式 `[跳过]` 状态并记录原因，不执行测试命令
+
+#### Scenario: 混合任务只跳过测试部分
+- **WHEN** `testMode = "off"` 且单个任务同时包含代码实现与测试补充
+- **THEN** `@lyx-apply` 完成代码实现部分，只跳过测试补充部分并记录
 
 #### Scenario: review 不报告缺测试
 - **WHEN** `testMode = "off"` 且 review-plan / review-code 审查实现

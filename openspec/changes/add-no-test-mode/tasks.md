@@ -15,8 +15,8 @@
 
 ## 4. 工作流模板
 
-- [ ] 4.1 更新 `templates/skills/fix.md`：读取 `testMode`，off 时不写测试文件、不运行测试命令，仍执行 typecheck/build；验证模板包含 normal/off 两路和 `@lyx-fix` 最小配置读取例外
-- [ ] 4.2 更新 `templates/skills/propose.md` 与 `templates/skills/apply.md`：off 时不生成测试任务，apply 跳过测试专用步骤并输出 `[跳过] ...（testMode=off）`；验证模板断言
+- [ ] 4.1 更新 `templates/skills/fix.md`：读取 `testMode`，off 时不写测试文件、不运行测试命令，仍执行 typecheck/build；配置不可读/解析失败时停止并提示 doctor；验证模板包含 normal/off 两路、失败路径和 `@lyx-fix` 最小配置读取例外
+- [ ] 4.2 更新 `templates/skills/propose.md` 与 `templates/skills/apply.md`：off 时不生成测试任务，apply 跳过测试专用步骤并输出 `[跳过] ...（testMode=off）`，混合任务只跳过测试部分；验证模板断言
 - [ ] 4.3 更新 `templates/skills/review-plan.md`、`review-code.md` 与四份双宿主 reviewer 角色词：off 时抑制全部测试相关发现但保留非测试门禁；验证 shared template / Codex / Claude rubric 逐字一致
 - [ ] 4.4 更新 `templates/skills/archive.md`：off 时跳过 test，保留 typecheck/build，并明确报告“testMode=off，测试已跳过”；验证模板断言
 
@@ -27,6 +27,6 @@
 
 ## 6. 回归与门禁
 
-- [ ] 6.1 扩展 `src/utils/__tests__/host-adapters.test.ts`，覆盖 fix/propose/apply/archive/review 的 testMode=off 文本规则，以及 `@lyx-fix` 不读取 review/coding 配置的边界；运行 focused Vitest
+- [ ] 6.1 扩展 `src/utils/__tests__/host-adapters.test.ts`，覆盖 fix/propose/apply/archive/review 的 testMode=off 文本规则、配置读取失败停止、混合任务保留实现，以及 `@lyx-fix` 不读取 review/coding 配置的边界；运行 focused Vitest
 - [ ] 6.2 运行 `pnpm test`、`pnpm typecheck`、`pnpm build`，确认全部通过
 - [ ] 6.3 运行 `openspec validate --changes add-no-test-mode --strict`，确认 change 结构通过
