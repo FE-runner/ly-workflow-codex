@@ -191,6 +191,18 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(fix).not.toContain('SHALL NOT 写 `context.md` 或 `review-findings.md`')
   })
 
+  it('workflow templates carry the 2026-10 issue fixes', () => {
+    const explore = read('explore.md')
+    expect(explore).toContain('find openspec/changes -maxdepth 2')
+    expect(explore).not.toContain('ls openspec/changes/*/review-findings.md')
+    const propose = read('propose.md')
+    expect(propose).toContain('git rev-parse --verify HEAD')
+    expect(propose).toContain('chore: 暂存工作区改动')
+    const init = read('init.md')
+    expect(init).toContain('outside-project')
+    expect(init).toContain('root.path')
+  })
+
   it('only the propose template gates review gates by reviewMode (review/apply/archive stay config-independent)', () => {
     const propose = read('propose.md')
     expect(propose).toContain('reviewMode')

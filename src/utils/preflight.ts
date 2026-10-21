@@ -1,7 +1,8 @@
 import type { ExecFileOptions } from 'node:child_process'
 import type { HostId } from './host-adapters'
 import { execFile, spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
+import { isAbsolute, relative, resolve } from 'node:path'
 import ansis from 'ansis'
 import inquirer from 'inquirer'
 import { join } from 'pathe'
@@ -28,7 +29,7 @@ export interface OpenspecCliStatus {
 
 export type OpenspecCliInspectionStatus = 'ok' | 'missing' | 'unhealthy'
 export type OpenspecSkillsInspectionStatus = 'project-ready' | 'global-only' | 'missing' | 'unknown'
-export type OpenspecRootInspectionStatus = 'healthy' | 'missing' | 'unhealthy' | 'not-checked'
+export type OpenspecRootInspectionStatus = 'healthy' | 'missing' | 'unhealthy' | 'outside-project' | 'not-checked'
 
 export interface OpenspecSkillRoot {
   scope: 'project' | 'global'
@@ -59,6 +60,10 @@ export interface OpenspecRootInspection {
   status: OpenspecRootInspectionStatus
   doctor?: unknown
   error?: string
+  /** doctor 报告的 root 路径（outside-project 时用于提示） */
+  rootPath?: string
+  /** 当前项目顶层（git toplevel，失败时 cwd） */
+  projectRoot?: string
 }
 
 export type OpenspecAction
@@ -301,6 +306,26 @@ export async function resolveInspectHosts(explicit?: HostId[]): Promise<HostId[]
   return installed.length > 0 ? installed : listRegisteredHosts()
 }
 
+function safeRealpath(p: string): string {
+  try {
+    return realpathSync(p)
+  }
+  catch {
+    return resolve(p)
+  }
+}
+
+function isWithinProject(projectRoot: string, target: string): boolean {
+  const rel = relative(safeRealpath(projectRoot), safeRealpath(target))
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+async function resolveProjectRoot(cwd: string): Promise<string> {
+  const result = await execFileText('git', ['rev-parse', '--show-toplevel'], { cwd })
+  const top = result.ok ? result.stdout.trim() : ''
+  return top || cwd
+}
+
 async function inspectOpenspecRoot(cwd: string, cli: OpenspecCliStatus): Promise<OpenspecRootInspection> {
   if (!cli.installed)
     return { status: 'not-checked' }
@@ -325,10 +350,15 @@ async function inspectOpenspecRoot(cwd: string, cli: OpenspecCliStatus): Promise
     }
   }
 
-  const rootHealthy = (doctor as { root?: { healthy?: boolean } } | undefined)?.root?.healthy
-  return rootHealthy === true
-    ? { status: 'healthy', doctor }
-    : { status: 'unhealthy', doctor }
+  const rootInfo = (doctor as { root?: { healthy?: boolean, path?: string } } | undefined)?.root
+  if (rootInfo?.healthy !== true)
+    return { status: 'unhealthy', doctor }
+  if (!rootInfo.path)
+    return { status: 'healthy', doctor }
+  const projectRoot = await resolveProjectRoot(cwd)
+  return isWithinProject(projectRoot, rootInfo.path)
+    ? { status: 'healthy', doctor, rootPath: rootInfo.path, projectRoot }
+    : { status: 'outside-project', doctor, rootPath: rootInfo.path, projectRoot }
 }
 
 export async function inspectOpenspec(options?: { cwd?: string, hosts?: HostId[] }): Promise<OpenspecInspection> {
@@ -352,12 +382,12 @@ export async function inspectOpenspec(options?: { cwd?: string, hosts?: HostId[]
   if (skills.status === 'global-only')
     actions.push({ kind: 'warn-global-only' })
   if (skills.status === 'missing') {
-    if (root.status === 'missing')
+    if (root.status === 'missing' || root.status === 'outside-project')
       actions.push({ kind: 'init-root', hosts })
     else
       actions.push({ kind: 'repair-skills', strategy: 'init', hosts: hostsWithStatus(skills, 'missing') })
   }
-  if (root.status === 'missing' && !actions.some(a => a.kind === 'init-root'))
+  if ((root.status === 'missing' || root.status === 'outside-project') && !actions.some(a => a.kind === 'init-root'))
     actions.push({ kind: 'init-root', hosts })
   if (root.status === 'unhealthy')
     actions.push({ kind: 'report-root', doctor: root.doctor })
@@ -456,6 +486,10 @@ export function printOpenspecInspection(inspection: OpenspecInspection): void {
   if (inspection.root.status === 'missing') {
     console.log(ansis.yellow(`⚠ ${i18n.t('common:preflight.rootMissing')}`))
   }
+  else if (inspection.root.status === 'outside-project') {
+    console.error(ansis.red(`✗ ${i18n.t('common:preflight.rootOutsideProject', { root: inspection.root.rootPath ?? '', project: inspection.root.projectRoot ?? '' })}`))
+    console.log(ansis.gray(`  ${i18n.t('common:preflight.repairHint', { cmd: 'openspec init' })}`))
+  }
   else if (inspection.root.status === 'unhealthy') {
     console.error(ansis.red(`✗ ${i18n.t('common:preflight.rootUnhealthy')}`))
   }
@@ -496,12 +530,12 @@ export async function ensureOpenspec(options?: OpenspecEnsureOptions): Promise<O
 
   const toolsOf = (hosts: HostId[]) => hosts.map(h => getAdapter(h).openspecTool).join(',')
 
-  if (inspection.root.status === 'missing') {
+  if (inspection.root.status === 'missing' || inspection.root.status === 'outside-project') {
     const tools = toolsOf(targets)
     const initResult = await execFileText('openspec', ['init', '--tools', tools, '--no-animation'], { cwd })
     executed.push(`init-root:openspec init --tools ${tools}`)
     inspection = await inspect()
-    if (!initResult.ok && inspection.root.status === 'missing')
+    if (!initResult.ok && (inspection.root.status === 'missing' || inspection.root.status === 'outside-project'))
       return { inspection, executed }
   }
 

@@ -19,6 +19,8 @@ argument-hint: '<需求描述>'
 再检测当前是否已处于某个 worktree 内：比较 `git rev-parse --git-dir` 与 `--git-common-dir`（路径先 realpath 归一化再比较），并排除子模块误判（`git rev-parse --show-superproject-working-tree`）。
 
 - **已在 worktree 内** → 跳过隔离方式询问，捕获 `ISOLATION=worktree`、`DEVELOPMENT_BRANCH="$SOURCE_BRANCH"`、`WORKTREE_PATH="$(git rev-parse --show-toplevel)"`、`ISOLATION_SOURCE_BRANCH=null`，直接进入步骤 2。
+**unborn branch 预检（SHALL）**：呈现隔离选项前执行 `git rev-parse --verify HEAD >/dev/null 2>&1`；失败（仓库尚无任何提交）时，"隔离 worktree"选项 SHALL 标注不可用并说明需先创建 baseline commit，"本项目切新分支"与"留在当前分支"照常可选。
+
 - **不在任何 worktree 内** → 直接向用户提问一次（三选一；已在某个开发分支上时照常询问，不因当前分支非默认分支而跳过）：
 
   ```
@@ -59,7 +61,7 @@ argument-hint: '<需求描述>'
        三种选择均直接执行（风险已写入文案，不二次确认）；处置动作失败（提交失败、stash 失败等）→ **如实报错停止编排，不自动兜底**。
     3. 执行 `git checkout -b <开发分支名>`（从当前 HEAD 建新分支并切换）。本路径**不运行 baseline 验证**（同一工作目录、同一 env、同一 node_modules，baseline 验证的"全新 worktree 可用性"前提不成立）、**不切换会话工作目录**、**不打印兜底续接命令**（无目录切换即无会话断链风险）。分支名已存在或非法导致 `git checkout -b` 失败时，**如实报错停止编排转人工**（不自动改名、不自动 stash），change 尚未生成。
     4. 进入步骤 2，后续编排（opsx:propose → 自审 → commit → 流水线）在当前工作目录原位继续。
-  - **留在当前分支**：捕获 `ISOLATION=none`、`ISOLATION_SOURCE_BRANCH="$SOURCE_BRANCH"`、`DEVELOPMENT_BRANCH=null`；不创建 worktree、不切换分支，直接进入步骤 2。若 `git status --porcelain` 按同一规则忽略进行中快照后仍非空，触发与"本项目切新分支"相同的脏改动三选一处置询问（其中 Stash 选项因无切换动作**不自动 pop**——改动收进 stash 由用户日后 `git stash pop` 自取，执行时如实说明；WIP commit 选项将改动提交到当前分支，message 与暂存命令（含快照排除）沿用同一文案）。
+  - **留在当前分支**：捕获 `ISOLATION=none`、`ISOLATION_SOURCE_BRANCH="$SOURCE_BRANCH"`、`DEVELOPMENT_BRANCH=null`；不创建 worktree、不切换分支，直接进入步骤 2。若 `git status --porcelain` 按同一规则忽略进行中快照后仍非空，触发与"本项目切新分支"相同的脏改动三选一处置询问（其中 Stash 选项因无切换动作**不自动 pop**——改动收进 stash 由用户日后 `git stash pop` 自取，执行时如实说明；WIP commit 选项将改动提交到当前分支，提交首行用 `chore: 暂存工作区改动`（区别于切分支路径的 `chore(wip): 切分支前暂存工作区改动`），暂存命令与快照排除沿用同一规则）。
 
 **隔离动作成功后的公共失败路径**：从步骤 1 捕获/创建隔离环境成功开始，步骤 2-4 任一后续中止、失败或用户取消时，命令 SHALL 报告 `ISOLATION`、`DEVELOPMENT_BRANCH`、`WORKTREE_PATH` 与“已保留、未清理”的状态，SHALL NOT 自动合并或删除。
 

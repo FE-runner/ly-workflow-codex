@@ -75,7 +75,7 @@ src/utils/                   共享层（不出现宿主名与宿主路径）
   installer.ts               安装 / 卸载主流程：按宿主遍历适配器，结果按宿主记录
   installer-template.ts      PACKAGE_ROOT 解析、宿主片段注入、~/ 展开、共享变量
   installer-data.ts          15 个命令注册
-  preflight.ts               OpenSpec 三层检查（CLI + skills + root）：skills 按宿主判定、整体取最差；
+  preflight.ts               OpenSpec 三层检查（CLI + skills + root）：skills 按宿主判定、整体取最差；root 必须位于项目顶层之下（否则 outside-project）；
                              修复按宿主传 --tools；无宿主配置时只读诊断
   fs-helpers.ts platform.ts version.ts package-meta.ts
 

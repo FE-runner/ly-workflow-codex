@@ -13,8 +13,8 @@ argument-hint: '[<想探索的问题或想法>]'
 在委托 `@openspec-explore` **之前**，先扫描 active 与 archive 两个位置的快照：
 
 ```bash
-ls openspec/changes/*/review-findings.md 2>/dev/null
-ls openspec/changes/archive/*/review-findings.md 2>/dev/null
+find openspec/changes -maxdepth 2 -name review-findings.md 2>/dev/null
+find openspec/changes/archive/ -maxdepth 2 -name review-findings.md 2>/dev/null
 ```
 
 命中后 SHALL 读取每份快照，判定每条 Warning 是否已解决：Warning 顶层编号条目下存在至少一条 `- 解决：` 子项（跨 change 解决说明或本 change 内就地标注均可）即为**已解决**，否则为**未解决**。本命令只展示未解决条目——已解决条目 SHALL NOT 展示、SHALL NOT 计数，也 SHALL NOT 提供展开已隐藏条目的入口。

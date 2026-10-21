@@ -23,3 +23,10 @@
 - `ensure` 修复后要重新检查 root，不能只看 init 命令退出码。
 - `@lyx-init` 不能只看 `healthy`，还要校验 `root.path` 位置。
 - 纯模板与 CLI 混合改动，慢验证统一由归档前关卡执行。
+
+## 实施决策（apply 阶段回写）
+
+- `outside-project` 作为独立 root 状态接入 preflight 类型、inspect、actions、ensure、print 与 i18n；项目顶层用 `git rev-parse --show-toplevel`，失败回退 cwd，路径比较前 `realpathSync` 归一化。
+- `ensure` 把 `outside-project` 与 `missing` 同等对待，执行 `init-root` 后重新 inspect；只读路径只报告并给 `openspec init` 指引。
+- explore 改 `find`（archive 路径保留尾斜杠以兼容既有断言）；propose 增加 unborn HEAD 预检与 `chore: 暂存工作区改动` 文案；init 增加 root 位置校验与"先 init 再 ensure"规范顺序。
+- 验证：`pnpm typecheck` / `pnpm test`（398 passed）/ `pnpm build` 全绿；新增 preflight 两个状态单测与模板断言。

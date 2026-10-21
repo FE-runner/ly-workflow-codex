@@ -23,6 +23,7 @@ const zhCN = {
       skillsUnknown: '无法读取 OpenSpec workflow profile，skills 状态未知（WARN）',
       skillsMissingCodex: 'codex 宿主缺少 openspec-* skills——运行 openspec init 安装到 ~/.agents/skills/ 或项目 .agents/skills/',
       rootMissing: 'OpenSpec root 未初始化——运行 @lyx-init 完成 openspec init',
+      rootOutsideProject: 'OpenSpec root 位于项目之外（{{root}}），项目顶层为 {{project}}——在项目内运行 openspec init 后重试',
       rootUnhealthy: 'OpenSpec root 不健康——运行 openspec doctor --json 查看 fix 建议',
     },
     doctor: {
@@ -34,6 +35,7 @@ const zhCN = {
       skillsMissing: '缺失：{{list}}',
       rootHealthy: '健康',
       rootMissing: '未初始化（运行 @lyx-init）',
+      rootOutsideProject: '位于项目之外',
       rootUnhealthy: '不健康（运行 openspec doctor --json）',
       rootNotChecked: '未检查（openspec CLI 不可用）',
     },
@@ -354,6 +356,7 @@ const en: typeof zhCN = {
       skillsUnknown: 'Unable to read the OpenSpec workflow profile; skills status is unknown (WARN)',
       skillsMissingCodex: 'codex host is missing the openspec-* skills — run openspec init to install them into ~/.agents/skills/ or the project .agents/skills/',
       rootMissing: 'OpenSpec root is not initialized — run @lyx-init to complete openspec init',
+      rootOutsideProject: 'OpenSpec root is outside the project ({{root}}); project root is {{project}} — run openspec init inside the project and retry',
       rootUnhealthy: 'OpenSpec root is unhealthy — run openspec doctor --json for fix guidance',
     },
     doctor: {
@@ -365,6 +368,7 @@ const en: typeof zhCN = {
       skillsMissing: 'missing: {{list}}',
       rootHealthy: 'healthy',
       rootMissing: 'not initialized (run @lyx-init)',
+      rootOutsideProject: 'outside the project',
       rootUnhealthy: 'unhealthy (run openspec doctor --json)',
       rootNotChecked: 'not checked (openspec CLI unavailable)',
     },
