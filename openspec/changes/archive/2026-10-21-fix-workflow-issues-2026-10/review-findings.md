@@ -10,10 +10,12 @@
 1. [openspec/specs/worktree-create-before-propose/spec.md:22,69] — 既有正文与 Scenario 仍写旧 WIP 文案 `wip: 切分支前暂存工作区改动`，与新模板的 `chore(wip): ...` 不一致；本 change 的 ADDED Requirement 已声明对其为权威，但旧文本未删
    问题细节：同一 spec 内出现两套文案，读者可能照旧文案执行；清理它需要 MODIFIED 整块替换，超出本 change 的最小改动面
    建议: 下次触碰该 Requirement 时用 MODIFIED 整块替换，删除旧文案与旧命令
+   - 解决：lyx-fix（commit aaa425d，2026-10-21）— worktree spec 两处旧 WIP 文案已替换为 chore(wip) 版本
 
 2. [openspec/specs/worktree-create-before-propose/spec.md:22] — 既有 WIP 命令写 `git add -A && git commit -m ...`，而模板实际使用带快照排除的 pathspec 暂存；这是本 change 之前就存在的漂移
    问题细节：`git add -A` 会把进行中快照带进提交，与模板的排除规则相反；本 change 未扩大范围去改它
    建议: 后续以 MODIFIED 方式把 spec 的命令同步为模板的 pathspec 版本
+   - 解决：lyx-fix（commit aaa425d，2026-10-21）— worktree spec 的 WIP 命令已同步为模板的 pathspec（排除进行中快照）
 
 ## 代码审查
 
@@ -25,3 +27,4 @@
 1. [src/utils/preflight.ts] — `isWithinProject` 把"项目顶层之下的任意子目录"也判为 healthy；若项目内存在嵌套 OpenSpec root，预检结论与 `openspec` 在项目顶层执行时的 nearest root 解析可能不一致
    问题细节：当前 issue 2 的目标是拦住家目录兜底 root，本实现已覆盖；嵌套 root 是另一个边界，未在本 change 定义口径
    建议: 后续明确"root 必须等于项目顶层"或补一条嵌套 root 的 Scenario 与测试
+   - 解决：lyx-fix（commit aaa425d，2026-10-21）— root 判定补"必须覆盖 cwd"，并新增旁支 root Scenario 与单测

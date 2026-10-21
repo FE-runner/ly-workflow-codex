@@ -356,7 +356,9 @@ async function inspectOpenspecRoot(cwd: string, cli: OpenspecCliStatus): Promise
   if (!rootInfo.path)
     return { status: 'healthy', doctor }
   const projectRoot = await resolveProjectRoot(cwd)
-  return isWithinProject(projectRoot, rootInfo.path)
+  const withinProject = isWithinProject(projectRoot, rootInfo.path)
+  const coversCwd = isWithinProject(rootInfo.path, cwd)
+  return withinProject && coversCwd
     ? { status: 'healthy', doctor, rootPath: rootInfo.path, projectRoot }
     : { status: 'outside-project', doctor, rootPath: rootInfo.path, projectRoot }
 }

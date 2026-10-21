@@ -98,7 +98,7 @@ skills 检查 SHALL NOT 以"任一 `openspec-*` skill 存在"判定通过。检�
 
 ### Requirement: OpenSpec root 必须位于当前项目顶层之下
 
-`lycx openspec inspect|ensure`、`@lyx-init` 与安装器 preflight 共用的 root 判定 SHALL 在 `openspec doctor` 报 healthy 之后，额外校验 `root.path` 是否位于当前项目顶层之下：项目顶层取 `git rev-parse --show-toplevel`（成功时），否则取当前工作目录；`root.path` 等于项目顶层或位于其下为通过，位于其外（含 `$HOME` 兜底 root）SHALL 判为 `outside-project`，SHALL NOT 判为 healthy。
+`lycx openspec inspect|ensure`、`@lyx-init` 与安装器 preflight 共用的 root 判定 SHALL 在 `openspec doctor` 报 healthy 之后，额外校验 `root.path` 是否位于当前项目顶层之下：项目顶层取 `git rev-parse --show-toplevel`（成功时），否则取当前工作目录；`root.path` SHALL 同时满足两条才通过：位于项目顶层或其下；且覆盖当前工作目录（等于 `cwd` 或是其祖先）。任一不满足（含 `$HOME` 兜底 root、项目内但不覆盖 cwd 的旁支 root）SHALL 判为 `outside-project`，SHALL NOT 判为 healthy。
 
 `ensure` 在 `allowWrite` 为真时 SHALL 像处理 `missing` 一样提供并执行 `init-root`（在项目内 `openspec init`）；`allowWrite` 为假或用户拒绝时 SHALL 只报告 `outside-project` 并给出 `openspec init` 的可执行指引，SHALL NOT 把该状态当作 healthy 继续。
 
@@ -106,6 +106,11 @@ skills 检查 SHALL NOT 以"任一 `openspec-*` skill 存在"判定通过。检�
 
 - **WHEN** 当前项目位于 `/Users/ly/codes/x`，`openspec doctor` 返回 healthy 且 `root.path = /Users/ly`
 - **THEN** root 判定为 `outside-project`，SHALL NOT 判 healthy，报告提示在项目内运行 `openspec init`
+
+#### Scenario: 项目内但不覆盖 cwd 的旁支 root 判 outside-project
+
+- **WHEN** 当前 `cwd = <project>/packages/app`，`root.path = <project>/packages/other`
+- **THEN** root 判定为 `outside-project`，报告提示在 `cwd` 内运行 `openspec init`
 
 #### Scenario: 项目内 root 仍判 healthy
 

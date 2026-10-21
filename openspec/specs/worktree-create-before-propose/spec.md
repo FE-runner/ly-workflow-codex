@@ -19,7 +19,7 @@ worktree baseline 失败时，SHALL 报告失败摘要并询问用户：选择"�
 
 1. 询问/确认开发分支名（规则与 worktree 路径一致：可含 `/`）。
 2. 检查当前工作区未提交改动（`git status --porcelain`）：非空时 SHALL 用一次三选一询问处置方式，各选项文案 MUST 如实说明后果：
-   - **提交（WIP commit）**：`git add -A && git commit -m "wip: 切分支前暂存工作区改动"` 后再切分支——新分支从含 WIP commit 的 HEAD 切出，改动固化为新分支上的提交，review-code 审查对象不受污染；
+   - **提交（WIP commit）**：`git add -A -- ':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md' && git commit -F "$MSG_FILE"`（message 首行 `chore(wip): 切分支前暂存工作区改动`） 后再切分支——新分支从含 WIP commit 的 HEAD 切出，改动固化为新分支上的提交，review-code 审查对象不受污染；
    - **Stash**：`git stash push -u` → 切分支 → `git stash pop`——文案 SHALL 如实说明"pop 回来后改动仍在工作区，stash 仅提供日志留底"，SHALL NOT 夸大其隔离效果；
    - **原样保留**：不做任何处理——文案 SHALL 明示"改动会进入 review-code 审查范围（`git diff HEAD`），可能污染审查对象"。
    三种选择均 SHALL 直接执行（风险已写入文案，SHALL NOT 二次确认）；处置动作失败（提交失败、stash 失败等）SHALL 如实报错停止编排，SHALL NOT 自动兜底。
@@ -66,7 +66,7 @@ worktree baseline 失败时，SHALL 报告失败摘要并询问用户：选择"�
 
 #### Scenario: 切新分支时脏改动选择 WIP commit
 - **WHEN** 工作区存在未提交改动，用户选择"本项目切新分支"并在脏改动处置中选择"提交（WIP commit）"
-- **THEN** 命令先 `git add -A && git commit -m "wip: 切分支前暂存工作区改动"`，再 `git checkout -b <开发分支名>`；新分支从含 WIP commit 的 HEAD 切出，改动固化为新分支上的提交，review-code 审查对象不受污染
+- **THEN** 命令先 `git add -A -- ':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md' && git commit -F "$MSG_FILE"`（message 首行 `chore(wip): 切分支前暂存工作区改动`），再 `git checkout -b <开发分支名>`；新分支从含 WIP commit 的 HEAD 切出，改动固化为新分支上的提交，review-code 审查对象不受污染
 
 #### Scenario: 切新分支时脏改动选择 Stash
 - **WHEN** 工作区存在未提交改动，用户选择"本项目切新分支"并在脏改动处置中选择"Stash"

@@ -35,7 +35,7 @@ argument-hint: '<项目摘要或名称>'
 2. **解析 JSON 结果**：读取 `cli.status`、`skills.status`、`skills.missing`、`root.status`、`actions` 与 `executed`。
    - `skills.status === "global-only"`：输出 WARN 说明 skills 仅全局可用但命令可继续；不自动固化项目级。
    - `cli.status !== "ok"`、`skills.status === "missing"` 或 `root.status` 为 `missing` / `unhealthy` / `outside-project` 且 ensure 后仍未修复：停止，展示缺失 skill 清单与 `openspec doctor --json` 的 fix 建议；`outside-project` 时明确要求在当前项目内执行 `openspec init` 后重试。
-   - `root.status === "healthy"`、`root.path` 位于当前仓库顶层之下，且 `skills.status` 为 `project-ready` 或 `global-only`：继续步骤 3。`root.path` 缺失或位于仓库顶层之外时视同 `outside-project`，停止并要求在项目内执行 `openspec init`。
+   - `root.status === "healthy"`、`root.path` 位于当前仓库顶层之下且覆盖当前目录（等于 cwd 或其祖先），且 `skills.status` 为 `project-ready` 或 `global-only`：继续步骤 3。`root.path` 缺失或位于仓库顶层之外时视同 `outside-project`，停止并要求在项目内执行 `openspec init`。
 3. **不要自行复制 workflow → skill 检测逻辑**。CLI、skills、root 的检查与修复统一由 `lycx openspec ensure` 负责；`--host` 限定只针对当前宿主检查与补齐（`--tools` 取值由宿主映射），不重建或清理另一宿主的 OpenSpec 产物。
 4. **规范顺序**：项目级 OpenSpec 的标准路径是"先 `openspec init`（生成项目 root 与项目级 skills），再 `lycx openspec ensure`（校验并补齐）"；`outside-project` 时 ensure 只给可执行建议，SHALL NOT 在未确认宿主前自行写入项目级产物。
 
