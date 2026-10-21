@@ -170,6 +170,10 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       expect(content, name).toContain('固定标注 `可自动修复：否` 与 `影响落地：否`')
       expect(content, name).toContain('审查者点名测试补齐 SHALL NOT 单独使该条进入本清单')
       expect(content, name).not.toContain('审查者已点名具体用例的测试补齐')
+      if (name === 'review-plan.md') {
+        expect(content).toContain('纯展示与 `skip_specs`')
+        expect(content).toContain('无 delta spec 与无测试任务均属合法')
+      }
     }
   })
 

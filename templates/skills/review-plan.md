@@ -34,6 +34,8 @@ argument-hint: '[<change-name>] [--no-commit]'
 4. **方案不可实施**：依赖的接口 / 数据 / 权限在现有系统中不存在，且文档没有给出任何获取路径或替代方案。
 5. **可证实的范围缺口**：文档已明确会改动 X，却遗漏 X 的下游受影响面（调用方 / 迁移 / 回滚），且该遗漏可由文档内信息直接证实。
 
+**纯展示与 `skip_specs`**：proposal 明确声明纯展示改动、New/Modified Capabilities 为空且在 `.openspec.yaml` 设置 `skip_specs: true` 时，无 delta spec 与无测试任务均属合法，SHALL NOT 报 Critical 或 Warning。若 proposal 声明了至少一个 New/Modified Capability，`skip_specs: true` 仍属误用，按「缺失 delta spec」处理。
+
 **Warning（建议修复，不阻断）——不满足 Critical 但值得改：**
 
 风险点或 Trade-off 交代不足、`tasks.md` 拆解粒度不理想、需要人工决策的开放问题未在文档中显式标注、spec 的 Scenario 不够具体（但 Requirement 已覆盖，作为补充覆盖仅记录）、术语或结构不统一。
