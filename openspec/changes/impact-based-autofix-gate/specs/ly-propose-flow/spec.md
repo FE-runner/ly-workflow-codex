@@ -49,5 +49,5 @@
 
 #### Scenario: 首轮零 Critical 但存在「是」条目时仍按正常清零推进
 
-- **WHEN** 全自动路径下 review-plan（或 review-code）首轮 Critical 数为 0，但存在 1 条标注为「是」的 Warning，当前会话修复后第 2 轮复审确认已解决
+- **WHEN** 全自动路径下 review-plan（或 review-code）首轮 Critical 数为 0，但存在 1 条 `影响落地=是` 且 `可自动修复=是` 的 Warning，当前会话修复后下一轮审查确认已解决
 - **THEN** 该循环以正常清零结束，流水线按正常清零推进（进入 apply 或结束流水线），SHALL NOT 因"首轮零 Critical"或"本轮曾出现 Warning"而误判为非正常终止
