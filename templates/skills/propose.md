@@ -79,6 +79,12 @@ argument-hint: '<需求描述>'
 
 读取 `@openspec-propose skill`（opsx propose 编排 prompt）并按其定义的完整流程，围绕 `参数`（需求描述）生成 proposal/design/tasks 全部 artifacts。生成过程中遵循该编排 prompt 的全部步骤与约束（本命令的步骤 4-9 在其后继续编排）。
 
+**测试风险策略适配（SHALL）**：生成 artifacts 时按 `risk-based-testing-policy` 分类并决定测试义务。
+
+- 纯 UI、文案或样式改动只涉及静态展示且不改变行为或契约时，MAY 在 `proposal.md` 明确声明“展示型改动，无行为或契约变化”，保持 New/Modified Capabilities 为空，并在 `.openspec.yaml` 设置 `skip_specs: true`；此时 SHALL NOT 生成 delta spec 或测试任务，`tasks.md` 仍须包含实现任务与相称验证任务（如 typecheck、build 或视觉检查）。
+- 行为或契约改动 SHALL 生成对应 delta spec，并在可自动化时生成与风险相称的测试任务。
+- 补充边界覆盖 SHALL NOT 被自动扩为核心 tasks；若 proposal 的核心 What Change 完全没有对应实施任务，仍按机械断链处理。
+
 **解决的审查未修项声明（可选）**：若用户在本次讨论中明确本次 change 解决了某条历史 `review-findings.md` 的 Warning，SHALL 在生成的 `proposal.md` 末尾新增 `## 解决的审查未修项` 小节，每条以 `- <归档快照路径>#<节名>#<序号> — <一句解决说明>` 列出。节名仅允许 `方案审查` / `代码审查`（如 `...#方案审查#1` / `...#代码审查#2`），序号为该节 Warning 条目的 1 起连续编号，路径 SHALL 指向 `openspec/changes/archive/**/review-findings.md` 下的已归档快照。本次 change 不解决任何历史 Warning 时 SHALL 省略该小节，SHALL NOT 创建空小节。propose 阶段 SHALL NOT 直接改写历史快照——实际回写由 `@lyx-archive` 在归档时完成（见 `review-findings-snapshot` 的「追加式解决说明」）。
 
 ### 4. 确定真实 change 名（前后快照比对）
@@ -91,14 +97,14 @@ argument-hint: '<需求描述>'
 
 **四项检查（逐项执行，粒度按条目对齐，不做段落级语义对齐）：**
 
-1. **正向闭环**：proposal 的每条 What Change 条目 SHALL 能对应到 design 的决策与 tasks 的任务（粒度：What Change 列表项 ↔ tasks checkbox 逐条映射）。design.md 缺失时容错跳过该段（What Change 直接对接 tasks），缺失本身不作为问题处理。
-2. **反向闭环**：tasks 的每个任务 SHALL 能溯源到至少一条 What Change 条目；不可溯源的孤儿任务属于拆解时私自扩的范围，SHALL 处理（删除或补全对应的 What Change/设计依据）。
+1. **正向闭环**：proposal 的每条 What Change 条目 SHALL 能对应到 design 的决策与 tasks 的核心实施任务（粒度：What Change 列表项 ↔ tasks checkbox 逐条映射）。补充边界覆盖不属于核心实施任务，其缺失 SHALL NOT 判为断链。design.md 缺失时容错跳过该段（What Change 直接对接 tasks），缺失本身不作为问题处理。
+2. **反向闭环**：tasks 的每个任务 SHALL 能溯源到至少一条 What Change 条目或测试风险策略要求的验证；不可溯源的孤儿任务属于拆解时私自扩的范围，SHALL 处理（删除或补全对应的 What Change/设计依据）。不得为“额外覆盖率”新增不可溯源任务。
 3. **基线波及**：对 proposal 声明的每个 Modified Capability，SHALL 逐条对照 `openspec/specs/<capability>/spec.md` 的现有 Requirements 检查本次改动是否波及（粒度：基线 Requirement 逐条）；被波及但方案只字未提的即为遗漏，SHALL 处理。New Capabilities 无基线可查，跳过该项。
 4. **通用业务维度过网**：权限、失败路径、并发、兼容/迁移等通用业务维度 SHALL 逐项过一遍（按维度逐项给结论）；判定"不适用"的维度 MUST 写明理由，SHALL NOT 静默跳过。
 
 **发现问题分两类处理：**
 
-- **机械断链**（漏任务、范围未同步、design 决策缺失等可直接修复的缺陷）：由提出者直接修改对应 artifact，SHALL NOT 就此类问题询问用户。
+- **机械断链**（核心实施任务漏项、范围未同步、design 决策缺失等可直接修复的缺陷）：由提出者直接修改对应 artifact，SHALL NOT 就此类问题询问用户。补充边界测试、额外 Scenario 或额外测试任务缺失 SHALL NOT 归入机械断链。
 - **业务判断类**（"这个场景要不要支持"等需要用户决策的开放问题）：SHALL 列为开放问题直接向用户提问，SHALL NOT 由提出者自行猜测决定。**全自动模式下同样询问**——该询问是自动流水线的人工确认点，与"需要人工介入"同级；用户回答后按回答更新对应 artifact 再继续。用户拒绝/取消回答 → 停止后续编排（不 commit、全自动流水线不启动），artifacts 留在工作区，报告结论清单与未决问题，转人工处理。
 
 **逐项结论清单（硬约束，防走过场）：**

@@ -163,6 +163,13 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       expect(content, name).toContain('每条 Warning 还须同时附')
       // 报告分级结构未被破坏：既有 Warning 小节标题保留
       expect(content, name).toContain('## Warning（建议修复，最后一轮结果）')
+      // 测试风险策略：纯展示免测试、补充边界仅记录、核心行为缺口不放宽
+      expect(content, name).toContain('测试风险策略例外')
+      expect(content, name).toContain('纯展示改动没有新增自动化测试')
+      expect(content, name).toContain('补充边界覆盖只形成 Warning')
+      expect(content, name).toContain('固定标注 `可自动修复：否` 与 `影响落地：否`')
+      expect(content, name).toContain('审查者点名测试补齐 SHALL NOT 单独使该条进入本清单')
+      expect(content, name).not.toContain('审查者已点名具体用例的测试补齐')
     }
   })
 
@@ -344,10 +351,14 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     for (const marker of ['A（代码对齐 spec）', 'B（小幅行为变化）', 'C（超出轻流程）', '无 spec 基线', '用户坚持轻流程'])
       expect(fix, marker).toContain(marker)
     expect(fix).toContain(t('@lyx-propose'))
-    // 先红后绿回归测试
+    // 风险测试策略：逻辑 bug 仍先红后绿，纯展示可免新增测试，补充边界不阻塞
+    expect(fix).toContain('risk-based-testing-policy')
     expect(fix).toContain('确认其失败')
+    expect(fix).toContain('**纯 UI、文案、样式**')
+    expect(fix).toContain('SHALL NOT 被要求新增自动化测试')
+    expect(fix).toContain('补充边界覆盖缺失 SHALL NOT 作为自审不通过条件')
     // 五项自审 + 对称清单
-    for (const item of ['① 修对了吗', '② spec 一致吗', '③ 漏改了吗', '④ 改多了吗', '⑤ 有回归测试吗'])
+    for (const item of ['① 修对了吗', '② spec 一致吗', '③ 漏改了吗', '④ 改多了吗', '⑤ 验证充分吗'])
       expect(fix, item).toContain(item)
     expect(fix).toContain('改动对称清单')
     // 验证门禁与 B 类确认
@@ -363,6 +374,16 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     // 不读取宿主配置、不 spawn
     expect(fix).not.toMatch(/reviewExecutor|codingExecutor|reviewMode|config\.toml/)
     expect(fix).not.toContain('{{')
+  })
+
+  it('propose template applies the risk-based testing policy', () => {
+    const propose = read('propose.md')
+    expect(propose).toContain('risk-based-testing-policy')
+    expect(propose).toContain('skip_specs: true')
+    expect(propose).toContain('SHALL NOT 生成 delta spec 或测试任务')
+    expect(propose).toContain('补充边界覆盖 SHALL NOT 被自动扩为核心 tasks')
+    expect(propose).toContain('核心 What Change 完全没有对应实施任务')
+    expect(propose).toContain('仍按机械断链处理')
   })
 
   it('explore convergence hint routes small changes to fix and others to propose', () => {

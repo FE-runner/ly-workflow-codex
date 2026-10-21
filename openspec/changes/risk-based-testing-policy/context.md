@@ -14,3 +14,9 @@
 - 不新增运行时分类器；执行 agent 必须基于 diff 和 proposal 留下分类依据。
 - 不新增通用模板片段机制；短条款继续在共享模板与双宿主角色词中镜像，由现有一致性测试守护。
 - 模板修改只更新仓库产物，不自动刷新用户已安装的全局 skills；发布后仍需 `lycx update` 或重装。
+
+## 实施决策
+
+- 模板继续使用完整双轴字段名；`AGENTS.md`、`CLAUDE.md` 与 README 使用 `否+否` 作为可读缩写，含义固定为 `可自动修复：否` / `影响落地：否`。
+- 新增防回退断言集中在 `host-adapters.test.ts`：共享模板四象限仍逐字一致，Codex / Claude 两份判级标准分别与对应共享模板逐字一致。
+- 本次仅验证仓库模板与测试，未安装或刷新 `~/.agents/skills/lyx-*`、`~/.codex/lyx/prompts/codex/`、`~/.claude/agents/lyx-*`；运行中的 installed skills 仍是旧规则。

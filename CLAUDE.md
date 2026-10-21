@@ -30,12 +30,12 @@ lycx uninstall [--host <hosts>]             # 按宿主卸载（缺省 = 全部�
 |------|-----------|
 | `@lyx-init` | 生成项目 AGENTS.md（Claude Code 下额外产出导入它的 `CLAUDE.md`）+ `lycx openspec ensure --host <当前宿主>`（共享 CLI/skills/root 修复）+ 自动 commit |
 | `@lyx-explore` | 委托 `@openspec-explore skill`；委托前扫描 `review-findings.md` 审查未修项快照，有命中则先询问是否列出（纯薄壳 + 一次快照询问）；收敛时按规模提示 `@lyx-fix` / `@lyx-propose` |
-| `@lyx-propose` | 编排入口：隔离三选一 → 全自动/手动 → `@openspec-propose skill` → 记录 isolation metadata → 方案自审 → context.md 产出 → commit `propose:`；全自动 = review-plan → apply → review-code 流水线 |
+| `@lyx-propose` | 编排入口：隔离三选一 → 全自动/手动 → `@openspec-propose skill` → 记录 isolation metadata → 按风险测试策略生成 spec/tasks 与方案自审 → context.md 产出 → commit `propose:`；全自动 = review-plan → apply → review-code 流水线 |
 | `@lyx-apply` | 按 `codingExecutor` 实施（`main` = 主 agent 直接实施；`subagent` = spawn coding subagent，非 fork，经 context.md 获取软上下文）读 tasks.md 逐任务实施 + 验证 + 勾 checkbox，主会话确认后回写 context.md 并 commit `apply:` |
-| `@lyx-fix` | 小需求 / bug 轻量路径：不建 change，spec 分流（A 对齐 / B 就地改主 spec / C 转 propose）→ 先红后绿 → 主 agent 五项自审 → 验证门禁 → B 类确认 → 单 commit（无 Change trailer） |
+| `@lyx-fix` | 小需求 / bug 轻量路径：不建 change，spec 分流（A 对齐 / B 就地改主 spec / C 转 propose）→ 按风险测试策略实施与验证（逻辑 bug 先红后绿，纯展示可免新增测试）→ 主 agent 五项自审 → 验证门禁 → B 类确认 → 单 commit（无 Change trailer） |
 | `@lyx-archive` | 委托 `@openspec-archive-change skill` + 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
-| `@lyx-review-plan` | 按 `reviewExecutor` 审方案（`main` = 主 agent 直接自审，最多 2 轮；`subagent` = 单审查 subagent + 主会话逐条裁决 + 驳回硬线），清零统一提交；循环结束后写 `review-findings.md` 的 `## 方案审查` 节（只收未被自动修复的 Warning） |
-| `@lyx-review-code` | 按 `reviewExecutor` 审代码（同上），Critical/Warning/Info 分级；循环结束后写 `review-findings.md` 的 `## 代码审查` 节（只收未被自动修复的 Warning） |
+| `@lyx-review-plan` | 按 `reviewExecutor` 审方案（`main` = 主 agent 直接自审，最多 2 轮；`subagent` = 单审查 subagent + 主会话逐条裁决 + 驳回硬线），按风险策略把补充边界记为 `否+否`，清零统一提交；循环结束后写 `review-findings.md` 的 `## 方案审查` 节 |
+| `@lyx-review-code` | 按 `reviewExecutor` 审代码（同上），Critical/Warning/Info 分级；纯展示缺新增测试不形成发现，补充边界记为 `否+否`；循环结束后写 `review-findings.md` 的 `## 代码审查` 节 |
 | `@lyx-release` | GitFlow 四场景发版 + SemVer 推导 + 上线合并二选一 |
 | `@lyx-changelog` | Keep a Changelog 格式生成/更新 CHANGELOG.md |
 | `@lyx-publish` | npm 包发布四场景 |
@@ -46,6 +46,7 @@ lycx uninstall [--host <hosts>]             # 按宿主卸载（缺省 = 全部�
 - 审查关卡 = **执行者可切换**（两个宿主语义一致；子代理机制按宿主：codex = spawn + `send_input`，Claude Code = `Agent` 工具调用 `lyx-*` 自定义子代理 + `SendMessage`，交互模式后台运行时等待语义为"结果被消费并如实报告"）：`reviewExecutor = "main"`（默认）= 主 agent 直接自审，无 spawn、无逐条裁决、无驳回硬线，最多 2 轮；`reviewExecutor = "subagent"` = 每关 spawn 1 个审查 subagent（非 fork、只携带 TASK、只审 change 范围），每条 Critical 由主会话逐条裁决——认可即修复，不认可必须附**可核验依据**；subagent 路径第 2 轮起默认 `send_input` 复用同一子代理
 - 审查范围 = **按 `reviewMode` 门控**（`full` / `plan-only` / `code-only` / `off`，未配置等价 `full`）：只决定 `@lyx-propose` 编排入口跑哪些审查关卡（`plan-only` 跳过 review-code、`code-only` 跳过 review-plan、`off` 两级都跳过；apply 始终执行），被跳过的关卡打印 `[跳过]` 状态行、其节点前置校验一并跳过；直接调用 `@lyx-review-plan` / `@lyx-review-code` 与 `@lyx-apply` / 归档前验证不受影响；`lycx init` / 菜单把 `reviewMode` 作为采集段开头一问（`off` 跳过 review 侧提问），`lycx doctor` 展示并告警非法取值与 `off` + review 侧字段非空
 - 软上下文 = **change 目录 `context.md`**：propose 产出（内容边界自检：无整段重复、决策可溯源、≤100 行）→ apply 维护（实施决策回写，只增不删）→ review-plan / review-code / coding subagent 消费（TASK 只传路径）
+- 测试策略 = **`risk-based-testing-policy`**：行为或契约与逻辑缺陷要求相称测试；纯 UI、文案、样式在不改变状态、事件、分支、数据流、计算或契约时可免新增测试；补充边界只记录为 `可自动修复：否` / `影响落地：否`，不自动补、不阻塞清零。archive 完整验证不变
 - 审查未修项快照 = **change 目录 `review-findings.md`**（快照式留痕，非台账）：review-plan / review-code 循环结束时按节 upsert 写入最后一轮**未被自动修复的 Warning**（不收 Info / Critical），Warning 条目连续编号；正常清零在统一 commit **之后**写（保持未跟踪），随 `@lyx-archive` 的 `git add -- openspec/` 落库并搬入 `archive/`；`@lyx-explore` 进入时扫描并**先询问后只列出未解决条目**（有 `- 解决：` 子项即视为已解决、不展示不计数；全部已解决时不询问）；该文件被排除在审查范围与中间 commit 之外。历史 Warning 被后续 change 解决时，在新 change 的 `proposal.md` 用 `## 解决的审查未修项` 声明锚点，由 `@lyx-archive` 向已归档快照追加追加式解决说明（原文不改、幂等、失败不阻断归档）；同一 change 内修复的 Warning 在 active 快照就地标注 `- 解决：本 change 内修复（commit <短 hash>）— …`（审查后同会话修复并提交后标注，或 `@lyx-archive` 归档前核对未标注条目、用户逐条确认后标注；必带 commit hash、按 hash 幂等、不新增提交）；`@lyx-commit --all` 与 propose WIP commit 的全量暂存以 `':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md'` 排除进行中快照
 - **驳回硬线**（终止条件）：（a）同一 Critical 复现且再被驳回；（b）连续 2 轮对当轮全部 Critical 均不认可——命中即停转人工
 - 实施 = **按 `codingExecutor` 切换**：`main`（默认）= 主 agent 直接实施；`subagent` = spawn coding subagent（非 fork，只实施 change 范围 + context.md），模型 = `[host] codingModel`。两条路径均由主会话统一提交 `apply: <change-name>`；subagent 路径环境级不可用回退主 agent，业务失败原样呈报转人工
