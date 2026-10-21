@@ -21,3 +21,4 @@
 1. [templates/skills/review-code.md / templates/skills/review-plan.md] — 消费判据段写"同一条 `影响落地=是` 条目（判同键同上一条 Critical 的三元组）"，此处上下文中并无"上一条 Critical"，指代不清
    问题细节：真正想引用的是终止条件 2 定义的判同键（文件路径 + 问题类别 + 定位锚点）；当前措辞会让读者回头找不存在的"上一条 Critical"
    建议: 改为"判同键见终止条件 2（文件路径 + 问题类别 + 定位锚点）"
+   - 解决：lyx-fix（commit ba32e3c，2026-10-21）— 两份 review 模板的判同键改为显式引用终止条件 2（文件路径 + 问题类别 + 定位锚点）

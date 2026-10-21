@@ -31,3 +31,4 @@
 2. [templates/CLAUDE.md:34] — 模板导航只给 review-code 行补了「（每条 Warning 附「可自动修复」标注）」，review-plan 行未同步提及；两行都描述同一个审查分级契约，读者会以为标注只适用于代码审查
    问题细节：review-plan 行本身没有"分级"字样，所以不构成事实性错误，但对称度不足；该文件也不在本 change 的文档同步清单里（命令增删才触发）
    建议: 在 review-plan 行补一句「Warning 附「可自动修复」标注」，或把标注说明提到表格上方的通用段落里
+   - 解决：lyx-fix（commit ba32e3c，2026-10-21）— templates/CLAUDE.md 的 review-plan 行补齐「可自动修复」「影响落地」两项标注，review-code 行同步为两项

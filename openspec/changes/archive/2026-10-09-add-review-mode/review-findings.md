@@ -23,3 +23,4 @@
    建议: 二选一对齐：改 spec 场景文案，或让 `reviewOffWarn` 不参与检查项 `status`。
 2. [src/commands/__tests__/menu-config.test.ts:337, openspec/changes/add-review-mode/specs/subagent-agent-config/spec.md:25] — proposal/tasks/spec 要求菜单配置入口也覆盖 `off` 跳过与保留，但菜单测试没有该用例 — 补一个走 `configExecutorsAndModels` 的菜单分支测试。
    建议: 新增菜单分支测试：`reviewMode=off` 时跳过 review 侧提问、既有值原样保留、coding 侧照常采集。
+   - 解决：lyx-fix（commit ba32e3c，2026-10-21）— 新增 reviewMode=off 菜单用例，覆盖跳过 review 侧提问、既有值保留、coding 侧照常采集
