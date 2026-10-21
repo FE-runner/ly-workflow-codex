@@ -403,7 +403,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
   it('apply and archive templates honor no-test mode', () => {
     const apply = read('apply.md')
     expect(apply).toContain('testMode = "off"')
-    expect(apply).toContain('测试专用任务跳过并输出 `[跳过] <任务>（testMode=off）`')
+    expect(apply).toContain('测试专用任务跳过、输出 `[跳过] <任务>（testMode=off）`')
     expect(apply).toContain('`- [x]` 且注明 `（testMode=off，已跳过）`')
     expect(apply).toContain('混合任务只跳过测试部分')
 
