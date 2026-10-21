@@ -7,7 +7,7 @@
 
 ### Requirement: fix 命令是不创建 change 的单命令轻量流程
 
-`@lyx-fix` SHALL 以用户参数描述的问题或需求为输入，在当前会话由主 agent 按「定位 → spec 分流 → 实施 → 自审 → 最终验证 →（B 类确认）→ 提交」顺序一次完成。命令 SHALL NOT 创建 OpenSpec change 目录、SHALL NOT 写 `context.md` 或 `review-findings.md`、SHALL NOT 询问隔离方式或全自动/手动、SHALL NOT 创建分支或 worktree，直接在当前分支工作。执行主体固定为主 agent：SHALL NOT 读取或受 `[host]` 的 `reviewExecutor` / `codingExecutor` / `reviewMode` 及模型字段影响，SHALL NOT spawn 子代理。
+`@lyx-fix` SHALL 以用户参数描述的问题或需求为输入，在当前会话由主 agent 按「定位 → spec 分流 → 实施 → 自审 → 最终验证 →（B 类确认）→ 提交」顺序一次完成。命令 SHALL NOT 创建 OpenSpec change 目录、SHALL NOT 写 `context.md`（MAY 写 `review-findings.md`，如追加解决标注；写入内容属于本次修复的待提交单元）、SHALL NOT 询问隔离方式或全自动/手动、SHALL NOT 创建分支或 worktree，直接在当前分支工作。执行主体固定为主 agent：SHALL NOT 读取或受 `[host]` 的 `reviewExecutor` / `codingExecutor` / `reviewMode` 及模型字段影响，SHALL NOT spawn 子代理。
 
 开始前 SHALL 检查 `git status --porcelain`：存在预存改动时如实提示并记录其路径清单，这些改动 SHALL NOT 被纳入本次提交。
 
@@ -75,7 +75,7 @@
 4. **改多了吗**：diff 不含与本次修复无关的改动，预存改动未混入；
 5. **有回归测试吗**：核对实施阶段的失败记录，或无法测试的原因。
 
-自审发现的问题 SHALL 直接修正并纳入同一提交。自审 SHALL NOT 做 Critical/Warning/Info 分级、SHALL NOT 循环多轮、SHALL NOT 写审查快照，SHALL NOT 覆盖安全/性能/风格等通用审查维度。
+自审发现的问题 SHALL 直接修正并纳入同一提交。自审 SHALL NOT 做 Critical/Warning/Info 分级、SHALL NOT 循环多轮，SHALL NOT 覆盖安全/性能/风格等通用审查维度。
 
 #### Scenario: 自审发现漏改的成对位置
 - **WHEN** 项目 AGENTS.md 的「改动对称清单」列出 zh-CN ↔ en 文案键成对，diff 只改了 zh-CN
@@ -123,7 +123,7 @@
 
 ### Requirement: fix 提交为单个非 change 生命周期 commit
 
-命令 SHALL 只产生一个 commit，按路径暂存本次修复涉及的代码、测试与主 spec 文件（SHALL NOT 使用 `git add -A` 全量暂存，SHALL NOT 纳入预存改动与任何 `review-findings.md`）。message SHALL 遵守 `@lyx-commit` 正文规范：`<type>(<scope>): <subject>` 首行（type 按实际改动判断，主 spec 改动作为附带改动不改变 type 与 scope），正文含 `- 动机：` / `- 改动：` / `- 影响：`，并追加：
+命令 SHALL 只产生一个 commit，按路径暂存本次修复涉及的代码、测试与主 spec 文件（SHALL NOT 使用 `git add -A` 全量暂存，SHALL NOT 纳入预存改动；本次修复主动写入的 `review-findings.md` SHALL 随路径清单一并暂存）。message SHALL 遵守 `@lyx-commit` 正文规范：`<type>(<scope>): <subject>` 首行（type 按实际改动判断，主 spec 改动作为附带改动不改变 type 与 scope），正文含 `- 动机：` / `- 改动：` / `- 影响：`，并追加：
 
 - `- spec：` 分流结论（A 点名对齐的 Requirement；B 点名修改的 capability 与 Requirement/Scenario；无 spec 基线如实注明）；
 - `- 自审：` 五项中有内容的结论；
@@ -136,5 +136,5 @@ message SHALL NOT 追加 `Change-Stage` / `Change-Name` trailer。`git commit` �
 - **THEN** commit message 首行为 CC 前缀，正文含动机/改动/影响与 spec/自审/验证六条 bullet，末尾无 `Change-Stage` / `Change-Name` trailer
 
 #### Scenario: 提交只含本次文件
-- **WHEN** 工作区同时存在预存改动与进行中 change 的 `review-findings.md`
-- **THEN** 提交的文件集合只包含本次修复涉及的文件
+- **WHEN** 工作区同时存在预存改动（含其他 change 的 `review-findings.md`）
+- **THEN** 提交的文件集合只包含本次修复涉及的文件（含本次主动写入的 `review-findings.md`，如有）

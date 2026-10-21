@@ -173,6 +173,12 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(read('explore.md')).toContain('存在至少一条 `- 解决：` 子项')
   })
 
+  it('fix template allows writing review-findings for resolution notes', () => {
+    const fix = read('fix.md')
+    expect(fix).toContain('MAY 写 `review-findings.md`')
+    expect(fix).not.toContain('SHALL NOT 写 `context.md` 或 `review-findings.md`')
+  })
+
   it('only the propose template gates review gates by reviewMode (review/apply/archive stay config-independent)', () => {
     const propose = read('propose.md')
     expect(propose).toContain('reviewMode')

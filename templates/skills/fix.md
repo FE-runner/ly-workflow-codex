@@ -1,6 +1,6 @@
 ---
 name: lyx-fix
-description: '小需求 / bug 轻量流程：定位 → spec 分流（A 对齐 / B 就地改主 spec / C 转 @lyx-propose）→ 先红后绿实施 → 主 agent 五项自审 → 最终验证门禁 → 单 commit；不创建 OpenSpec change、不写快照'
+description: '小需求 / bug 轻量流程：定位 → spec 分流（A 对齐 / B 就地改主 spec / C 转 @lyx-propose）→ 先红后绿实施 → 主 agent 五项自审 → 最终验证门禁 → 单 commit；不创建 OpenSpec change'
 argument-hint: '<问题或需求描述>'
 ---
 
@@ -12,7 +12,7 @@ argument-hint: '<问题或需求描述>'
 
 面向小需求与 bug 修复的单命令轻量路径：一次完成「定位 → spec 分流 → 实施 → 自审 → 最终验证 →（B 类确认）→ 提交」，只产生**一个 commit**。本命令：
 
-- SHALL NOT 创建 OpenSpec change 目录，SHALL NOT 写 `context.md` 或 `review-findings.md`；
+- SHALL NOT 创建 OpenSpec change 目录，SHALL NOT 写 `context.md`；MAY 写 `review-findings.md`（如追加解决标注），写入内容属于本次修复的待提交单元；
 - SHALL NOT 询问隔离方式或全自动/手动，SHALL NOT 创建分支或 worktree，直接在当前分支工作（需要隔离时由用户先自行 `@lyx-worktree`）；
 - 执行主体固定为主 agent：不读取宿主配置文件，审查/实施执行者、审查范围与模型字段均不影响本命令，SHALL NOT spawn 子代理。
 
@@ -58,7 +58,7 @@ SHALL NOT 在未给出分流结论的情况下开始实施。
 - **④ 改多了吗**：diff 不含与本次修复无关的改动，预存改动未混入。
 - **⑤ 有回归测试吗**：核对步骤 3 的失败记录，或无法测试的原因。
 
-自审发现的问题直接修正，纳入同一提交。自审**不分级**（不用 Critical/Warning/Info）、**不循环**、**不写快照**，不覆盖安全/性能/风格等通用审查维度——这些问题若存在，说明改动已超出轻流程，应转 `@lyx-propose`。
+自审发现的问题直接修正，纳入同一提交。自审**不分级**（不用 Critical/Warning/Info）、**不循环**，不覆盖安全/性能/风格等通用审查维度——这些问题若存在，说明改动已超出轻流程，应转 `@lyx-propose`。
 
 ### 5. 最终验证（提交门禁）
 
@@ -79,7 +79,7 @@ SHALL NOT 在未给出分流结论的情况下开始实施。
 
 ### 7. 提交（单个 commit）
 
-1. **按路径暂存**本次修复涉及的代码、测试与主 spec 文件：`git add -- <文件清单>`。SHALL NOT 使用全量暂存，SHALL NOT 纳入预存改动与任何 `review-findings.md`。若暂存区在步骤 0 时已有其他 staged 内容，用 `git commit --only -F "$MSG_FILE" -- <文件清单>` 隔离提交（`-F` 放在 `--` 之前）。
+1. **按路径暂存**本次修复涉及的代码、测试与主 spec 文件：`git add -- <文件清单>`。SHALL NOT 使用全量暂存，SHALL NOT 纳入预存改动；本次修复主动写入的 `review-findings.md` SHALL 随路径清单一并暂存。若暂存区在步骤 0 时已有其他 staged 内容，用 `git commit --only -F "$MSG_FILE" -- <文件清单>` 隔离提交（`-F` 放在 `--` 之前）。
 2. 用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取路径，按 `@lyx-commit` 正文规范写入完整 message，执行 `git commit -F "$MSG_FILE"`：
 
    ```
