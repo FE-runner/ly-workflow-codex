@@ -2,7 +2,7 @@ import type { HostDoctorCheck, HostInspectContext } from '../../utils/host-adapt
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import { i18n } from '../../i18n'
-import { sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode } from '../../utils/config'
+import { sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeTestMode } from '../../utils/config'
 import { listPrefixedDirs } from '../../utils/fs-helpers'
 import { CLAUDE_AGENT_DEFINITIONS, renderAgentModelLines } from './adapter'
 import { CLAUDE_AGENTS_DIR } from './paths'
@@ -66,6 +66,13 @@ export async function claudeDoctorChecks(ctx: HostInspectContext): Promise<HostD
   const config = ctx.config ?? {}
   const parts: string[] = []
   let warn = false
+  const testModeRaw = config.testMode
+  const testMode = sanitizeTestMode(testModeRaw) ?? 'normal'
+  if (typeof testModeRaw === 'string' && testModeRaw.trim() !== '' && !sanitizeTestMode(testModeRaw)) {
+    warn = true
+    parts.push(i18n.t('doctor:modelConfig.warnInvalidTestMode'))
+  }
+  parts.push(i18n.t('doctor:modelConfig.testMode', { mode: testMode }))
   const reviewModeRaw = config.reviewMode
   const reviewMode = sanitizeReviewMode(reviewModeRaw) ?? 'full'
   if (typeof reviewModeRaw === 'string' && reviewModeRaw.trim() !== '' && !sanitizeReviewMode(reviewModeRaw)) {

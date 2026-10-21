@@ -14,7 +14,7 @@ argument-hint: '<问题或需求描述>'
 
 - SHALL NOT 创建 OpenSpec change 目录，SHALL NOT 写 `context.md`；MAY 写 `review-findings.md`（如追加解决标注），写入内容属于本次修复的待提交单元；
 - SHALL NOT 询问隔离方式或全自动/手动，SHALL NOT 创建分支或 worktree，直接在当前分支工作（需要隔离时由用户先自行 `@lyx-worktree`）；
-- 执行主体固定为主 agent：不读取宿主配置文件，审查/实施执行者、审查范围与模型字段均不影响本命令，SHALL NOT spawn 子代理。
+- 执行主体固定为主 agent：仅读取 `{{LYX_CONFIG_FILE}}` 的 `[host].testMode`，审查/实施执行者、审查范围与模型字段均不影响本命令，SHALL NOT spawn 子代理。
 
 主 spec 同步是本命令的强制职责——轻流程绕开了 delta 与归档，spec 不随改动同步就会漂移。
 
@@ -42,7 +42,10 @@ SHALL NOT 在未给出分流结论的情况下开始实施。
 
 ### 3. 实施（按测试风险执行）
 
-实施前 SHALL 按 `risk-based-testing-policy` 对改动单元分类并记录测试策略：
+实施前 SHALL 读取 `{{LYX_CONFIG_FILE}}` 的 `[host].testMode`。配置缺失、不可读或解析失败时 SHALL 停止并提示运行 `lycx doctor`，SHALL NOT 静默按 `normal` 继续。
+
+- `testMode = "off"`：SHALL NOT 新增或修改测试文件、SHALL NOT 生成测试任务、SHALL NOT 运行任何测试命令；行为或契约改动仍正常实施，并改用类型检查、构建或其他非测试验证。混合任务只跳过测试部分，不跳过实现部分。
+- `testMode = "normal"`：按 `risk-based-testing-policy` 对改动单元分类并记录测试策略：
 
 1. **行为或契约改动、逻辑缺陷修复**：在可自动化时先编写能复现问题或刻画新行为的测试并运行，**确认其失败**，记录失败输出（供自审⑤核对）；再修改实现直到该测试与相关测试通过。B 类同时就地修改主 spec。
 2. **纯 UI、文案、样式**：改动只涉及静态展示、文案、样式、布局或图标，且不改变状态、事件、条件分支、数据流、业务计算、公开组件契约、接口或配置行为时，SHALL NOT 被要求新增自动化测试；仍须运行相关既有测试、类型检查或构建，并在可用时执行视觉检查。
@@ -65,7 +68,7 @@ SHALL NOT 在未给出分流结论的情况下开始实施。
 
 ### 5. 最终验证（提交门禁）
 
-自审（含修正）完成后运行：与本次改动相关的测试或相称验证 + 项目提供的类型检查（缺失项跳过并注明）；纯展示改动按可用性运行视觉检查；可不运行全量构建（慢验证不在本命令门禁内）。
+自审（含修正）完成后运行：项目提供的类型检查 + build 或其他非测试验证；`testMode = "normal"` 时另运行与本次改动相关的测试；纯展示改动按可用性运行视觉检查。验证失败处理规则保持不变。
 
 - 失败 → 修正后重跑，且只对为修复验证失败新增的 diff 重新执行自审③④。
 - 同一验证**连续失败 2 次** → 停止，原样呈报失败输出转人工；改动保留在工作区，SHALL NOT 提交。
@@ -82,7 +85,7 @@ SHALL NOT 在未给出分流结论的情况下开始实施。
 
 ### 7. 提交（单个 commit）
 
-1. **按路径暂存**本次修复涉及的代码、测试与主 spec 文件：`git add -- <文件清单>`。SHALL NOT 使用全量暂存，SHALL NOT 纳入预存改动；本次修复主动写入的 `review-findings.md` SHALL 随路径清单一并暂存。若暂存区在步骤 0 时已有其他 staged 内容，用 `git commit --only -F "$MSG_FILE" -- <文件清单>` 隔离提交（`-F` 放在 `--` 之前）。
+1. **按路径暂存**本次修复涉及的代码、主 spec 文件，以及 `testMode = "normal"` 时新增或修改的测试文件：`git add -- <文件清单>`。SHALL NOT 使用全量暂存，SHALL NOT 纳入预存改动；本次修复主动写入的 `review-findings.md` SHALL 随路径清单一并暂存。若暂存区在步骤 0 时已有其他 staged 内容，用 `git commit --only -F "$MSG_FILE" -- <文件清单>` 隔离提交（`-F` 放在 `--` 之前）。
 2. 用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取路径，按 `@lyx-commit` 正文规范写入完整 message，执行 `git commit -F "$MSG_FILE"`：
 
    ```

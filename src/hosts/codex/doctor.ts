@@ -1,9 +1,9 @@
-import type { ExecutorKind, LyConfig, ReviewMode } from '../../types'
+import type { ExecutorKind, LyConfig, ReviewMode, TestMode } from '../../types'
 import type { HostDoctorCheck, HostInspectContext } from '../../utils/host-adapters'
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import { i18n } from '../../i18n'
-import { sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, sanitizeSpawnableModels } from '../../utils/config'
+import { sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, sanitizeSpawnableModels, sanitizeTestMode } from '../../utils/config'
 import { listPrefixedDirs } from '../../utils/fs-helpers'
 import { readCodexCurrentModel } from './provider'
 
@@ -37,6 +37,10 @@ export interface SubagentExecutorResult {
 export interface SubagentModelConfigResult {
   /** 总体状态：warn（spawnableModels 形态异常 / 执行者非法 / 模型字段在 main 路径下不生效）> ok */
   status: 'ok' | 'warn'
+  /** 测试模式（未配置/空白/非法等价 normal） */
+  testMode: TestMode
+  /** testMode 原值非空但不是合法取值 */
+  testModeInvalid: boolean
   /** 审查范围（未配置/空白/非法等价 full） */
   reviewMode: ReviewMode
   /** reviewMode 原值非空但不是合法取值 */
@@ -71,6 +75,9 @@ function resolveExecutor(value: unknown): { kind: ExecutorKind, invalid: boolean
 export function assessSubagentModelConfig(codexHost: LyConfig['host']): SubagentModelConfigResult {
   const spawn = sanitizeSpawnableModels(codexHost?.spawnableModels)
 
+  const testModeRaw = codexHost?.testMode
+  const testMode: TestMode = sanitizeTestMode(testModeRaw) ?? 'normal'
+  const testModeInvalid = typeof testModeRaw === 'string' && testModeRaw.trim() !== '' && !sanitizeTestMode(testModeRaw)
   const reviewModeRaw = codexHost?.reviewMode
   const reviewMode: ReviewMode = sanitizeReviewMode(reviewModeRaw) ?? 'full'
   const reviewModeInvalid = typeof reviewModeRaw === 'string' && reviewModeRaw.trim() !== '' && !sanitizeReviewMode(reviewModeRaw)
@@ -143,7 +150,9 @@ export function assessSubagentModelConfig(codexHost: LyConfig['host']): Subagent
   const fieldWarn = fields.some(f => f.status === 'warn')
   const executorWarn = executors.some(e => e.invalid)
   return {
-    status: spawnWarn || fieldWarn || executorWarn || reviewModeInvalid || reviewOffWarn ? 'warn' : 'ok',
+    status: spawnWarn || fieldWarn || executorWarn || testModeInvalid || reviewModeInvalid || reviewOffWarn ? 'warn' : 'ok',
+    testMode,
+    testModeInvalid,
     reviewMode,
     reviewModeInvalid,
     reviewOffWarn,
@@ -158,6 +167,9 @@ export function assessSubagentModelConfig(codexHost: LyConfig['host']): Subagent
 function buildSubagentModelCheckDetail(result: SubagentModelConfigResult): string {
   const parts: string[] = []
 
+  parts.push(i18n.t('doctor:modelConfig.testMode', { mode: result.testMode }))
+  if (result.testModeInvalid)
+    parts.push(i18n.t('doctor:modelConfig.warnInvalidTestMode'))
   parts.push(i18n.t('doctor:modelConfig.reviewMode', { mode: result.reviewMode }))
   if (result.reviewModeInvalid)
     parts.push(i18n.t('doctor:modelConfig.warnInvalidReviewMode'))

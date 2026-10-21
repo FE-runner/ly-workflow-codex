@@ -8,6 +8,8 @@ describe('assessSubagentModelConfig (switchable-executor-flow)', () => {
   it('both executors unset → ok, default main, model fields unset', () => {
     const result = assessSubagentModelConfig(undefined)
     expect(result.status).toBe('ok')
+    expect(result.testMode).toBe('normal')
+    expect(result.testModeInvalid).toBe(false)
     expect(result.spawnState).toBe('unset')
     expect(result.executors.map(e => e.kind)).toEqual(['main', 'main'])
     expect(result.executors.every(e => !e.invalid)).toBe(true)
@@ -139,5 +141,17 @@ describe('assessSubagentModelConfig (switchable-executor-flow)', () => {
     expect(result.reviewMode).toBe('off')
     expect(result.reviewOffWarn).toBe(true)
     expect(result.status).toBe('warn')
+  })
+
+  it('testMode=off 通过并展示；非法 testMode 按 normal 且整体 warn', () => {
+    const off = assessSubagentModelConfig({ testMode: 'off' })
+    expect(off.testMode).toBe('off')
+    expect(off.testModeInvalid).toBe(false)
+    expect(off.status).toBe('ok')
+
+    const invalid = assessSubagentModelConfig({ testMode: 'never' as never })
+    expect(invalid.testMode).toBe('normal')
+    expect(invalid.testModeInvalid).toBe(true)
+    expect(invalid.status).toBe('warn')
   })
 })

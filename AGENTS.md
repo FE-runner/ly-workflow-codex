@@ -48,7 +48,7 @@ src/commands/
   collect-subagent-config.ts 子代理配置采集（init / menu 共用）：执行者二连 → 模型二连 → 推理档二连；
                              宿主差异只有执行者提示文案键与推理档建议清单（经宿主适配层传入），
                              共享层不做宿主名分支
-  menu.ts                    交互式菜单（按宿主展示；更新 / 配置执行者与模型 / 卸载可选宿主；
+  menu.ts                    交互式菜单（按宿主展示；更新 / 配置模式、执行者与模型 / 卸载可选宿主；
                              配置入口复用 collect-subagent-config，两宿主同口径）
   doctor.ts                  doctor / status：通用项 + 按宿主分组的适配器体检项
   update.ts                  按宿主决策：版本落后重装 / 定义偏差本地重渲染 / 跳过；按宿主备份回滚
@@ -119,6 +119,7 @@ prompts  = "..."
 backup   = "..."
 
 [host]                     # 宿主配置节（历史节名 [codexHost] 兼容读取，下次写入归一为 [host]）
+testMode = "normal"        # normal（默认/未配置：保留测试义务）| off（无测试模式：不写测试、不跑测试）
 reviewMode = "full"        # full（方案+代码审查，默认/未配置）| plan-only（仅方案审查）| code-only（仅代码审查）| off（跳过审查）
 reviewExecutor = "main"    # main（主 agent 直接执行，默认/未配置）| subagent
 codingExecutor = "main"
@@ -159,9 +160,11 @@ spawnableModels = [...]    # 仅 codex：本机实测可 spawn 的模型清单�
 6. **OpenSpec 依赖检查统一为共享三层模型，按宿主判定与修复**：`lycx init` / `@lyx-init` / `lycx doctor` 共用 CLI、skills、root 三层检查；skills 按 OpenSpec profile 推导，每个宿主只在自己的技能根里判定（codex：项目/全局 `.agents`、`.codex`；claude：项目/全局 `.claude/skills`），整体取最差；项目级修复按缺失技能的宿主执行 `openspec init --tools <宿主>`，不重建另一宿主产物；无任何宿主配置文件时只读诊断，写入型修复延后到宿主确认之后；`global-only` WARN 并继续，不自动固化。
 7. **Claude 侧以 main 为基线，子代理为可选增强**：子代理定义始终安装（执行者只决定是否使用），不启用 worktree 隔离（实施改动须留在主检出由主会话统一提交），审查子代理工具含 Bash 但正文限定只读 git / openspec；`@lyx-init` 在 Claude 宿主下额外产出导入 `AGENTS.md` 的 `CLAUDE.md`。
 
-8. **小改动走 `@lyx-fix` 轻量路径，spec 同步是它的强制职责**：不创建 OpenSpec change、不询问隔离与自动化档位、不读宿主配置（执行主体固定主 agent），一次完成定位 → spec 分流（A 对齐既有 spec / B 同一 commit 就地改主 spec，不走 delta / C 超出范围转 `@lyx-propose`）→ 按测试风险实施与验证 → 五项自审（修对 / spec 一致 / 漏改 / 改多 / 验证充分）→ 最终验证门禁 → B 类提交前确认 → 单个非 change 生命周期 commit（正文追加 `- spec：` / `- 自审：` / `- 验证：`，无 Change trailer）。理由：流程越重越容易被绕开，绕开的改动才是 spec 漂移的主要来源；`git log -- openspec/specs/` 即可追溯轻流程的 spec 改动。
+8. **小改动走 `@lyx-fix` 轻量路径，spec 同步是它的强制职责**：不创建 OpenSpec change、不询问隔离与自动化档位、只读取宿主配置的 `testMode`（执行主体仍固定主 agent），一次完成定位 → spec 分流（A 对齐既有 spec / B 同一 commit 就地改主 spec，不走 delta / C 超出范围转 `@lyx-propose`）→ 按测试风险实施与验证 → 五项自审（修对 / spec 一致 / 漏改 / 改多 / 验证充分）→ 最终验证门禁 → B 类提交前确认 → 单个非 change 生命周期 commit（正文追加 `- spec：` / `- 自审：` / `- 验证：`，无 Change trailer）。理由：流程越重越容易被绕开，绕开的改动才是 spec 漂移的主要来源；`git log -- openspec/specs/` 即可追溯轻流程的 spec 改动。
 
 9. **测试义务由风险决定，跨 fix / propose / review 共用**：`risk-based-testing-policy` 定义行为或契约改动、逻辑缺陷修复、纯展示改动与补充边界覆盖的统一口径。纯 UI、文案、样式在不改变状态、事件、分支、数据流、业务计算或契约时可免新增测试，但必须运行项目已有的相称验证；补充边界覆盖只记录为 `否+否` Warning，不自动扩为 tasks/tests。`@lyx-propose` 按该策略生成 spec/tasks；`@lyx-review-plan` / `@lyx-review-code` 按该策略判级。逻辑缺陷复现、核心行为覆盖、契约一致性及 `@lyx-archive` 完整验证均不放宽。
+
+10. **无测试模式是宿主级显式 opt-in**：`[host].testMode = "off"` 时不新增/修改测试文件、不生成测试任务、不执行测试命令；fix 仍实施，propose 仍生成必要 spec，review 不产生测试缺失类发现，archive 跳过测试但仍执行 typecheck/build。配置缺失、不可读或解析失败时命令停止并提示 `lycx doctor`，不得静默回退 `normal`；未配置 `testMode` 的旧用户默认 `normal`。
 
 ## 改动对称清单
 

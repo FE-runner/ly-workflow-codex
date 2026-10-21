@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPAWNABLE_MODELS_DEFAULT } from '../../hosts/codex/schema'
-import { createDefaultConfig, getConfigPath, getHostConfigPath, getHostLyDir, getLyDir, listInstalledHosts, mergeCodexHostConfig, readLyConfig, sanitizeCodexHostExtras, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, sanitizeSpawnableModels, writeLyConfig } from '../config'
+import { createDefaultConfig, getConfigPath, getHostConfigPath, getHostLyDir, getLyDir, listInstalledHosts, mergeCodexHostConfig, readLyConfig, sanitizeCodexHostExtras, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, sanitizeSpawnableModels, sanitizeTestMode, writeLyConfig } from '../config'
 
 // 模块顶层常量（CONFIG_FILE / LY_DIR 等）在 import 时基于 homedir() 求值，
 // 因此 hoisted 阶段就创建固定临时 home，再 mock homedir() 指向它——
@@ -89,6 +89,11 @@ describe('createDefaultConfig (codex 宿主配置文件)', () => {
   it('stores codexHost.reviewModel when provided', () => {
     const config = createDefaultConfig({ ...baseOptions, host: { reviewModel: 'gpt-5.1-codex' } })
     expect(config.host?.reviewModel).toBe('gpt-5.1-codex')
+  })
+
+  it('stores testMode when provided and omits it when unset or invalid', () => {
+    expect(createDefaultConfig({ ...baseOptions, host: { testMode: 'off' } }).host).toEqual({ testMode: 'off' })
+    expect(createDefaultConfig({ ...baseOptions, host: { testMode: 'invalid' as never } }).host).toBeUndefined()
   })
 
   it('stores reviewExecutor / codingExecutor and models when provided (direct pass-through)', () => {
@@ -616,5 +621,28 @@ describe('sanitizeReviewMode', () => {
     expect(mergeCodexHostConfig({ reviewMode: 'code-only' }, {})).toEqual({ reviewMode: 'code-only' })
     expect(mergeCodexHostConfig({ reviewMode: 'full' }, { reviewMode: 'off' })).toEqual({ reviewMode: 'off' })
     expect(mergeCodexHostConfig({ reviewMode: 'off' }, { reviewMode: undefined })).toBeUndefined()
+  })
+})
+
+describe('sanitizeTestMode / testMode config', () => {
+  it('accepts normal and off with trimming', () => {
+    expect(sanitizeTestMode('normal')).toBe('normal')
+    expect(sanitizeTestMode(' off ')).toBe('off')
+  })
+
+  it('treats blank, invalid and non-string values as unset', () => {
+    expect(sanitizeTestMode('')).toBeUndefined()
+    expect(sanitizeTestMode('   ')).toBeUndefined()
+    expect(sanitizeTestMode('sometimes')).toBeUndefined()
+    expect(sanitizeTestMode(42)).toBeUndefined()
+  })
+
+  it('preserves, overrides and clears testMode through mergeHostConfig', () => {
+    expect(mergeCodexHostConfig({ testMode: 'off', reviewMode: 'full' }, {})).toEqual({
+      testMode: 'off',
+      reviewMode: 'full',
+    })
+    expect(mergeCodexHostConfig({ testMode: 'normal' }, { testMode: 'off' })).toEqual({ testMode: 'off' })
+    expect(mergeCodexHostConfig({ testMode: 'off' }, { testMode: undefined })).toBeUndefined()
   })
 })

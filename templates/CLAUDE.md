@@ -26,12 +26,12 @@
 |------|------|------|
 | `init.md` | 真逻辑 | 生成 AGENTS.md（claude 宿主额外产出导入它的 `CLAUDE.md`）+ `lycx openspec ensure --host <当前宿主>` + 自动 commit |
 | `explore.md` | 薄壳委托 | 直接调用 `@openspec-explore skill`，收敛到方案时按规模提示转 `@lyx-fix` / `@lyx-propose` |
-| `propose.md` | 真逻辑 | 委托 `@openspec-propose skill` + 创建方案前隔离三选一（隔离 worktree【同会话 cd 续跑】/本项目切新分支/留在当前分支）+ 记录 isolation metadata + 全自动/手动两路径 + 按风险测试策略生成 spec/tasks + commit 前方案自审 + context.md 软上下文产出（内容边界自检） |
+| `propose.md` | 真逻辑 | 委托 `@openspec-propose skill` + 创建方案前隔离三选一（隔离 worktree【同会话 cd 续跑】/本项目切新分支/留在当前分支）+ 记录 isolation metadata + 全自动/手动两路径 + 按 `testMode` / 风险策略生成 spec/tasks + commit 前方案自审 + context.md 软上下文产出（内容边界自检） |
 | `apply.md` | 真逻辑 | 按 `codingExecutor` 实施：`main`（默认）= 主 agent 直接实施；`subagent` = coding subagent（非 fork，经 context.md 获取软上下文）读 tasks.md 逐任务实施+验证+勾 checkbox 后回传。两条路径均由主会话确认后回写 context.md，并按共用 index 隔离协议统一提交 apply 阶段 commit（CC 前缀 + `Change-Stage: apply` trailer）；subagent 路径环境级不可用回退主 agent，业务失败转人工 |
-| `fix.md` | 真逻辑 | 小需求 / bug 轻量路径：不建 change、不读宿主配置；spec 分流 A/B/C（B 就地改主 spec）→ 按风险测试策略实施与验证（逻辑 bug 先红后绿，纯展示可免新增测试）→ 主 agent 五项自审（成对清单读项目 AGENTS.md「改动对称清单」）→ 最终验证门禁 → B 类确认 → 单个非 change 生命周期 commit |
+| `fix.md` | 真逻辑 | 小需求 / bug 轻量路径：不建 change、只读宿主 `testMode`；spec 分流 A/B/C（B 就地改主 spec）→ normal 按风险测试策略、off 不写不跑测试 → 主 agent 五项自审 → 最终验证门禁 → B 类确认 → 单个非 change 生命周期 commit |
 | `archive.md` | 真逻辑 | 委托 `@openspec-archive-change skill` 归档 + 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
-| `review-plan.md` | 真逻辑 | 按 `reviewExecutor` 审方案：`main`（默认）= 主 agent 直接自审，无逐条裁决/驳回硬线，最多 2 轮；`subagent` = 单审查 subagent（`plan-reviewer.md`，范围点名 + context.md 路径引用；模型 `reviewModel`）+ 主会话逐条裁决 + 驳回硬线 + 全局轮数上限 5；每条 Warning 附双轴，补充边界固定 `否+否`。两条路径清零后统一提交 |
-| `review-code.md` | 真逻辑 | 按 `reviewExecutor` 审代码（同 review-plan 的执行者分支），Critical/Warning/Info 分级与 Warning 双轴；纯展示缺新增测试不形成发现，补充边界固定 `否+否`；慢验证由 `@lyx-archive` 归档前执行 |
+| `review-plan.md` | 真逻辑 | 按 `reviewExecutor` 审方案；Warning 双轴；`testMode=off` 时抑制全部测试相关发现。两条路径清零后统一提交 |
+| `review-code.md` | 真逻辑 | 按 `reviewExecutor` 审代码；`testMode=off` 时抑制测试缺失类发现，保留非测试门禁；慢验证由 `@lyx-archive` 归档前执行 |
 | `commit.md` `rollback.md` `clean-branches.md` | Git 工具 | 不变 |
 | `worktree.md` | Git 工具 | 默认 `~/.ly/worktrees/<项目名>/` 单层平铺；`switch` 子命令已移除，隔离切换由 `@lyx-propose` 触发；propose 创建隔离时负责记录 metadata |
 | `release.md` | 真逻辑 | GitFlow 四场景（feature/release/hotfix/dev-offline），SemVer + Conventional Commits 自动推导版本号 |

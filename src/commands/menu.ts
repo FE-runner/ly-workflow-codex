@@ -1,4 +1,5 @@
 import type { HostId } from '../utils/host-adapters'
+import type { TestMode } from '../types'
 import type { SubagentConfigCollected } from './collect-subagent-config'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -10,7 +11,7 @@ import { join } from 'pathe'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import { getConfigPath, getHostConfigPath, listInstalledHosts, mergeHostConfig, readLyConfig, sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, writeLyConfig } from '../utils/config'
+import { getConfigPath, getHostConfigPath, listInstalledHosts, mergeHostConfig, readLyConfig, sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, sanitizeTestMode, writeLyConfig } from '../utils/config'
 import { DEFAULT_HOST, getAdapter, listRegisteredHosts } from '../utils/host-adapters'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows } from '../utils/installer'
 import { PACKAGE_NAME } from '../utils/package-meta'
@@ -211,6 +212,7 @@ export async function showMainMenu(): Promise<void> {
     if (sanitizeReviewModel(config?.host?.reviewModel)) {
       statusParts.push(ansis.green(`review model: ${config?.host?.reviewModel}`))
     }
+    statusParts.push(ansis.cyan(`test: ${sanitizeTestMode(config?.host?.testMode) ?? 'normal'}`))
     statusParts.push(ansis.cyan(`review: ${sanitizeReviewMode(config?.host?.reviewMode) ?? 'full'}`))
 
     drawHeader(statusParts)
@@ -344,6 +346,7 @@ export async function configExecutorsAndModels(): Promise<void> {
   }
 
   const current: SubagentConfigCollected = {
+    testMode: sanitizeTestMode(config.host?.testMode),
     reviewMode: sanitizeReviewMode(config.host?.reviewMode),
     reviewExecutor: sanitizeExecutor(config.host?.reviewExecutor),
     codingExecutor: sanitizeExecutor(config.host?.codingExecutor),
@@ -358,9 +361,9 @@ export async function configExecutorsAndModels(): Promise<void> {
     suggestions: getAdapter(host).reasoningEffortSuggestions,
   })
 
-  // reviewMode 未配置 ≡ 'full'：归一后比较，避免"用户只是接受了默认值"被当成改动而写回
+  // testMode 未配置 ≡ 'normal'、reviewMode 未配置 ≡ 'full'：归一后比较，避免接受默认值被当成改动
   const normalize = (key: keyof SubagentConfigCollected, value: string | undefined): string | undefined =>
-    key === 'reviewMode' ? (value ?? 'full') : value
+    key === 'testMode' ? (value ?? 'normal') : key === 'reviewMode' ? (value ?? 'full') : value
   const changed = (Object.keys(current) as Array<keyof SubagentConfigCollected>)
     .some(key => normalize(key, next[key]) !== normalize(key, current[key]))
   if (!changed) {
@@ -391,6 +394,11 @@ export async function configExecutorsAndModels(): Promise<void> {
     'code-only': i18n.t('init:reviewMode.codeOnly'),
     'off': i18n.t('init:reviewMode.off'),
   }
+  const testModeLabel: Record<TestMode, string> = {
+    normal: i18n.t('init:testMode.normal'),
+    off: i18n.t('init:testMode.off'),
+  }
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.testMode'))} ${ansis.green(testModeLabel[next.testMode ?? 'normal'])}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewMode'))} ${ansis.green(reviewModeLabel[next.reviewMode ?? 'full'])}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewModelA'))} ${modelLine(next.reviewModel)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingModel'))} ${modelLine(next.codingModel)}`)

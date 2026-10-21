@@ -170,6 +170,8 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       expect(content, name).toContain('固定标注 `可自动修复：否` 与 `影响落地：否`')
       expect(content, name).toContain('审查者点名测试补齐 SHALL NOT 单独使该条进入本清单')
       expect(content, name).not.toContain('审查者已点名具体用例的测试补齐')
+      expect(content, name).toContain('无测试模式例外')
+      expect(content, name).toContain('缺少测试文件、缺少测试任务、缺少边界测试或测试覆盖不足')
       if (name === 'review-plan.md') {
         expect(content).toContain('纯展示与 `skip_specs`')
         expect(content).toContain('无 delta spec 与无测试任务均属合法')
@@ -361,6 +363,10 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(fix).toContain('**纯 UI、文案、样式**')
     expect(fix).toContain('SHALL NOT 被要求新增自动化测试')
     expect(fix).toContain('补充边界覆盖缺失 SHALL NOT 作为自审不通过条件')
+    expect(fix).toMatch(/\/lyx\/config\.toml/)
+    expect(fix).toContain('testMode = "off"')
+    expect(fix).toContain('SHALL NOT 运行任何测试命令')
+    expect(fix).toContain('配置缺失、不可读或解析失败时 SHALL 停止')
     // 五项自审 + 对称清单
     for (const item of ['① 修对了吗', '② spec 一致吗', '③ 漏改了吗', '④ 改多了吗', '⑤ 验证充分吗'])
       expect(fix, item).toContain(item)
@@ -376,7 +382,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(fix).not.toContain('Change-Name: <change-name>')
     expect(fix).not.toMatch(/git add -A(?!`)/)
     // 不读取宿主配置、不 spawn
-    expect(fix).not.toMatch(/reviewExecutor|codingExecutor|reviewMode|config\.toml/)
+    expect(fix).not.toMatch(/reviewExecutor|codingExecutor|reviewMode/)
     expect(fix).not.toContain('{{')
   })
 
@@ -388,6 +394,21 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(propose).toContain('补充边界覆盖 SHALL NOT 被自动扩为核心 tasks')
     expect(propose).toContain('核心 What Change 完全没有对应实施任务')
     expect(propose).toContain('仍按机械断链处理')
+    expect(propose).toContain('testMode = "off"')
+    expect(propose).toContain('SHALL NOT 生成测试文件、测试修改或测试命令任务')
+  })
+
+  it('apply and archive templates honor no-test mode', () => {
+    const apply = read('apply.md')
+    expect(apply).toContain('testMode = "off"')
+    expect(apply).toContain('测试专用任务跳过并输出 `[跳过] <任务>（testMode=off）`')
+    expect(apply).toContain('混合任务只跳过测试部分')
+
+    const archive = read('archive.md')
+    expect(archive).toContain('testMode = "off"')
+    expect(archive).toContain('跳过测试类别')
+    expect(archive).toContain('testMode=off，测试已跳过')
+    expect(archive).toContain('仍执行类型检查 / 构建')
   })
 
   it('explore convergence hint routes small changes to fix and others to propose', () => {

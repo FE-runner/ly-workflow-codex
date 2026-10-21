@@ -79,7 +79,11 @@ argument-hint: '<需求描述>'
 
 读取 `@openspec-propose skill`（opsx propose 编排 prompt）并按其定义的完整流程，围绕 `参数`（需求描述）生成 proposal/design/tasks 全部 artifacts。生成过程中遵循该编排 prompt 的全部步骤与约束（本命令的步骤 4-9 在其后继续编排）。
 
-**测试风险策略适配（SHALL）**：生成 artifacts 时按 `risk-based-testing-policy` 分类并决定测试义务。
+**测试模式与风险策略适配（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 的 `[host].testMode`；配置缺失、不可读或解析失败时停止并提示运行 `lycx doctor`。
+
+`testMode = "off"` 时 SHALL NOT 生成测试文件、测试修改或测试命令任务；行为或契约所需 spec 仍照常生成，tasks 的验证限定为 typecheck、build、视觉检查或其他非测试检查。
+
+`testMode = "normal"` 时按 `risk-based-testing-policy` 分类并决定测试义务：
 
 - 纯 UI、文案或样式改动只涉及静态展示且不改变行为或契约时，MAY 在 `proposal.md` 明确声明“展示型改动，无行为或契约变化”，保持 New/Modified Capabilities 为空，并在 `.openspec.yaml` 设置 `skip_specs: true`；此时 SHALL NOT 生成 delta spec 或测试任务，`tasks.md` 仍须包含实现任务与相称验证任务（如 typecheck、build 或视觉检查）。
 - 行为或契约改动 SHALL 生成对应 delta spec，并在可自动化时生成与风险相称的测试任务。

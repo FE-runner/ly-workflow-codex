@@ -1,4 +1,4 @@
-import type { ExecutorKind, ReviewMode } from '../types'
+import type { ExecutorKind, ReviewMode, TestMode } from '../types'
 import ansis from 'ansis'
 import inquirer from 'inquirer'
 import { i18n } from '../i18n'
@@ -14,7 +14,7 @@ import {
 
 // ═══════════════════════════════════════════════════════
 // 子代理配置采集（init 与 menu 共用；两宿主同口径）
-// 采集面：审查范围（reviewMode）→ 执行者二连 → 模型二连 → 推理档二连。
+// 采集面：测试模式（testMode）→ 审查范围（reviewMode）→ 执行者二连 → 模型二连 → 推理档二连。
 // reviewMode = off 时跳过 review 侧执行者/模型/推理档提问（既有值保留），coding 侧始终采集。
 // 宿主差异只有两处，均由调用方传入：① 执行者提示文案键；② 推理档建议档位清单（宿主适配层提供）。
 // 共享层不出现宿主名分支。
@@ -22,6 +22,7 @@ import {
 
 /** 采集结果：审查范围 + 执行者二连 + 模型二连 + 推理档二连（undefined = 未配置） */
 export interface SubagentConfigCollected {
+  testMode?: TestMode
   reviewMode?: ReviewMode
   reviewExecutor?: ExecutorKind
   codingExecutor?: ExecutorKind
@@ -30,6 +31,11 @@ export interface SubagentConfigCollected {
   reviewReasoningEffort?: string
   codingReasoningEffort?: string
 }
+
+const TEST_MODE_FIELDS = [
+  { value: 'normal', labelKey: 'init:testMode.normal' },
+  { value: 'off', labelKey: 'init:testMode.off' },
+] as const
 
 // 审查范围候选（顺序与取值见 ReviewMode）
 const REVIEW_MODE_FIELDS = [
@@ -57,6 +63,17 @@ const EXECUTOR_FIELDS = [
   { key: 'reviewExecutor', labelKey: 'init:executor.reviewExecutor' },
   { key: 'codingExecutor', labelKey: 'init:executor.codingExecutor' },
 ] as const
+
+async function pickTestModeField(current?: TestMode): Promise<TestMode> {
+  const { pick } = await inquirer.prompt([{
+    type: 'list',
+    name: 'pick',
+    message: i18n.t('init:testMode.prompt'),
+    choices: TEST_MODE_FIELDS.map(f => ({ name: i18n.t(f.labelKey), value: f.value })),
+    default: current ?? 'normal',
+  }])
+  return (TEST_MODE_FIELDS.some(f => f.value === pick) ? pick : 'normal') as TestMode
+}
 
 /**
  * 审查范围（reviewMode）list 选择：候选 = full / plan-only / code-only / off。
@@ -183,6 +200,14 @@ export async function collectSubagentConfig(options: {
 }): Promise<SubagentConfigCollected> {
   const { defaults, executorHintKey, suggestions } = options
   const collected: SubagentConfigCollected = {}
+
+  // ── 测试模式（最前，独立于审查范围）──
+  console.log()
+  console.log(ansis.cyan.bold(`  ${i18n.t('init:testMode.title')}`))
+  console.log()
+  console.log(ansis.gray(`  ${i18n.t('init:testMode.hint')}`))
+  console.log()
+  collected.testMode = await pickTestModeField(defaults.testMode)
 
   // ── 审查范围（整段开头一问）──
   console.log()

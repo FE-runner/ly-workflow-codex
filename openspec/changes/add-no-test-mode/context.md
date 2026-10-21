@@ -17,3 +17,10 @@
 - i18n 文案键必须 zh-CN / en 同步；双宿主 reviewer 判级标准继续保持逐字一致。
 - `@lyx-fix` 允许出现且仅允许使用 `{{LYX_CONFIG_FILE}}` 读取 `testMode`，现有“无占位符”断言需收窄为“只允许该配置路径占位符”。
 - 默认模式行为不变，不做配置迁移；回滚可移除 `testMode` 字段并恢复模板。
+
+## 实施决策
+
+- `HostAdapterConfig` 新增可选 `testMode`，使 Codex / Claude doctor 能在宿主无关上下文中读取该字段。
+- 菜单入口文案改为“配置模式、执行者与模型”，明确 testMode 与 reviewMode 都从该入口维护。
+- `@lyx-fix` 的模板占位符在安装期渲染为当前宿主 config.toml 绝对路径；断言对象是渲染后的命令文本，因此验证 `/lyx/config.toml` 而非原始 `{{LYX_CONFIG_FILE}}`。
+- 无测试模式只影响 lyx 工作流行为；项目自身测试脚本、npm 发布 workflow 和 CI 测试配置保持原样。

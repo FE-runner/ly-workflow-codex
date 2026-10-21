@@ -145,6 +145,13 @@ const zhCN = {
     },
     selectWorkflows: '选择要安装的工作流（可多选）',
     confirmInstall: '确认安装以上配置？',
+    testMode: {
+      title: '测试模式',
+      hint: 'normal 保留现有测试义务；off 为无测试模式：不新增或修改测试文件、不生成测试任务、不执行测试命令，但仍执行类型检查与构建',
+      prompt: '测试模式（testMode）',
+      normal: 'normal — 正常测试流程',
+      off: 'off — 无测试模式（不写测试、不跑测试）',
+    },
     reviewMode: {
       title: '审查范围',
       hint: '选择编排入口 @lyx-propose 执行哪些审查关卡（直接调用 @lyx-review-plan / @lyx-review-code 不受影响）',
@@ -172,6 +179,7 @@ const zhCN = {
     summary: {
       title: '配置摘要:',
       host: '安装宿主',
+      testMode: '测试模式',
       reviewMode: '审查范围',
       reviewExecutor: '审查执行者',
       codingExecutor: '实施执行者',
@@ -242,6 +250,8 @@ const zhCN = {
       okReasoningUnset: '{{key}} 未覆盖（继承模型/宿主默认）',
       warnInvalid: 'spawnableModels 字段格式非法/清洗后为空（仅形态提示，可运行 lycx init/update 修复）',
       reviewMode: 'reviewMode={{mode}}（仅门控 @lyx-propose 编排入口）',
+      testMode: 'testMode={{mode}}（normal=正常测试；off=无测试模式）',
+      warnInvalidTestMode: 'testMode 取值非法，按 normal 处理',
       warnInvalidReviewMode: 'reviewMode 取值非法，按 full 处理',
       warnReviewOff: 'reviewMode=off：review 侧字段不生效',
       agentNeedConfig: 'agent 模型需额外配置：能否 spawn 由当前环境实际能力决定，工具不做清单强校验',
@@ -302,7 +312,7 @@ const zhCN = {
     options: {
       init: '初始化 ly-workflow-codex',
       update: '更新工作流',
-      configExecutorsAndModels: '配置执行者与模型',
+      configExecutorsAndModels: '配置模式、执行者与模型',
       uninstall: '卸载 ly-workflow-codex',
       help: '帮助',
       exit: '退出',
@@ -478,6 +488,13 @@ const en: typeof zhCN = {
     },
     selectWorkflows: 'Select workflows to install (multi-select)',
     confirmInstall: 'Confirm installation with above configuration?',
+    testMode: {
+      title: 'Test mode',
+      hint: 'normal keeps the existing testing obligations; off disables test files, test tasks and test commands while still running typecheck and build',
+      prompt: 'Test mode (testMode)',
+      normal: 'normal — regular testing flow',
+      off: 'off — no-test mode (write no tests, run no tests)',
+    },
     reviewMode: {
       title: 'Review scope',
       hint: 'Choose which review gates the @lyx-propose orchestrator runs (direct @lyx-review-plan / @lyx-review-code calls are unaffected)',
@@ -505,6 +522,7 @@ const en: typeof zhCN = {
     summary: {
       title: 'Configuration summary:',
       host: 'Install host',
+      testMode: 'Test mode',
       reviewMode: 'Review scope',
       reviewExecutor: 'Review executor',
       codingExecutor: 'Implementation executor',
@@ -575,6 +593,8 @@ const en: typeof zhCN = {
       okReasoningUnset: '{{key}} not overridden (inherits model/host default)',
       warnInvalid: 'spawnableModels is malformed / empty after cleaning (shape hint only; run lycx init/update to fix)',
       reviewMode: 'reviewMode={{mode}} (gates the @lyx-propose orchestrator only)',
+      testMode: 'testMode={{mode}} (normal=regular tests; off=no-test mode)',
+      warnInvalidTestMode: 'testMode has an invalid value; treated as normal',
       warnInvalidReviewMode: 'reviewMode has an invalid value; treated as full',
       warnReviewOff: 'reviewMode=off: review-side fields have no effect',
       agentNeedConfig: 'Agent models need extra setup: spawn support depends on the current environment; this tool performs no list-based validation',
@@ -635,7 +655,7 @@ const en: typeof zhCN = {
     options: {
       init: 'Initialize ly-workflow-codex',
       update: 'Update workflows',
-      configExecutorsAndModels: 'Configure executors and models',
+      configExecutorsAndModels: 'Configure modes, executors and models',
       uninstall: 'Uninstall ly-workflow-codex',
       help: 'Help',
       exit: 'Exit',

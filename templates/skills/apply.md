@@ -13,7 +13,7 @@ argument-hint: '[<change-name>]'
 - **`"main"`（默认）**：主 agent SHALL 在当前会话直接实施——读取该 change 的 `tasks.md` 逐任务实施 + 验证 + 勾选；SHALL NOT spawn 子代理、SHALL NOT 读取 `codingModel` / `codingReasoningEffort`、SHALL NOT 产生 `[回退]` 标记。
 - **`"subagent"`**：主会话 spawn 一个 coding subagent，**非 fork spawn**（只携带 TASK，软上下文经该 change 目录下的 `context.md` 到达）并在任务中点名"只实施 change 范围"；模型按 `codingModel`、非空推理档按 `codingReasoningEffort` 传入。coding subagent 读取 tasks.md 逐任务实施 + 验证 + 勾选后，将改动与结果**回传主会话，不自行 commit**。
 
-两条路径共同遵守：主会话确认后回写 `context.md`（实施决策）并按共用 index 隔离协议统一提交 apply 阶段 commit（message 为 CC 前缀 + `Change-Stage: apply` + `Change-Name: <change-name>` trailer），作为 `@lyx-review-code` 的审查对象。失败区分两阶段：**环境级不可用**（仅 `subagent` 路径可能发生——宿主无 subagent 能力、初始 spawn 失败）按回退口径回退主 agent 直接实施，输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为业务失败；**实施中/验证失败** SHALL 原样呈报转人工，不自动重试、不自动兜底。隔离 worktree 的询问/新建统一收敛到 `@lyx-propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
+两条路径共同遵守：实施前读取 `{{LYX_CONFIG_FILE}}` 的 `[host].testMode`；配置缺失、不可读或解析失败时停止并提示运行 `lycx doctor`。主会话确认后回写 `context.md`（实施决策）并按共用 index 隔离协议统一提交 apply 阶段 commit（message 为 CC 前缀 + `Change-Stage: apply` + `Change-Name: <change-name>` trailer），作为 `@lyx-review-code` 的审查对象。失败区分两阶段：**环境级不可用**（仅 `subagent` 路径可能发生——宿主无 subagent 能力、初始 spawn 失败）按回退口径回退主 agent 直接实施，输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为业务失败；**实施中/验证失败** SHALL 原样呈报转人工，不自动重试、不自动兜底。隔离 worktree 的询问/新建统一收敛到 `@lyx-propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
 
 ## 步骤
 
@@ -48,6 +48,7 @@ argument-hint: '[<change-name>]'
 4. **范围点名（只实施 change 范围）**：任务点名"只实施 change 范围"——读取 `openspec/changes/<change-name>/tasks.md`，按需读取同目录 `proposal.md`/`design.md`/`context.md` 及任务引用的上下文文件，理解现有模式；SHALL NOT 改动范围外文件。
 5. **实施规范**（coding subagent 内部执行）：
    - 自顶向下逐任务实施，每完成一个任务立即验证：只修改任务列出的文件，不添加任务之外的功能/重构/注释；按 tasks.md 指定的验证方式运行验证（如 typecheck/build/test），失败则修复后重试，每个任务最多 3 次修复尝试；验证通过后，把 tasks.md 中对应条目从 `- [ ]` 改为 `- [x]`，继续下一个任务。
+   - `testMode = "off"` 时不新增或修改测试文件、不执行测试命令。测试专用任务跳过并输出 `[跳过] <任务>（testMode=off）`；混合任务只跳过测试部分，实现部分照常执行。
    - 不询问——任务描述有歧义时按最简方案处理，直接落地并在回传结果中说明选择。
 6. **回传不 commit**：coding subagent SHALL NOT 自行执行任何 git commit——实施完成后，将实际改动的文件清单、验证结果与逐任务完成情况回传主会话。
 

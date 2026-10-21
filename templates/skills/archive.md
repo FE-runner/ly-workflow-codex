@@ -1,6 +1,6 @@
 ---
 name: lyx-archive
-description: '归档前先执行项目完整验证（测试/类型检查/构建），通过后按 opsx:archive 编排流程归档完成的 change，完成后 commit'
+description: '归档前按 testMode 执行完整验证（normal：测试/类型检查/构建；off：跳过测试），通过后按 opsx:archive 编排流程归档完成的 change，完成后 commit'
 argument-hint: '[<change-name>]'
 ---
 
@@ -14,7 +14,10 @@ argument-hint: '[<change-name>]'
 
 ## 归档前完整验证（SHALL，先于任何归档动作）
 
-在委托 OpenSpec 归档流程**之前**，对当前工作区执行一次项目完整验证，覆盖测试 / 类型检查 / 构建三类：
+在委托 OpenSpec 归档流程**之前**，读取 `{{LYX_CONFIG_FILE}}` 的 `[host].testMode`。配置缺失、不可读或解析失败时 SHALL 停止归档并提示运行 `lycx doctor`。
+
+- `testMode = "normal"`：对当前工作区执行一次项目完整验证，覆盖测试 / 类型检查 / 构建三类。
+- `testMode = "off"`：跳过测试类别，仍执行类型检查 / 构建，并在报告中明确注明“testMode=off，测试已跳过”。
 
 - 按项目实际提供的脚本选择（例如 `package.json` 的 `scripts.test` / `scripts.typecheck` / `scripts.build`，或项目 README/AGENTS.md 声明的等价命令）。
 - 项目未提供的类别 SHALL 跳过并在报告中注明（例如"未提供 typecheck 脚本"），SHALL NOT 因缺失判定失败。

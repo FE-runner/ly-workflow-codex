@@ -12,6 +12,11 @@ const HOST_KEYS = [
   'init:claude.executorHint',
   'init:claude.modelInherit',
   'init:claude.noProviderNote',
+  'init:testMode.title',
+  'init:testMode.hint',
+  'init:testMode.normal',
+  'init:testMode.off',
+  'init:summary.testMode',
   'common:preflight.repairHint',
 ]
 

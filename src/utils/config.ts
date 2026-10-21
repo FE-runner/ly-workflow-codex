@@ -1,4 +1,4 @@
-import type { ExecutorKind, HostSection, LyConfig, ReviewMode, SupportedLang } from '../types'
+import type { ExecutorKind, HostSection, LyConfig, ReviewMode, SupportedLang, TestMode } from '../types'
 import type { HostId } from './host-adapters'
 import fs from 'fs-extra'
 import { join } from 'pathe'
@@ -128,6 +128,7 @@ export function createDefaultConfig(options: {
       backup: join(paths.lyDir, 'backup'),
     },
   }
+  const testMode = sanitizeTestMode(options.host?.testMode)
   const reviewExecutor = sanitizeExecutor(options.host?.reviewExecutor)
   const reviewMode = sanitizeReviewMode(options.host?.reviewMode)
   const codingExecutor = sanitizeExecutor(options.host?.codingExecutor)
@@ -141,7 +142,8 @@ export function createDefaultConfig(options: {
   // 避免"重装即丢失非法值、下次 doctor 不再告警"掩盖配置问题
   const spawnableModels = options.host?.spawnableModels
   if (
-    reviewMode
+    testMode
+    || reviewMode
     || reviewExecutor
     || codingExecutor
     || reviewModel
@@ -151,6 +153,7 @@ export function createDefaultConfig(options: {
     || spawnableModels !== undefined
   ) {
     config.host = {
+      ...(testMode ? { testMode } : {}),
       ...(reviewMode ? { reviewMode } : {}),
       ...(reviewExecutor ? { reviewExecutor } : {}),
       ...(codingExecutor ? { codingExecutor } : {}),
@@ -162,6 +165,21 @@ export function createDefaultConfig(options: {
     }
   }
   return config
+}
+
+/** 全部合法测试模式取值（doctor 提示与清洗共用） */
+export const TEST_MODES = ['normal', 'off'] as const
+
+/**
+ * 测试模式字段清洗（[host].testMode）：
+ * 非字符串 → undefined；trim 后仅接受 normal / off，其余（含空白）视为未配置。
+ * 未配置等价 'normal'，由模板运行时按此默认值解析。
+ */
+export function sanitizeTestMode(value: unknown): TestMode | undefined {
+  if (typeof value !== 'string')
+    return undefined
+  const cleaned = value.trim()
+  return (TEST_MODES as readonly string[]).includes(cleaned) ? (cleaned as TestMode) : undefined
 }
 
 /**
@@ -231,7 +249,7 @@ export function sanitizeReasoningEffort(value: unknown): string | undefined {
 
 export type HostExtras = Pick<
   HostSection,
-  'reviewMode' | 'reviewExecutor' | 'codingExecutor' | 'codingModel' | 'reviewReasoningEffort' | 'codingReasoningEffort' | 'spawnableModels'
+  'testMode' | 'reviewMode' | 'reviewExecutor' | 'codingExecutor' | 'codingModel' | 'reviewReasoningEffort' | 'codingReasoningEffort' | 'spawnableModels'
 >
 
 /**
@@ -243,6 +261,7 @@ export function sanitizeHostExtras(hostSection: LyConfig['host']): HostExtras {
     return {}
 
   const reviewExecutor = sanitizeExecutor(hostSection.reviewExecutor)
+  const testMode = sanitizeTestMode(hostSection.testMode)
   const reviewMode = sanitizeReviewMode(hostSection.reviewMode)
   const codingExecutor = sanitizeExecutor(hostSection.codingExecutor)
   const codingModel = sanitizeModelField(hostSection.codingModel)
@@ -250,6 +269,7 @@ export function sanitizeHostExtras(hostSection: LyConfig['host']): HostExtras {
   const codingReasoningEffort = sanitizeReasoningEffort(hostSection.codingReasoningEffort)
 
   return {
+    ...(testMode ? { testMode } : {}),
     ...(reviewMode ? { reviewMode } : {}),
     ...(reviewExecutor ? { reviewExecutor } : {}),
     ...(codingExecutor ? { codingExecutor } : {}),
@@ -262,6 +282,7 @@ export function sanitizeHostExtras(hostSection: LyConfig['host']): HostExtras {
 
 /** init/menu 写回 codexHost 时的字段覆盖集合；key 存在即视为权威值，undefined 表示清除该字段 */
 export interface HostOverride {
+  testMode?: TestMode
   reviewMode?: ReviewMode
   reviewExecutor?: ExecutorKind
   codingExecutor?: ExecutorKind
@@ -284,6 +305,7 @@ export function mergeHostConfig(
   const has = (key: keyof HostOverride): boolean =>
     Object.prototype.hasOwnProperty.call(override, key)
 
+  const testMode = sanitizeTestMode(has('testMode') ? override.testMode : existing?.testMode)
   const reviewExecutor = sanitizeExecutor(has('reviewExecutor') ? override.reviewExecutor : existing?.reviewExecutor)
   const reviewMode = sanitizeReviewMode(has('reviewMode') ? override.reviewMode : existing?.reviewMode)
   const codingExecutor = sanitizeExecutor(has('codingExecutor') ? override.codingExecutor : existing?.codingExecutor)
@@ -293,6 +315,7 @@ export function mergeHostConfig(
   const codingReasoningEffort = sanitizeReasoningEffort(has('codingReasoningEffort') ? override.codingReasoningEffort : existing?.codingReasoningEffort)
 
   const merged: HostSection = {
+    ...(testMode ? { testMode } : {}),
     ...(reviewMode ? { reviewMode } : {}),
     ...(reviewExecutor ? { reviewExecutor } : {}),
     ...(codingExecutor ? { codingExecutor } : {}),

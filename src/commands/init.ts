@@ -1,5 +1,5 @@
 import type { CodexModelProvider } from '../hosts/codex/provider'
-import type { ExecutorKind, InitOptions, InstallResult, LyConfig, ReviewMode, SupportedLang } from '../types'
+import type { ExecutorKind, InitOptions, InstallResult, LyConfig, ReviewMode, SupportedLang, TestMode } from '../types'
 import type { HostId } from '../utils/host-adapters'
 import type { SubagentConfigCollected } from './collect-subagent-config'
 import ansis from 'ansis'
@@ -20,6 +20,7 @@ import {
   sanitizeReasoningEffort,
   sanitizeReviewMode,
   sanitizeReviewModel,
+  sanitizeTestMode,
   writeLyConfig,
 } from '../utils/config'
 import { getAdapter, listRegisteredHosts } from '../utils/host-adapters'
@@ -236,11 +237,16 @@ function printSummary(input: { host: HostId, models: SubagentConfigCollected, co
     'code-only': i18n.t('init:reviewMode.codeOnly'),
     'off': i18n.t('init:reviewMode.off'),
   }
+  const testModeLabel: Record<TestMode, string> = {
+    normal: i18n.t('init:testMode.normal'),
+    off: i18n.t('init:testMode.off'),
+  }
   console.log()
   console.log(ansis.yellow('━'.repeat(50)))
   console.log(ansis.bold(`  ${i18n.t('init:summary.title')}`))
   console.log()
   console.log(`  ${ansis.cyan(i18n.t('init:summary.host'))}  ${ansis.green(host)}`)
+  console.log(`  ${ansis.cyan(i18n.t('init:summary.testMode'))}  ${ansis.green(testModeLabel[models.testMode ?? 'normal'])}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewMode'))}  ${ansis.green(reviewModeLabel[models.reviewMode ?? 'full'])}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewExecutor'))}  ${executorLabel(models.reviewExecutor)}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.codingExecutor'))}  ${executorLabel(models.codingExecutor)}`)
@@ -333,6 +339,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
   for (const host of hosts) {
     const existing = existingConfigs.get(host)?.host
     const defaults: SubagentConfigCollected = {
+      testMode: sanitizeTestMode(existing?.testMode),
       reviewMode: sanitizeReviewMode(existing?.reviewMode),
       reviewExecutor: sanitizeExecutor(existing?.reviewExecutor),
       codingExecutor: sanitizeExecutor(existing?.codingExecutor),
@@ -376,6 +383,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
     for (const host of hosts) {
       const collected = collectedByHost.get(host)!
       const hostSection = mergeHostConfig(existingConfigs.get(host)?.host, {
+        testMode: collected.testMode,
         reviewMode: collected.reviewMode,
         reviewExecutor: collected.reviewExecutor,
         codingExecutor: collected.codingExecutor,

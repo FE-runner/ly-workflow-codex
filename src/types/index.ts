@@ -9,6 +9,9 @@ export type ExecutorKind = 'main' | 'subagent'
 // 审查范围（仅门控 @lyx-propose 编排入口）：full = 方案+代码审查；plan-only = 仅方案审查；code-only = 仅代码审查；off = 跳过审查
 export type ReviewMode = 'full' | 'plan-only' | 'code-only' | 'off'
 
+// 测试模式：normal = 保留现有测试义务；off = 不写测试文件、不执行测试
+export type TestMode = 'normal' | 'off'
+
 // ly-workflow-codex 配置
 export interface LyConfig {
   general: {
@@ -30,6 +33,8 @@ export interface LyConfig {
 
 // 宿主配置节字段
 export interface HostSection {
+  // 测试模式；未配置/空白/非法等价 'normal'
+  testMode?: TestMode
   // 审查范围；仅决定编排入口 @lyx-propose 触发哪些审查关卡，未配置/空白/非法等价 'full'
   reviewMode?: ReviewMode
   // 审查执行者：main = 主 agent 直接执行（默认/未配置）；subagent = spawn 独立审查 subagent

@@ -106,6 +106,7 @@ describe('init — host selection (5.1)', () => {
     state.answers = [
       { selectedLang: 'zh-CN' },
       { hosts: ['claude'] },
+      { pick: 'normal' },
       { pick: 'full' },
       { pick: 'main' },
       { pick: 'main' },
@@ -147,6 +148,7 @@ describe('init — claude wizard (host-subagent-model-config)', () => {
     state.answers = [
       { selectedLang: 'zh-CN' },
       { hosts: ['claude'] },
+      { pick: 'normal' },
       { pick: 'full' },
       { pick: 'main' },
       { pick: 'main' },
@@ -157,9 +159,9 @@ describe('init — claude wizard (host-subagent-model-config)', () => {
     expect(providerSpies.listModelProviders).not.toHaveBeenCalled()
     // main 执行者下模型/推理档不采集：全部提示都已按预设答案消费完毕
     expect(state.answers).toEqual([])
-    expect(state.prompts.map(p => p.name)).toEqual(['selectedLang', 'hosts', 'pick', 'pick', 'pick', 'confirm'])
+    expect(state.prompts.map(p => p.name)).toEqual(['selectedLang', 'hosts', 'pick', 'pick', 'pick', 'pick', 'confirm'])
     const write = state.writes.find(w => w.host === 'claude')!
-    expect(write.config.host).toEqual({ reviewMode: 'full', reviewExecutor: 'main', codingExecutor: 'main' })
+    expect(write.config.host).toEqual({ testMode: 'normal', reviewMode: 'full', reviewExecutor: 'main', codingExecutor: 'main' })
     expect(write.config.paths.prompts.replace(/\\/g, '/')).toContain('/.claude/lyx')
   })
 
@@ -168,6 +170,7 @@ describe('init — claude wizard (host-subagent-model-config)', () => {
     state.answers = [
       { selectedLang: 'zh-CN' },
       { hosts: ['claude'] },
+      { pick: 'normal' },
       { pick: 'full' },
       { pick: 'subagent' },
       { pick: 'subagent' },
@@ -190,10 +193,12 @@ describe('init — claude wizard (host-subagent-model-config)', () => {
       'pick',
       'pick',
       'pick',
+      'pick',
       'confirm',
     ])
     const write = state.writes.find(w => w.host === 'claude')!
     expect(write.config.host).toEqual({
+      testMode: 'normal',
       reviewMode: 'full',
       reviewExecutor: 'subagent',
       codingExecutor: 'subagent',
@@ -209,6 +214,7 @@ describe('init — claude wizard (host-subagent-model-config)', () => {
     state.answers = [
       { selectedLang: 'zh-CN' },
       { hosts: ['claude'] },
+      { pick: 'normal' },
       { pick: 'full' },
       { pick: 'subagent' },
       { pick: 'main' },
@@ -230,6 +236,7 @@ describe('init — claude wizard (host-subagent-model-config)', () => {
     state.installed = ['claude']
     state.existing = {
       host: {
+        testMode: 'off',
         reviewExecutor: 'subagent',
         codingExecutor: 'subagent',
         reviewModel: 'claude-sonnet-5-5',
@@ -241,6 +248,7 @@ describe('init — claude wizard (host-subagent-model-config)', () => {
     await init({ skipPrompt: true })
     const write = state.writes.find(w => w.host === 'claude')!
     expect(write.config.host).toEqual({
+      testMode: 'off',
       reviewExecutor: 'subagent',
       codingExecutor: 'subagent',
       reviewModel: 'claude-sonnet-5-5',
@@ -255,6 +263,7 @@ describe('init — claude wizard (host-subagent-model-config)', () => {
     state.answers = [
       { selectedLang: 'zh-CN' },
       { hosts: ['claude'] },
+      { pick: 'normal' },
       { pick: 'full' },
       { pick: 'subagent' },
       { pick: 'subagent' },
@@ -284,15 +293,17 @@ describe('init — claude wizard (host-subagent-model-config)', () => {
     state.answers = [
       { selectedLang: 'zh-CN' },
       { hosts: ['claude'] },
+      { pick: 'normal' },
       { pick: 'off' },
       { pick: 'main' },
       { confirm: true },
     ]
     await init()
     // review 侧三项不提问（reviewMode → codingExecutor → confirm），既有 review 侧值保留
-    expect(state.prompts.map(p => p.name)).toEqual(['selectedLang', 'hosts', 'pick', 'pick', 'confirm'])
+    expect(state.prompts.map(p => p.name)).toEqual(['selectedLang', 'hosts', 'pick', 'pick', 'pick', 'confirm'])
     const write = state.writes.find(w => w.host === 'claude')!
     expect(write.config.host).toEqual({
+      testMode: 'normal',
       reviewMode: 'off',
       reviewExecutor: 'subagent',
       reviewModel: 'claude-sonnet-5-5',
@@ -318,6 +329,7 @@ describe('init — reviewMode 摘要不生效口径 (fix-review-mode-summary-lab
     state.answers = [
       { selectedLang: 'zh-CN' },
       { hosts: ['claude'] },
+      { pick: 'normal' },
       { pick: 'off' },
       { pick: 'main' },
       { confirm: true },
@@ -339,6 +351,7 @@ describe('init — reviewMode 摘要不生效口径 (fix-review-mode-summary-lab
     state.answers = [
       { selectedLang: 'zh-CN' },
       { hosts: ['claude'] },
+      { pick: 'normal' },
       { pick: 'off' },
       { pick: 'main' },
       { confirm: true },
@@ -355,6 +368,7 @@ describe('init — reviewMode 摘要不生效口径 (fix-review-mode-summary-lab
     state.answers = [
       { selectedLang: 'zh-CN' },
       { hosts: ['claude'] },
+      { pick: 'normal' },
       { pick: 'full' },
       { pick: 'main' },
       { pick: 'main' },
