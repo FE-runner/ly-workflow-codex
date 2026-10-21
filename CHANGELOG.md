@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.11.0] - 2026-10-21
+
+审查自动修复改为按影响面消费；审查未修项台账清零，并修掉 2026-10 工作流问题清单。
+
+### Added
+
+- 审查发现新增 `影响落地：是 / 否` 标注，与 `可自动修复` 组成四象限：`是+是` 不限轮次自动修并参与正常清零、`是+否` 落快照、`否+是` 停止转人工、`否+否` 落快照
+- `@lyx-fix` 允许写 `review-findings.md`（如追加解决标注），并随路径清单一并提交
+- `lycx openspec ensure` 与 `@lyx-init` 新增 `outside-project` root 状态：root 不在项目顶层或不覆盖 cwd 时不再判 healthy
+- `@lyx-propose` 增加 unborn HEAD 预检（无提交时禁用隔离 worktree 选项）
+- `@lyx-explore` 快照扫描改用 `find`，消除 zsh `nomatch` 报错
+
+### Changed
+
+- 删除「自动修只消费首轮」与「未修好即降级」；正常清零改为「Critical 为 0 且所有 `影响落地=是` 的 Warning 已解决」
+- 新增三条收敛刹车：影响项熔断、不可自动修的影响项停止、第 3 轮起新增影响项停止
+- WIP commit 文案按路径区分（切新分支 / 留在当前分支）
+- `@lyx-init` 明确「先 `openspec init`、再 `ensure`」的规范顺序
+
+### Fixed
+
+- 清理全部审查未修项快照（8 条 → 0 条）：worktree spec 旧 WIP 命令与旧文案、Critical 判级 rubric、菜单 `reviewMode=off` 用例、模板导航标注等
+
 ## [0.10.0] - 2026-10-17
 
 审查关卡新增「可自动修复」轴：机械性 Warning 从"只落快照"改为在首轮自动修复，需要人拍板的 Warning 仍保留在快照里。
