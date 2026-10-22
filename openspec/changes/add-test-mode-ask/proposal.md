@@ -8,7 +8,7 @@
 - effective 配置仍按项目覆盖 > 宿主默认 > `normal` 解析；其结果是 `ask` 时，change 级命令读取 `.openspec.yaml` 的 `lyx.testModeDecision`（仅 `normal` / `off`）。
 - 决策优先级：effective 配置为 `normal` / `off` 时直接使用配置；配置为 `ask` 且 change 已有合法 `testModeDecision` 时沿用；配置为 `ask` 且决策缺失/非法时询问一次，并把选择写回 change 元数据。
 - `@lyx-propose` 在 effective 配置为 `ask` 时先询问一次，再生成 artifacts；真实 change 名确定后把选择写入 `.openspec.yaml`，随 propose commit 一次落库。
-- `@lyx-apply`、`@lyx-review-plan`、`@lyx-review-code`、`@lyx-archive` 读取已持久化决策；需要补问并写入时，把 `.openspec.yaml` 纳入该阶段提交范围。
+- `@lyx-apply`、`@lyx-review-plan`、`@lyx-review-code`、`@lyx-archive` 读取已持久化决策；本轮新写入，或继承且实际消费的 dirty 决策，均随对应成功阶段提交。
 - `@lyx-fix` 不创建 change 元数据：effective 配置为 `ask` 时每次调用询问一次，选择仅对本次 fix 生效。
 - 未获得回答的非交互环境 SHALL 停止，不得默认 `normal` 或 `off`；最终解析为 `normal` / `off` 后，现有测试义务与无测试模式规则保持不变。
 - 补齐配置、CLI、元数据解析、模板与角色词、双语文档及自动化测试。
@@ -27,7 +27,7 @@
 
 ## Impact
 
-- 配置与 CLI：`src/types/index.ts`、`src/utils/config.ts`、`src/commands/project.ts`、`src/cli-setup.ts`、`src/i18n/index.ts`
+- 配置与 CLI：`src/types/index.ts`、`src/utils/config.ts`、`src/utils/host-adapters.ts`、`src/commands/project.ts`、`src/cli-setup.ts`、`src/i18n/index.ts`
 - change 决策解析：更新工作流运行时的 `.openspec.yaml lyx.testModeDecision` 读写契约，不引入新的 YAML 运行时依赖
 - 体检与展示：Codex / Claude doctor、`lycx status`
 - 工作流模板：`fix`、`propose`、`apply`、`archive`、`review-plan`、`review-code`

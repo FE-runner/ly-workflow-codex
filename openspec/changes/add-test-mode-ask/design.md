@@ -52,7 +52,7 @@ lyx:
   testModeDecision: normal | off
 ```
 
-字段可选。写入 SHALL 保留 YAML 其他字段与 `lyx` 下其他键。非法值视为缺失，下一次 `ask` 时重新询问并覆盖。运行模板通过常规文件读取与编辑协议维护该字段，不引入新的 YAML 运行时依赖。
+字段可选。写入 SHALL 保留 YAML 其他字段与 `lyx` 下其他键。`.openspec.yaml` 缺失 SHALL 视为决策缺失并允许创建；文件解析成功但 `lyx` 不是 mapping，或 `testModeDecision` 存在且既不是 string 也不是 null 时，SHALL 视为结构非法并停止，要求人工修复。字符串非法值或 `null` SHALL 视为缺失，下一次 `ask` 时重新询问并覆盖。`.openspec.yaml` 整体不可读或 YAML 解析失败时，命令 SHALL 停止在询问/写入/测试动作前并要求人工修复，SHALL NOT 当成字段缺失覆盖。运行模板通过常规文件读取与编辑协议维护该字段，不引入新的 YAML 运行时依赖。
 
 替代方案使用 `context.md` 或独立文件，会绕开 change 元数据并增加第二份生命周期状态；`.openspec.yaml` 已是 each change 的唯一元数据载体。
 
@@ -63,7 +63,7 @@ lyx:
 - 配置为 `normal` / `off`：直接进入现有流程；
 - 配置为 `ask`：在 opsx propose 生成前询问一次 `normal` / `off`，按选择生成/跳过测试任务；真实 change 名确定后写入 `lyx.testModeDecision`，随既有 propose commit 提交。
 
-此路径保证同一 change 的后续阶段无需再次询问。若会话在 propose commit 前中断，磁盘上没有 change 决策，下一次运行会重新询问，符合“未落库即未确认”。
+此路径保证同一 change 的后续阶段无需再次询问。若会话在决策写入前中断，磁盘上没有 change 决策，下一次运行会重新询问；若决策已写入但 propose commit 前中断，允许 dirty 决策保留并供同一 change 的恢复运行复用。
 
 ### D5. apply/review/archive 作为缺失决策的兜底入口
 
@@ -79,7 +79,9 @@ lyx:
 - review-plan / review-code：加入审查统一 commit 目标；即使无 Critical 修复，也因决策写入创建实际 commit；
 - archive：由既有 `git add -- openspec/` 覆盖。
 
-若命令在 commit 前失败，决策写入保留在工作区，供恢复后的同一 change 沿用。
+决策在写入磁盘后立即对同一 change 生效。正常成功路径 SHALL 提交该决策；若成功后消费的是前次遗留的 dirty 决策，也 SHALL 在本阶段 commit 中一并提交 `.openspec.yaml`。以下情形允许保留未提交的 dirty 决策并如实报告：propose/apply/archive 在决策写入或消费后、阶段 commit 前因中断、验证失败或业务失败停止；review `--no-commit`、review 非清零终止；阶段 commit 失败。后续同一 change 的恢复运行 MAY 直接消费该磁盘决策，避免重复询问；不得把“未提交”误报为“未决策”。若用户要求回滚该决策，只能显式修改/删除字段。
+
+**模式来源一致性**：apply 在最终模式为 `normal` 且 artifacts 未按 normal 规划测试时 SHALL 停止，SHALL NOT 临时添加范围外测试。具体判据：若 change 已有 `testModeDecision = "off"` 但当前配置覆盖为 `normal`，或决策缺失后 apply 补问为 `normal`，而 `proposal.md` / `tasks.md` 没有明确测试任务或测试执行计划，则提示先更新 change artifacts 或恢复配置。
 
 ### D6. `@lyx-fix` 是显式每次询问例外
 
@@ -96,7 +98,7 @@ fix 不创建 change、不写 `context.md`，因此没有可持久化的 change 
 ## Risks / Trade-offs
 
 - **用户忘记回答导致流程停止** → 输出明确提示“测试模式未决定”，并保留工作区状态；这是避免静默选错测试策略的代价。
-- **配置修改与历史决策优先级混淆** → doctor/status 与命令报告同时展示 effective 配置值、change 决策与最终模式来源。
+- **配置修改与历史决策优先级混淆** → doctor/status 只展示配置层 effective 值与 `ask` 说明，不猜测 active change；实际 change 命令报告其目标 change、change 决策与最终模式来源。
 - **review 无修复但需写决策** → 扩展统一 commit 规则，使 `.openspec.yaml` 的真实变化不被“无 Critical 不建 commit”规则吞掉。
 - **人工编辑 YAML 损坏其他字段** → 模板要求只增改 `lyx.testModeDecision` 并保留其余内容；review/apply/archive 的 diff 校验会暴露越界改动。
 - **同一 change 在不同宿主机执行** → 决策存于 change 文件，随项目仓库共享；配置仍为宿主本地，配置 `normal/off` 可覆盖该宿主的消费。

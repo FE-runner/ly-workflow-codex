@@ -24,6 +24,10 @@
 
 - propose 必须在生成 artifacts 前询问，但只能在真实 change 名确定后写 `.openspec.yaml`；两者之间需在会话内保留选择。
 - review-plan / review-code 若为 ask 写入决策但无其他修复，仍需提交仅含 `.openspec.yaml` 的实际变更。
+- 决策写入后立即生效；正常成功路径必须提交，但 propose 中断、review `--no-commit`、非清零终止或 commit 失败时允许 dirty 保留并报告，后续恢复可复用该磁盘决策。
 - apply 的待提交清单必须并入 `.openspec.yaml`；archive 的 `git add -- openspec/` 天然覆盖。
 - 写 YAML 时只增改 `lyx.testModeDecision`，保留其他 `lyx` 字段与文件其他内容。
+- `.openspec.yaml` 整体不可读或解析失败时停止，不得当作字段缺失覆盖。
+- 文件缺失按决策缺失并允许创建；`lyx` 非 mapping 或 decision 为 object/list/number 时结构非法，停止人工修复；`null` 视为缺失。
+- apply 在最终 normal 覆盖历史 off/补问 normal，但 artifacts 未按 normal 规划测试时必须停止，不得临时加范围外测试。
 - `ask` 本身不是测试最终模式；任何模板或角色词都不得把 ask 直接按 normal/off 判级。

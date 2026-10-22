@@ -88,7 +88,7 @@
 
 `lycx doctor` SHALL 在每个宿主的配置检查中展示宿主默认 `testMode`，并在当前目录可解析项目根时展示有效配置 `testMode`、来源（项目覆盖 / 宿主默认 / 内置默认）与规范化项目路径。未配置或空白宿主默认 SHALL 显示 `normal`，非法非空值 SHALL 输出 WARN。项目覆盖表形态非法、匹配项目条目的 `testMode` 非法，或一个规范化路径对应互相冲突的多个原始键时，doctor SHALL 输出 WARN，且该覆盖 SHALL 不作为有效值来源。
 
-`lycx status` SHALL 在每个宿主分组中展示当前项目有效配置 `testMode` 及其来源。有效配置为 `ask` 时，展示文案 SHALL 明确其不是最终测试决策。
+`lycx status` SHALL 在每个宿主分组中展示当前项目有效配置 `testMode` 及其来源。有效配置为 `ask` 时，展示文案 SHALL 明确其不是最终测试决策：change 级命令由 change 决策决定，`@lyx-fix` 在 ask 下每次调用询问。
 
 #### Scenario: 向导采集正常与无测试模式
 - **WHEN** 用户运行交互 `lycx init` 或菜单配置
@@ -112,7 +112,61 @@
 
 #### Scenario: doctor 标明询问模式不是最终决策
 - **WHEN** 当前项目有效配置 `testMode = "ask"`
-- **THEN** `lycx doctor` 与 `status` 展示 `ask`，并说明最终测试模式由 change 级决策决定
+- **THEN** `lycx doctor` 与 `status` 展示 `ask`，并说明 change 命令使用 change 决策、fix 每次调用询问
+
+### Requirement: 项目级 testMode 管理命令
+
+lyx SHALL 提供 `lycx project test-mode normal|off|ask` 与 `lycx project test-mode --unset`，用于管理当前项目的路径键测试模式覆盖。
+
+命令 SHALL 按与运行时相同的规则解析规范化主仓库根路径。`--host <hosts>` SHALL 复用既有宿主参数解析；未指定时 SHALL 作用于全部已安装宿主。目标宿主的配置文件不存在时，命令 SHALL 将其报告为未安装并跳过，SHALL NOT 隐式安装宿主或创建安装配置文件。
+
+设置时，命令 SHALL 在目标宿主配置中新增或更新 `[projects."<规范化项目根>"]` 的 `testMode`，并保留其他宿主配置、其他项目条目与同一配置中的无关字段。移除时，命令 SHALL 把目标集合定义为所有规范化后等于当前项目根的原始项目键：逐个删除这些条目中的 `testMode`；若条目删除后不再含任何字段，SHALL 删除该空条目；若条目仍含其他字段，SHALL 保留该条目与字段。没有任何规范化等价键时，移除 SHALL 作为幂等成功处理并明确报告。
+
+命令写入任何配置前 SHALL 先完成参数、目标宿主集合、全部目标配置可读性与规范化路径冲突预校验，避免因可提前发现的错误产生部分写入。若其他原始项目键规范化后指向当前主仓库根，且与目标 `testMode` 冲突，命令 SHALL 不写任何配置并以非零状态列出全部冲突键；SHALL NOT 自动合并、删除或改写既有别名键。单宿主写入失败或多宿主后续写入失败时 SHALL 以非零退出状态如实报告已成功与失败的目标；至少覆盖无已安装目标宿主、`--host` 非法、模式参数缺失、模式与 `--unset` 同时出现、目标配置不可读、路径冲突或写入失败。
+
+#### Scenario: 设置当前项目无测试模式
+- **WHEN** 用户在项目内运行 `lycx project test-mode off`
+- **THEN** 每个目标宿主配置写入当前主仓库根的 `testMode = "off"`，并报告写入的宿主与路径
+
+#### Scenario: 设置当前项目询问模式
+- **WHEN** 用户在项目内运行 `lycx project test-mode ask`
+- **THEN** 每个目标宿主配置写入当前主仓库根的 `testMode = "ask"`，并报告该值会在 change 首次需要测试决策时询问
+
+#### Scenario: 在子目录设置命中主仓库根
+- **WHEN** 用户在 Git 仓库子目录运行 `lycx project test-mode off`
+- **THEN** 命令写入主仓库根路径键，而不是子目录路径键
+
+#### Scenario: linked worktree 更新同一项目键
+- **WHEN** 用户在 linked worktree 运行 `lycx project test-mode normal`
+- **THEN** 命令更新主仓库根路径对应的同一项目条目
+
+#### Scenario: 移除项目覆盖
+- **WHEN** 用户运行 `lycx project test-mode --unset`
+- **THEN** 当前项目条目的 `testMode` 被移除，后续有效值回退宿主默认
+
+#### Scenario: 移除覆盖包含规范化别名键
+- **WHEN** 当前项目覆盖只存在于非 canonical 的原始路径键，该键规范化后等于当前主仓库根
+- **THEN** 命令移除该原始键的 `testMode`；条目为空时删除条目，仍含其他字段时保留字段，避免覆盖继续生效
+
+#### Scenario: 移除不存在覆盖仍成功
+- **WHEN** 当前项目没有路径键覆盖，用户运行 `lycx project test-mode --unset`
+- **THEN** 命令不修改配置并报告无需移除，退出状态为成功
+
+#### Scenario: 未安装宿主被跳过
+- **WHEN** 用户未指定 `--host`，且仅一个已注册宿主有配置文件
+- **THEN** 命令只修改该已安装宿主，并明确报告另一宿主未安装、未写入
+
+#### Scenario: 非法参数不写配置
+- **WHEN** 用户同时传入模式值与 `--unset`，模式不是 normal/off/ask，或宿主参数非法
+- **THEN** 命令不写入任何配置文件，以非零状态退出并报告原因
+
+#### Scenario: 目标配置不可读时预校验阻止写入
+- **WHEN** 任一目标宿主配置文件存在但不可读或 TOML 解析失败
+- **THEN** 命令在写入任何目标前失败并报告该宿主，不产生部分配置更新
+
+#### Scenario: 规范化路径冲突阻止写入
+- **WHEN** 当前主仓库根已有多个规范化等价但原始写法不同的项目键，且取值互相冲突
+- **THEN** 设置命令不写入任何目标配置，以非零状态列出冲突键并报告需要人工处理
 
 ## ADDED Requirements
 
@@ -128,7 +182,11 @@
 
 询问 SHALL 明确区分 `normal`（写测试、跑测试）与 `off`（不写测试、不跑测试）。用户未回答、取消或当前环境无法交互时，命令 SHALL 停止，SHALL NOT 以 `normal` / `off` 猜测继续。
 
-写入 SHALL 保留 `.openspec.yaml` 的其他字段与 `lyx` 命名空间下的其他字段；非法旧值 SHALL 被当次选择覆盖。写入决策的命令 SHALL 把 `.openspec.yaml` 纳入其本阶段 commit 范围；即使该命令原本没有其他修改，也 SHALL 提交该元数据变更，不得留下未提交的决策修改。
+`.openspec.yaml` 缺失 SHALL 视为决策缺失并允许创建。文件解析成功但 `lyx` 不是 mapping，或 `testModeDecision` 存在且既不是 string 也不是 null 时，命令 SHALL 视为结构非法并停止，要求人工修复。`testModeDecision: null` 或非空但不在 `normal` / `off` 的字符串 SHALL 视为缺失并重新询问。文件整体不可读或 YAML 解析失败时 SHALL 停止，SHALL NOT 覆盖。
+
+写入 SHALL 保留 `.openspec.yaml` 的其他字段与 `lyx` 命名空间下的其他字段；非法旧值 SHALL 被当次选择覆盖。`.openspec.yaml` 整体不可读或 YAML 解析失败时，命令 SHALL 停止在询问/写入/测试动作前并要求人工修复，SHALL NOT 当成字段缺失覆盖。
+
+决策写入磁盘后 SHALL 立即对同一 change 生效。正常成功路径 SHALL 把 `.openspec.yaml` 纳入本阶段 commit；若本阶段成功消费的是前次遗留且尚未提交的决策，也 SHALL 一并提交该文件。即使该命令原本没有其他修改，也 SHALL 提交该元数据变更。以下情形允许保留未提交的 dirty 决策并如实报告：propose/apply/archive 在决策写入或消费后、阶段 commit 前因中断、验证失败或业务失败停止；review `--no-commit`、review 非清零终止；阶段 commit 失败。后续同一 change 的恢复运行 MAY 直接消费该磁盘决策，避免重复询问；SHALL NOT 把“未提交”误报为“未决策”。
 
 `@lyx-fix` 不创建 change 元数据，因此不适用本 Requirement；其 `ask` 行为由 `lightweight-fix-flow` 定义。
 
@@ -152,6 +210,18 @@
 - **WHEN** effective 配置为 `ask`，目标 change 没有 `lyx.testModeDecision`，用户在 apply / review / archive 中选择 `off`
 - **THEN** 命令写入 `lyx.testModeDecision = "off"` 并把 `.openspec.yaml` 纳入该阶段提交
 
+#### Scenario: YAML 不可读时停止
+- **WHEN** effective 配置为 `ask`，目标 change 的 `.openspec.yaml` 不可读或 YAML 解析失败
+- **THEN** 命令在询问、写入或测试动作前停止并要求人工修复，不得覆盖该文件
+
+#### Scenario: YAML 缺失时按缺失决策处理
+- **WHEN** effective 配置为 `ask` 且目标 change 的 `.openspec.yaml` 不存在
+- **THEN** 命令把决策视为缺失，允许询问并创建包含 `lyx.testModeDecision` 的元数据文件
+
+#### Scenario: YAML 结构非法时停止
+- **WHEN** `.openspec.yaml` 可解析，但 `lyx` 不是 mapping，或 `testModeDecision` 为 object/list/number
+- **THEN** 命令停止并要求人工修复，不得覆盖结构
+
 #### Scenario: 非法历史决策重新询问
 - **WHEN** effective 配置为 `ask`，`lyx.testModeDecision` 为非空非法值
 - **THEN** 命令忽略该值、询问一次并用新选择覆盖
@@ -159,3 +229,11 @@
 #### Scenario: 未获得回答时停止
 - **WHEN** effective 配置为 `ask` 且决策缺失，用户取消或当前环境不能交互
 - **THEN** 命令停止在测试动作前，不新增测试文件、不生成测试任务、不执行测试命令
+
+#### Scenario: no-commit 或失败时允许保留 dirty 决策
+- **WHEN** review 使用 `--no-commit`、review 非清零终止，或 propose/apply/archive 在决策写入/消费后、阶段 commit 前因中断、验证失败、业务失败或 commit 失败停止
+- **THEN** 命令如实报告未提交状态，后续同一 change 的恢复运行可以消费该磁盘决策
+
+#### Scenario: 最终 normal 与 artifacts 测试规划失配时停止
+- **WHEN** 历史决策为 `off` 但当前配置覆盖为 `normal`，或决策缺失后补问为 `normal`，而 proposal/tasks 没有测试任务或测试执行计划
+- **THEN** apply 在实施前停止，提示先更新 change artifacts 或恢复配置，不得临时添加范围外测试
