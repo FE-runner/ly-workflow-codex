@@ -35,6 +35,7 @@
 
 - 配置读取新增 `HostConfigReadResult`（missing / ok / invalid）；`init/update` 在宿主选择后、任何写入前预检全部所选宿主，invalid 时整体停止。菜单配置入口同样拒绝覆盖 invalid 配置。
 - `resolveProjectKey` 独立于 OpenSpec root 校验；实现覆盖 normal / separate-git-dir / submodule / linked worktree / bare worktree / 非 Git cwd。
+- 非 bare linked worktree 的主工作树根优先读取 common git dir 的 `core.worktree`；缺失时只把 common dir 父目录下的候选 `.git` 视为主 checkout，且必须显式以 `--git-dir=<candidate>` 解析并确认结果等于当前 common git dir。`git init --separate-git-dir` 不写 `core.worktree`，且 `git worktree list` 不能反推主 checkout，因此无法确认时回退当前 worktree 根，不能猜 common dir 父目录。
 - 项目解析保留原始键，按规范化等价键集合匹配；冲突或匹配条目非法时不采用项目覆盖，回退宿主默认并产生诊断。
 - CAC 不支持 `project test-mode` 这种多 token 子命令直接挂 options，实际注册为 `project <action> [mode]` 并在 action 中只接受 `test-mode`；用户调用方式仍是 `lycx project test-mode`。
 - 项目命令在写入前预校验全部目标；设置时 canonical 键可被覆盖，规范化等价别名键与目标值冲突则整体失败且不写；`--unset` 删除全部等价键中的 testMode。

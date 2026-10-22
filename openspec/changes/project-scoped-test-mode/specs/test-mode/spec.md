@@ -12,7 +12,7 @@
 2. `[host].testMode`；
 3. `normal`。
 
-项目路径 SHALL 归一到主仓库根：普通 checkout 与 separate-git-dir checkout 取 `show-toplevel`；子模块取子模块自身的 `show-toplevel`；非 bare 仓库上的 linked worktree 取主工作树根；bare repository 上的 linked worktree 因不存在主工作树根，取当前 worktree 的 `show-toplevel`；当前目录不在 Git 仓库内时，取规范化后的当前目录。匹配 SHALL 使用规范化后的绝对路径，SHALL NOT 依赖调用时的原始相对路径。
+项目路径 SHALL 归一到主仓库根：普通 checkout 与 separate-git-dir checkout 取 `show-toplevel`；子模块取子模块自身的 `show-toplevel`；非 bare 仓库上的 linked worktree 在可确定主工作树时取主工作树根；bare repository 上的 linked worktree，或 separate-git-dir 布局无法从 linked worktree 反推主 checkout 时，取当前 worktree 的 `show-toplevel`；当前目录不在 Git 仓库内时，取规范化后的当前目录。匹配 SHALL 使用规范化后的绝对路径，SHALL NOT 依赖调用时的原始相对路径。
 
 匹配项目条目缺失、项目条目内的 `testMode` 缺失/空白/非法，或项目覆盖表形态非法时，有效模式 SHALL 回退到 `[host].testMode`；非法项目覆盖形态 SHALL 由 `lycx doctor` 输出 WARN。宿主配置整体缺失、不可读或 TOML 解析失败时，SHALL 视为“测试模式未知”并在执行任何测试文件写入、测试任务生成或测试命令前停止，明确提示运行 `lycx doctor` 检查；SHALL NOT 静默按 `normal` 继续。
 
@@ -57,6 +57,10 @@
 #### Scenario: bare 仓库 worktree 使用自身路径
 - **WHEN** 用户位于 bare repository 的 linked worktree 内
 - **THEN** 项目键使用当前 worktree 的 `show-toplevel`，因为该仓库不存在可共享的主工作树根
+
+#### Scenario: separate-git-dir 主树无法反推时使用当前 worktree
+- **WHEN** 主 checkout 使用 separate-git-dir，且 linked worktree 无法从 Git metadata 确定主工作树路径
+- **THEN** 项目键使用当前 worktree 的 `show-toplevel`，不得猜成 common git dir 的父目录
 
 #### Scenario: 项目条目缺失时回退宿主默认
 - **WHEN** 当前主仓库根没有对应 `[projects]` 条目，且 `[host].testMode = "off"`

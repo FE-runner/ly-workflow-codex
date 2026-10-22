@@ -62,7 +62,7 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 **测试风险策略例外**：纯展示改动没有新增自动化测试 SHALL NOT 单独形成 Critical、Warning 或 Info；补充边界覆盖只形成 Warning 并固定标注 `可自动修复：否` 与 `影响落地：否`。已确认逻辑缺陷缺少复现测试、核心行为未覆盖或契约不一致时 SHALL NOT 使用本例外。
 
-**无测试模式例外**：当前项目有效 `testMode = "off"` 时，SHALL NOT 产生“缺少测试文件、缺少测试任务、缺少边界测试或测试覆盖不足”类 Critical / Warning / Info。有效值按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析；项目路径按主仓库根归一，子模块用自身根，bare worktree 用当前 worktree 根。项目覆盖缺失或非法时回退宿主默认；核心行为未覆盖、接口或配置契约不一致、错误路径、安全与数据完整性问题仍按既有规则判级。配置文件整体不可读/解析失败时按“测试模式未知”停止审查并提示运行 `lycx doctor`。
+**无测试模式例外**：当前项目有效 `testMode = "off"` 时，SHALL NOT 产生“缺少测试文件、缺少测试任务、缺少边界测试或测试覆盖不足”类 Critical / Warning / Info。有效值按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析；项目路径按主仓库根归一，子模块用自身根；非 bare linked worktree 能确定主树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 根。项目覆盖缺失或非法时回退宿主默认；核心行为未覆盖、接口或配置契约不一致、错误路径、安全与数据完整性问题仍按既有规则判级。配置文件整体不可读/解析失败时按“测试模式未知”停止审查并提示运行 `lycx doctor`。
 
 **必须判「是」的反向清单**（防借"不可自动修"逃避）：同一事实在两处表述不一致且权威方明确；已点名的漏改或漏同步（含项目改动对称清单覆盖的 i18n 文案键、宿主片段、命令表、README 双语）；明确缺陷且写法唯一（漏捕获异常、漏设错误标志、用错函数）。审查者点名测试补齐 SHALL NOT 单独使该条进入本清单；只有复现已确认 Critical 所必需的测试调整属于该 Critical 修复范围。
 

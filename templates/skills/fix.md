@@ -42,7 +42,7 @@ SHALL NOT 在未给出分流结论的情况下开始实施。
 
 ### 3. 实施（按测试风险执行）
 
-实施前 SHALL 读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 用主工作树根，bare worktree 用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时 SHALL 停止并提示运行 `lycx doctor`，SHALL NOT 静默按 `normal` 继续。
+实施前 SHALL 读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时 SHALL 停止并提示运行 `lycx doctor`，SHALL NOT 静默按 `normal` 继续。宿主配置缺失、不可读或解析失败时 SHALL 停止并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
 
 - `testMode = "off"`：SHALL NOT 新增或修改测试文件、SHALL NOT 生成测试任务、SHALL NOT 运行任何测试命令；行为或契约改动仍正常实施，并改用类型检查、构建或其他非测试验证。混合任务只跳过测试部分，不跳过实现部分。来源为项目覆盖时，跳过状态写为 `[跳过] ...（testMode=off，项目配置）`。
 - `testMode = "normal"`：按 `risk-based-testing-policy` 对改动单元分类并记录测试策略：

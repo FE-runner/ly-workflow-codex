@@ -48,9 +48,9 @@ testMode = "off"
 1. 在 Git 仓库内同时读取 `git rev-parse --show-toplevel`、`--git-dir`、`--git-common-dir` 与 `--show-superproject-working-tree`，并把相对结果按 cwd 转绝对、`realpath` 归一。
 2. `--show-superproject-working-tree` 非空时判定为子模块，项目键取子模块自身 `--show-toplevel`，不归并到 superproject。
 3. 非子模块且 `git-dir` 与 `git-common-dir` 相同时，当前目录是普通 checkout（包含 separate-git-dir），项目键取 `--show-toplevel`。
-4. 非子模块且 `git-dir` 与 `git-common-dir` 不同时，当前目录是 linked worktree。先以 common git dir 为 `--git-dir` 探测 `git rev-parse --is-bare-repository`：非 bare 时取 common git dir 的父目录作为主工作树根；bare 时不存在主工作树根，取当前 worktree 的 `--show-toplevel`。
+4. 非子模块且 `git-dir` 与 `git-common-dir` 不同时，当前目录是 linked worktree。先以 common git dir 为 `--git-dir` 探测 `git rev-parse --is-bare-repository`：bare 时取当前 worktree 的 `--show-toplevel`。非 bare 时依次尝试 `core.worktree`，以及 common dir 父目录下的候选 `.git`：候选必须显式以 `--git-dir=<candidate>` 可解析，且规范化 git dir 等于当前 common git dir，才可判定为主 checkout。两者都无法确认主工作树时，取当前 worktree 的 `--show-toplevel`，不得猜测 common dir 父目录。
 5. 不在 Git 仓库内或 Git 解析失败时，使用 `realpath(cwd)`；目录不存在时回退 `path.resolve(cwd)`。
-6. 返回规范化绝对路径，并保留“解析来源”（git-root / submodule-root / worktree-main-root / worktree-root-bare / cwd）供 doctor 展示。
+6. 返回规范化绝对路径，并保留“解析来源”（git-root / submodule-root / worktree-main-root / worktree-root-bare / worktree-root-unresolved / cwd）供 doctor 展示。
 
 替代方案继续使用 `--show-toplevel` 会让每个 linked worktree 拥有独立配置键，与已确认方案冲突。`--show-superproject-working-tree` 不作为主键来源；子模块按自身 Git 仓库处理。
 

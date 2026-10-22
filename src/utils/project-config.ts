@@ -1,13 +1,13 @@
 import type { LyConfig, ProjectSection, TestMode } from '../types'
 import { execFile } from 'node:child_process'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import fs from 'node:fs'
 import { resolve } from 'pathe'
 import { readLyConfigState, sanitizeTestMode } from './config'
 import type { HostConfigLocation, HostConfigReadResult } from './config'
 import type { HostId } from './host-adapters'
 
-export type ProjectPathSource = 'git-root' | 'submodule-root' | 'worktree-main-root' | 'worktree-root-bare' | 'cwd'
+export type ProjectPathSource = 'git-root' | 'submodule-root' | 'worktree-main-root' | 'worktree-root-bare' | 'worktree-root-unresolved' | 'cwd'
 export type TestModeSource = 'project' | 'host' | 'default'
 export type ProjectConfigWarningCode
   = | 'projects-invalid-shape'
@@ -97,7 +97,22 @@ export async function resolveProjectKey(cwd = process.cwd()): Promise<ProjectKey
   if (bare.ok && bare.stdout === 'true')
     return { path: topPath, source: 'worktree-root-bare' }
 
-  return { path: canonicalize(dirname(commonDirPath)), source: 'worktree-main-root' }
+  const coreWorktree = await execText('git', [`--git-dir=${commonDirPath}`, 'config', '--get', 'core.worktree'], cwd)
+  if (coreWorktree.ok && coreWorktree.stdout)
+    return { path: canonicalize(resolve(commonDirPath, coreWorktree.stdout)), source: 'worktree-main-root' }
+
+  const commonParent = dirname(commonDirPath)
+  const dotGit = join(commonParent, '.git')
+  if (fs.existsSync(dotGit)) {
+    const candidate = await execText('git', ['-C', commonParent, `--git-dir=${dotGit}`, 'rev-parse', '--git-dir'], cwd)
+    if (candidate.ok && candidate.stdout) {
+      const candidateGitDir = absoluteFrom(commonParent, candidate.stdout)
+      if (candidateGitDir === commonDirPath)
+        return { path: canonicalize(commonParent), source: 'worktree-main-root' }
+    }
+  }
+
+  return { path: topPath, source: 'worktree-root-unresolved' }
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

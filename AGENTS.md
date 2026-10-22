@@ -137,7 +137,7 @@ spawnableModels = [...]    # 仅 codex：本机实测可 spawn 的模型清单�
 testMode = "off"
 ```
 
-- 有效 `testMode`：当前项目路径覆盖 > `[host].testMode` > `normal`。项目键按主仓库根归一：普通 checkout / separate-git-dir / 子模块使用各自 `show-toplevel`；非 bare linked worktree 使用主工作树根；bare worktree 使用当前 worktree 根；非 Git 目录使用规范化 cwd。
+- 有效 `testMode`：当前项目路径覆盖 > `[host].testMode` > `normal`。项目键按主仓库根归一：普通 checkout / separate-git-dir / 子模块使用各自 `show-toplevel`；非 bare linked worktree 能确定主工作树时使用主树根；bare worktree 或 separate-git-dir 无法反推主树时使用当前 worktree 根；非 Git 目录使用规范化 cwd。
 - 项目条目缺失或非法时回退宿主默认；同一规范化路径的多个原始键取值冲突时忽略覆盖并由 doctor WARN。`lycx doctor` / `status` 展示宿主默认、当前项目有效值、来源与路径。
 - `lycx init` / update / 菜单写回保留全部 `[projects]` 与未知字段；任一所选宿主配置存在但不可读或 TOML 非法时，在写入任何宿主前停止，避免默认配置覆盖既有项目表。
 
@@ -177,7 +177,7 @@ testMode = "off"
 
 10. **无测试模式是宿主默认 + 项目覆盖的显式 opt-in**：有效 `testMode = "off"` 时不新增/修改测试文件、不生成测试任务、不执行测试命令；fix 仍实施，propose 仍生成必要 spec，review 不产生测试缺失类发现，archive 跳过测试但仍执行 typecheck/build。配置缺失、不可读或解析失败时命令停止并提示 `lycx doctor`，不得静默回退 `normal`；无项目条目时沿用宿主默认，未配置的旧用户默认 `normal`。
 
-11. **项目测试模式按主仓库根而非 checkout 路径区分**：项目覆盖存于每宿主 `lyx/config.toml` 的 `[projects."<path>"]`，linked worktree 与主工作区共享同一键；`lycx project test-mode` 只修改当前路径键，设置遇规范化别名冲突时失败且不写，`--unset` 删除全部规范化等价键中的 `testMode`。该字段不进入项目仓库，继续由宿主本地配置承载。
+11. **项目测试模式按主仓库根而非 checkout 路径区分**：项目覆盖存于每宿主 `lyx/config.toml` 的 `[projects."<path>"]`；linked worktree 能确定主树时与主工作区共享同一键，无法反推时使用当前 worktree 根。`lycx project test-mode` 只修改当前路径键，设置遇规范化别名冲突时失败且不写，`--unset` 删除全部规范化等价键中的 `testMode`。该字段不进入项目仓库，继续由宿主本地配置承载。
 
 ## 改动对称清单
 

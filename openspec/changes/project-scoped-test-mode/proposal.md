@@ -5,8 +5,8 @@
 ## What Changes
 
 - 在宿主配置文件新增路径键项目覆盖表 `[projects."<主仓库根路径>"]`，当前只支持 `testMode` 字段；`[host].testMode` 保留为未命中项目时的默认值。
-- 定义项目配置键解析：有 Git 时归一到主仓库根，子目录与 linked worktree 共用同一键；无 Git 时使用规范化后的当前目录。
-- 项目键解析需区分普通 checkout、separate-git-dir、子模块、linked worktree、bare repository 上的 linked worktree 与无 Git 目录；bare 仓库没有主工作树根时回退到当前 worktree 根。
+- 定义项目配置键解析：有 Git 时归一到主仓库根；子目录归一到该根，linked worktree 仅在能确认主工作树时共用同一键；无法确认时使用当前 worktree 根；无 Git 时使用规范化后的当前目录。
+- 项目键解析需区分普通 checkout、separate-git-dir、子模块、linked worktree、bare repository 上的 linked worktree 与无 Git 目录；bare 仓库没有主工作树根，或 separate-git-dir 无法反推主 checkout 时，回退到当前 worktree 根。
 - 定义有效测试模式解析顺序：项目路径条目 > 宿主默认 `testMode` > `normal`。项目条目缺失或取值非法时回退宿主默认，并由 doctor 暴露非法形态。
 - 新增 `lycx project test-mode normal|off` 与 `lycx project test-mode --unset`，按宿主写入 canonical 项目键，或从所有规范化等价的项目键中移除测试模式覆盖。
 - 项目命令写入前 SHALL 预校验全部目标配置与规范化路径冲突；别名键指向同一项目且值冲突时失败且不写任何配置。
