@@ -1,0 +1,7 @@
+schema: spec-driven
+lyx:
+  isolation: none
+  sourceBranch: main
+  developmentBranch: null
+  worktreePath: null
+created: 2026-10-22
