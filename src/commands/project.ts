@@ -191,6 +191,8 @@ export async function runProjectTestMode(mode: string | undefined, options: Proj
     console.log(ansis.green(`  ✓ ${options.unset
       ? i18n.t('project:unsetSuccess', { hosts: written.join(', '), path: project.path })
       : i18n.t('project:setSuccess', { mode: targetMode, hosts: written.join(', '), path: project.path })}`))
+    if (!options.unset && targetMode === 'ask')
+      console.log(ansis.gray(`  ${i18n.t('project:askSetHint')}`))
   }
   if (noops.length > 0)
     console.log(ansis.gray(`  ${i18n.t('project:unsetNoop', { hosts: noops.join(', '), path: project.path })}`))

@@ -241,6 +241,7 @@ function printSummary(input: { host: HostId, models: SubagentConfigCollected, co
   const testModeLabel: Record<TestMode, string> = {
     normal: i18n.t('init:testMode.normal'),
     off: i18n.t('init:testMode.off'),
+    ask: i18n.t('init:testMode.ask'),
   }
   console.log()
   console.log(ansis.yellow('━'.repeat(50)))

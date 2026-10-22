@@ -9,8 +9,8 @@ export type ExecutorKind = 'main' | 'subagent'
 // 审查范围（仅门控 @lyx-propose 编排入口）：full = 方案+代码审查；plan-only = 仅方案审查；code-only = 仅代码审查；off = 跳过审查
 export type ReviewMode = 'full' | 'plan-only' | 'code-only' | 'off'
 
-// 测试模式：normal = 保留现有测试义务；off = 不写测试文件、不执行测试
-export type TestMode = 'normal' | 'off'
+// 测试模式：normal = 保留测试义务；off = 不写/不跑测试；ask = change 首次需要时询问
+export type TestMode = 'normal' | 'off' | 'ask'
 
 // 路径键项目配置条目；当前只解释 testMode，其他字段原样保留
 export interface ProjectSection {

@@ -31,3 +31,12 @@
 - 文件缺失按决策缺失并允许创建；`lyx` 非 mapping 或 decision 为 object/list/number 时结构非法，停止人工修复；`null` 视为缺失。
 - apply 在最终 normal 覆盖历史 off/补问 normal，但 artifacts 未按 normal 规划测试时必须停止，不得临时加范围外测试。
 - `ask` 本身不是测试最终模式；任何模板或角色词都不得把 ask 直接按 normal/off 判级。
+
+## 实施决策
+
+- `ask` 已扩展到 `TestMode`、`TEST_MODES`、`HostAdapterConfig.testMode`、init/menu 候选、project CLI、doctor 与双语文案。
+- 元数据决策由模板运行时按文件编辑协议维护，不新增 YAML 依赖；缺失文件允许创建，`lyx` 非 mapping 或 decision 非 string/null 时停止。
+- review 主会话先解析 final mode，并在 TASK 中显式传给审查 subagent；角色词不再自行推断 ask。
+- 正常清零提交范围包含本轮新写或继承且实际消费的 `.openspec.yaml`；`--no-commit`、非清零、commit 失败允许 dirty 保留并复用。
+- 新增 `project-config.test.ts` 验证 ask 项目覆盖、非法覆盖回退、宿主非法回退 normal 与配置不可读停止。
+- 验证结果：`pnpm test` 415 passed、`pnpm typecheck`、`pnpm build`、`openspec validate --changes add-test-mode-ask --strict`、CLI ask smoke 全部通过。

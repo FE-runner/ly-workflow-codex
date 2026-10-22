@@ -184,11 +184,11 @@ export function createDefaultConfig(options: {
 }
 
 /** 全部合法测试模式取值（doctor 提示与清洗共用） */
-export const TEST_MODES = ['normal', 'off'] as const
+export const TEST_MODES = ['normal', 'off', 'ask'] as const
 
 /**
  * 测试模式字段清洗（[host].testMode）：
- * 非字符串 → undefined；trim 后仅接受 normal / off，其余（含空白）视为未配置。
+ * 非字符串 → undefined；trim 后仅接受 normal / off / ask，其余（含空白）视为未配置。
  * 未配置等价 'normal'，由模板运行时按此默认值解析。
  */
 export function sanitizeTestMode(value: unknown): TestMode | undefined {

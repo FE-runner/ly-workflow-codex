@@ -79,11 +79,13 @@ argument-hint: '<需求描述>'
 
 读取 `@openspec-propose skill`（opsx propose 编排 prompt）并按其定义的完整流程，围绕 `参数`（需求描述）生成 proposal/design/tasks 全部 artifacts。生成过程中遵循该编排 prompt 的全部步骤与约束（本命令的步骤 4-9 在其后继续编排）。
 
-**测试模式与风险策略适配（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时停止并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
+**测试模式与风险策略适配（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时停止并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
 
-`testMode = "off"` 时 SHALL NOT 生成测试文件、测试修改或测试命令任务；行为或契约所需 spec 仍照常生成，tasks 的验证限定为 typecheck、build、视觉检查或其他非测试检查。来源为项目覆盖时，状态行写为 `[跳过] ...（testMode=off，项目配置）`。
+配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时，新 change 尚无 `.openspec.yaml`，SHALL 在生成 artifacts 前询问一次：`normal` 表示写测试、跑测试；`off` 表示不写测试、不跑测试。用户取消或环境无法交互时停止，不生成 artifacts。选择 SHALL 在步骤 4 确定真实 change 名后写入 `openspec/changes/<change-name>/.openspec.yaml` 的 `lyx.testModeDecision`，随 propose commit 落库。
 
-`testMode = "normal"` 时按 `risk-based-testing-policy` 分类并决定测试义务：
+最终模式为 `testMode = "off"` 时 SHALL NOT 生成测试文件、测试修改或测试命令任务；行为或契约所需 spec 仍照常生成，tasks 的验证限定为 typecheck、build、视觉检查或其他非测试检查。来源为项目覆盖时，状态行写为 `[跳过] ...（testMode=off，项目配置）`。
+
+最终模式为 `normal` 时按 `risk-based-testing-policy` 分类并决定测试义务：
 
 - 纯 UI、文案或样式改动只涉及静态展示且不改变行为或契约时，MAY 在 `proposal.md` 明确声明“展示型改动，无行为或契约变化”，保持 New/Modified Capabilities 为空，并在 `.openspec.yaml` 设置 `skip_specs: true`；此时 SHALL NOT 生成 delta spec 或测试任务，`tasks.md` 仍须包含实现任务与相称验证任务（如 typecheck、build 或视觉检查）。
 - 行为或契约改动 SHALL 生成对应 delta spec，并在可自动化时生成与风险相称的测试任务。
@@ -135,9 +137,10 @@ lyx:
   sourceBranch: <ISOLATION_SOURCE_BRANCH 或 null>
   developmentBranch: <DEVELOPMENT_BRANCH 或 null>
   worktreePath: <WORKTREE_PATH；仅 worktree 模式>
+  testModeDecision: normal | off  # 仅 effective testMode = ask 且用户已选择时写入
 ```
 
-`isolation: none` 时 `sourceBranch` 仍记录当前分支，`developmentBranch` / `worktreePath` 为 `null`。`sourceBranch` 缺失时写 `null`，不得猜测。该 metadata 属于 propose 提交单元，随步骤 6 的 `git add -- openspec/changes/<change-name>/` 一起提交。
+`isolation: none` 时 `sourceBranch` 仍记录当前分支，`developmentBranch` / `worktreePath` 为 `null`。`sourceBranch` 缺失时写 `null`，不得猜测。`ask` 选择只写入 `testModeDecision`，保留 `.openspec.yaml` 其他字段。该 metadata 属于 propose 提交单元，随步骤 6 的 `git add -- openspec/changes/<change-name>/` 一起提交。若 propose commit 在决策写入后、提交前中断，允许决策保留为 dirty 并如实报告，后续恢复可复用。
 
 写入 metadata 后 SHALL 再运行一次 `openspec validate --changes <change-name>`；若验证失败，停止在 commit 前并报告原始错误。
 

@@ -14,7 +14,7 @@ export type HostId = 'codex' | 'claude'
 /** 宿主无关的模板渲染配置（宿主配置节的相关切片） */
 export interface HostAdapterConfig {
   /** 测试模式；未配置等价 'normal' */
-  testMode?: 'normal' | 'off'
+  testMode?: 'normal' | 'off' | 'ask'
   /** 审查范围；未配置等价 'full'，仅门控 @lyx-propose 编排入口 */
   reviewMode?: 'full' | 'plan-only' | 'code-only' | 'off'
   /** 审查执行者；未配置等价 'main'，由模板运行时解析 */

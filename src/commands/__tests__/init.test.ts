@@ -53,6 +53,9 @@ vi.mock('../../utils/config', async (importOriginal) => {
     ...mod,
     listInstalledHosts: async () => [...state.installed],
     readLyConfig: async () => state.existing,
+    readLyConfigState: async () => state.existing
+      ? { status: 'ok', path: '/tmp/test-config.toml', config: state.existing }
+      : { status: 'missing', path: '/tmp/test-config.toml' },
     writeLyConfig: async (config: any, host: string) => { state.writes.push({ host, config }) },
   }
 })
@@ -115,6 +118,8 @@ describe('init — host selection (5.1)', () => {
     await init()
     const hostPrompt = state.prompts.find(p => p.name === 'hosts')
     expect(hostPrompt.choices.filter((c: any) => c.checked).map((c: any) => c.value)).toEqual(['codex', 'claude'])
+    const testModePrompt = state.prompts.find(p => String(p.message).includes('testMode'))
+    expect(testModePrompt.choices.map((c: any) => c.value)).toEqual(['normal', 'off', 'ask'])
     // 取消 codex 后只写 claude，不动 codex
     expect(state.writes.map(w => w.host)).toEqual(['claude'])
     expect(state.installs.map(i => i.hosts)).toEqual([['claude']])

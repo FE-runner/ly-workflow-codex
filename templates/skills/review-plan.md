@@ -22,6 +22,8 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 循环执行期间默认不提交；仅当循环以"正常清零"结束时，才对审查目标全部文件（该 change 的 artifact 与 delta spec，含编排方已暂存的产物与循环修复）统一提交一次（见步骤 5）。传入 `--no-commit` 时，连这次最终的统一提交也不做。
 
+**测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失或无合法 `lyx.testModeDecision` 时询问一次 `normal` / `off` 并写回，保留其他字段；`lyx` 非 mapping 或 decision 为 object/list/number、文件不可读/解析失败时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `.openspec.yaml`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
+
 ## 判级标准（先定级，再写条目）
 
 同一类问题两次跑出不同级别会让流程行为不可预期，因此按下面规则定级；判断对象始终是文档本身，不是"实施还没开始"。
@@ -65,7 +67,7 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 **测试风险策略例外**：纯展示改动没有新增自动化测试 SHALL NOT 单独形成 Critical、Warning 或 Info；补充边界覆盖只形成 Warning 并固定标注 `可自动修复：否` 与 `影响落地：否`。已确认逻辑缺陷缺少复现测试、核心行为未覆盖或契约不一致时 SHALL NOT 使用本例外。
 
-**无测试模式例外**：当前项目有效 `testMode = "off"` 时，SHALL NOT 产生“缺少测试文件、缺少测试任务、缺少边界测试或测试覆盖不足”类 Critical / Warning / Info。有效值按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析；项目路径按主仓库根归一，子模块用自身根；非 bare linked worktree 能确定主树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 根。项目覆盖缺失或非法时回退宿主默认；核心行为未覆盖、接口或配置契约不一致、错误路径、安全与数据完整性问题仍按既有规则判级。配置文件整体不可读/解析失败时按“测试模式未知”停止审查并提示运行 `lycx doctor`。
+**无测试模式例外**：主会话 TASK SHALL 提供已解析的 final `testMode`（`normal` / `off`）与来源。final mode 为 `off` 时，SHALL NOT 产生“缺少测试文件、缺少测试任务、缺少边界测试或测试覆盖不足”类 Critical / Warning / Info；final mode 为 `normal` 时按风险策略判级。若 TASK 未提供 final mode 或仍为 `ask`，审查 SHALL 停止并报告调用方未完成决策。核心行为未覆盖、接口或配置契约不一致、错误路径、安全与数据完整性问题仍按既有规则判级。
 
 **必须判「是」的反向清单**（防借"不可自动修"逃避）：同一事实在两处表述不一致且权威方明确；已点名的漏改或漏同步（含项目改动对称清单覆盖的 i18n 文案键、宿主片段、命令表、README 双语）；明确缺陷且写法唯一（漏捕获异常、漏设错误标志、用错函数）。审查者点名测试补齐 SHALL NOT 单独使该条进入本清单；只有复现已确认 Critical 所必需的测试调整属于该 Critical 修复范围。
 
@@ -119,6 +121,7 @@ ls -d openspec/changes/*/ 2>/dev/null | grep -v '/archive/'
 
 {{HOST_FRAGMENT:subagent-nonfork}}
 2. **软上下文经 context.md 到达**：非 fork 意味着主会话讨论中的关键决策、取舍、已知边界等"软上下文"不再随会话历史自动到达审查 agent——TASK SHALL 指示审查 subagent 读取该 change 目录下的 `context.md`（`openspec/changes/<change-name>/context.md`）获取软上下文，SHALL NOT 在 TASK 中整段复制其内容。`context.md` 缺失（历史 change）时在报告中如实注明"context.md 缺失，软上下文不可用"后继续，SHALL NOT 凭空虚构上下文。
+TASK SHALL 携带主会话已解析的 final `testMode`（`normal` / `off`）与来源（配置 / change 决策）；审查 subagent SHALL NOT 再自行推断 ask 决策。若 final mode 缺失或仍为 `ask`，审查 subagent SHALL 停止并报告调用方未提供最终模式。
 {{HOST_FRAGMENT:subagent-model}}
 {{HOST_FRAGMENT:subagent-task}}
 

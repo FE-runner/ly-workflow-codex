@@ -172,6 +172,8 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       expect(content, name).not.toContain('审查者已点名具体用例的测试补齐')
       expect(content, name).toContain('无测试模式例外')
       expect(content, name).toContain('缺少测试文件、缺少测试任务、缺少边界测试或测试覆盖不足')
+      expect(content, name).toContain('final `testMode`')
+      expect(content, name).toContain('若 TASK 未提供 final mode 或仍为 `ask`')
       if (name === 'review-plan.md') {
         expect(content).toContain('纯展示与 `skip_specs`')
         expect(content).toContain('无 delta spec 与无测试任务均属合法')
@@ -368,6 +370,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(fix).toContain('SHALL NOT 运行任何测试命令')
     expect(fix).toContain('配置缺失、不可读或解析失败时 SHALL 停止')
     expect(fix).toContain('字段缺失、空白或非法时按 `normal` 处理')
+    expect(fix).toContain('配置为 `ask` 时，fix SHALL 在实施前每次调用询问一次')
     // 五项自审 + 对称清单
     for (const item of ['① 修对了吗', '② spec 一致吗', '③ 漏改了吗', '④ 改多了吗', '⑤ 验证充分吗'])
       expect(fix, item).toContain(item)
@@ -398,6 +401,9 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(propose).toContain('testMode = "off"')
     expect(propose).toContain('SHALL NOT 生成测试文件、测试修改或测试命令任务')
     expect(propose).toContain('字段缺失、空白或非法时按 `normal` 处理')
+    expect(propose).toContain('配置为 `ask` 时')
+    expect(propose).toContain('lyx.testModeDecision')
+    expect(propose).toContain('用户取消或环境无法交互时停止')
   })
 
   it('apply and archive templates honor no-test mode', () => {
@@ -406,6 +412,9 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(apply).toContain('测试专用任务跳过、输出 `[跳过] <任务>（testMode=off）`')
     expect(apply).toContain('`- [x]` 且注明 `（testMode=off，已跳过）`')
     expect(apply).toContain('混合任务只跳过测试部分')
+    expect(apply).toContain('配置为 `ask` 时读取目标 change')
+    expect(apply).toContain('继承并实际消费的 dirty `.openspec.yaml` 决策')
+    expect(apply).toContain('proposal/tasks 没有测试任务或测试执行计划')
 
     const archive = read('archive.md')
     expect(archive).toContain('testMode = "off"')
@@ -413,6 +422,8 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(archive).toContain('testMode=off，测试已跳过')
     expect(archive).toContain('仍执行类型检查 / 构建')
     expect(archive).toContain('字段缺失、空白或非法时按 `normal` 处理')
+    expect(archive).toContain('配置为 `ask` 时读取目标 change')
+    expect(archive).toContain('实际消费的继承 dirty `.openspec.yaml` 决策')
   })
 
   it('explore convergence hint routes small changes to fix and others to propose', () => {

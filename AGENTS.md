@@ -97,7 +97,7 @@ npx ly-workflow-codex        # 一键安装/菜单（默认动作，含 prefligh
 npx ly-workflow-codex init   # 选择宿主并安装 15 个 skills + 配置；OpenSpec 默认 check-only（i 为别名）
 npx ly-workflow-codex init --init-openspec  # 宿主确认后，为所选宿主初始化当前项目 OpenSpec root/skills
 lycx init --skip-prompt [--host codex,claude]  # 非交互：已安装宿主 → 探测宿主 → 兜底 codex
-lycx project test-mode normal|off [--host <hosts>]  # 写入当前主仓库根的项目测试模式覆盖
+lycx project test-mode normal|off|ask [--host <hosts>]  # 写入当前主仓库根的项目测试模式覆盖
 lycx project test-mode --unset [--host <hosts>]    # 移除当前项目全部规范化等价覆盖
 lycx doctor / status [--host <hosts>]          # 体检 / 安装概览（按宿主分组）
 lycx openspec inspect|ensure [--host <hosts>] --json  # OpenSpec 依赖检查 / 按宿主修复
@@ -123,7 +123,7 @@ prompts  = "..."
 backup   = "..."
 
 [host]                     # 宿主配置节（历史节名 [codexHost] 兼容读取，下次写入归一为 [host]）
-testMode = "normal"        # 宿主默认；未命中项目覆盖时生效（normal | off）
+testMode = "normal"        # 宿主默认；未命中项目覆盖时生效（normal | off | ask）
 reviewMode = "full"        # full（方案+代码审查，默认/未配置）| plan-only（仅方案审查）| code-only（仅代码审查）| off（跳过审查）
 reviewExecutor = "main"    # main（主 agent 直接执行，默认/未配置）| subagent
 codingExecutor = "main"
@@ -138,6 +138,7 @@ testMode = "off"
 ```
 
 - 有效 `testMode`：当前项目路径覆盖 > `[host].testMode` > `normal`。项目键按主仓库根归一：普通 checkout / separate-git-dir / 子模块使用各自 `show-toplevel`；非 bare linked worktree 能确定主工作树时使用主树根；bare worktree 或 separate-git-dir 无法反推主树时使用当前 worktree 根；非 Git 目录使用规范化 cwd。
+- effective `testMode = "ask"` 时，change 命令读取 `.openspec.yaml` 的 `lyx.testModeDecision`（`normal` / `off`）并沿用；决策缺失/非法时询问一次并写入。配置 normal/off 覆盖历史决策。`@lyx-fix` 无 change 元数据，ask 下每次调用询问。
 - 项目条目缺失或非法时回退宿主默认；同一规范化路径的多个原始键取值冲突时忽略覆盖并由 doctor WARN。`lycx doctor` / `status` 展示宿主默认、当前项目有效值、来源与路径。
 - `lycx init` / update / 菜单写回保留全部 `[projects]` 与未知字段；任一所选宿主配置存在但不可读或 TOML 非法时，在写入任何宿主前停止，避免默认配置覆盖既有项目表。
 
@@ -175,9 +176,11 @@ testMode = "off"
 
 9. **测试义务由风险决定，跨 fix / propose / review 共用**：`risk-based-testing-policy` 定义行为或契约改动、逻辑缺陷修复、纯展示改动与补充边界覆盖的统一口径。纯 UI、文案、样式在不改变状态、事件、分支、数据流、业务计算或契约时可免新增测试，但必须运行项目已有的相称验证；补充边界覆盖只记录为 `否+否` Warning，不自动扩为 tasks/tests。`@lyx-propose` 按该策略生成 spec/tasks；`@lyx-review-plan` / `@lyx-review-code` 按该策略判级。逻辑缺陷复现、核心行为覆盖、契约一致性及 `@lyx-archive` 完整验证均不放宽。
 
-10. **无测试模式是宿主默认 + 项目覆盖的显式 opt-in**：有效 `testMode = "off"` 时不新增/修改测试文件、不生成测试任务、不执行测试命令；fix 仍实施，propose 仍生成必要 spec，review 不产生测试缺失类发现，archive 跳过测试但仍执行 typecheck/build。配置缺失、不可读或解析失败时命令停止并提示 `lycx doctor`，不得静默回退 `normal`；无项目条目时沿用宿主默认，未配置的旧用户默认 `normal`。
+10. **测试模式支持正常、关闭与 change 级询问**：配置和最终决策均支持 `normal` / `off`，effective 配置另可 `ask`。`off` 时不新增/修改测试文件、不生成测试任务、不执行测试命令；fix 仍实施，propose 仍生成必要 spec，review 不产生测试缺失类发现，archive 跳过测试但仍执行 typecheck/build。`ask` 在每个 change 首次需要测试决策时询问并持久化；未回答或结构非法时停止，不得猜测 normal/off。
 
 11. **项目测试模式按主仓库根而非 checkout 路径区分**：项目覆盖存于每宿主 `lyx/config.toml` 的 `[projects."<path>"]`；linked worktree 能确定主树时与主工作区共享同一键，无法反推时使用当前 worktree 根。`lycx project test-mode` 只修改当前路径键，设置遇规范化别名冲突时失败且不写，`--unset` 删除全部规范化等价键中的 `testMode`。该字段不进入项目仓库，继续由宿主本地配置承载。
+
+12. **ask 回答存于 change 元数据**：change 的 `.openspec.yaml` 可选 `lyx.testModeDecision: normal | off`。propose 在生成前询问并在 change 创建后写入；apply/review/archive 优先消费已有决策，缺失时补问并随对应阶段 commit 提交。配置 normal/off 优先于历史决策；决策写入后允许在阶段失败/`--no-commit`/非清零终止时保持 dirty，供恢复复用。
 
 ## 改动对称清单
 

@@ -32,6 +32,11 @@ vi.mock('../../utils/config', async (importOriginal) => {
     ...mod,
     listInstalledHosts: async () => [...state.installed],
     readLyConfig: async () => ({ host: state.host }),
+    readLyConfigState: async () => ({
+      status: 'ok',
+      path: '/tmp/test-config.toml',
+      config: { host: state.host },
+    }),
     writeLyConfig: async (config: any, host: string) => {
       state.writes.push({ host, hostSection: config.host })
     },
@@ -78,6 +83,24 @@ describe('menu 子代理配置入口 (host-subagent-model-config)', () => {
     await configExecutorsAndModels()
     expect(state.writes[0].hostSection).toEqual({
       testMode: 'off',
+      reviewMode: 'full',
+      reviewExecutor: 'main',
+      codingExecutor: 'main',
+    })
+  })
+
+  it('testMode=ask：独立写回询问模式，不影响审查配置采集', async () => {
+    state.installed = ['codex']
+    state.host = { reviewExecutor: 'main', codingExecutor: 'main' }
+    state.answers = [
+      { pick: 'ask' },
+      { pick: 'full' },
+      { pick: 'main' },
+      { pick: 'main' },
+    ]
+    await configExecutorsAndModels()
+    expect(state.writes[0].hostSection).toEqual({
+      testMode: 'ask',
       reviewMode: 'full',
       reviewExecutor: 'main',
       codingExecutor: 'main',

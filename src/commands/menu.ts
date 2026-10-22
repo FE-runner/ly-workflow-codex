@@ -409,6 +409,7 @@ export async function configExecutorsAndModels(): Promise<void> {
   const testModeLabel: Record<TestMode, string> = {
     normal: i18n.t('init:testMode.normal'),
     off: i18n.t('init:testMode.off'),
+    ask: i18n.t('init:testMode.ask'),
   }
   console.log(`  ${ansis.cyan(i18n.t('init:summary.testMode'))} ${ansis.green(testModeLabel[next.testMode ?? 'normal'])}`)
   console.log(`  ${ansis.cyan(i18n.t('init:summary.reviewMode'))} ${ansis.green(reviewModeLabel[next.reviewMode ?? 'full'])}`)

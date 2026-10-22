@@ -154,4 +154,11 @@ describe('assessSubagentModelConfig (switchable-executor-flow)', () => {
     expect(invalid.testModeInvalid).toBe(true)
     expect(invalid.status).toBe('warn')
   })
+
+  it('testMode=ask 通过并保留询问模式', () => {
+    const ask = assessSubagentModelConfig({ testMode: 'ask' })
+    expect(ask.testMode).toBe('ask')
+    expect(ask.testModeInvalid).toBe(false)
+    expect(ask.status).toBe('ok')
+  })
 })

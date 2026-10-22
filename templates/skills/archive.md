@@ -14,10 +14,14 @@ argument-hint: '[<change-name>]'
 
 ## 归档前完整验证（SHALL，先于任何归档动作）
 
-在委托 OpenSpec 归档流程**之前**，读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时 SHALL 停止归档并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
+在委托 OpenSpec 归档流程**之前**，读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时 SHALL 停止归档并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
 
-- `testMode = "normal"`：对当前工作区执行一次项目完整验证，覆盖测试 / 类型检查 / 构建三类。
-- `testMode = "off"`：跳过测试类别，仍执行类型检查 / 构建，并在报告中明确注明“testMode=off，测试已跳过”；来源为项目覆盖时注明“项目配置”。
+配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失视为决策缺失；`lyx` 非 mapping 或 `testModeDecision` 为 object/list/number 时结构非法并停止；`null`、空白或非法字符串视为缺失；合法 `normal` / `off` 直接沿用。决策缺失时询问一次并写入 `lyx.testModeDecision`，保留其他字段；用户取消或环境无法交互时停止，不执行验证或归档。
+
+- 最终模式为 `normal`：对当前工作区执行一次项目完整验证，覆盖测试 / 类型检查 / 构建三类。
+- 最终模式为 `testMode = "off"`：跳过测试类别，仍执行类型检查 / 构建，并在报告中明确注明“testMode=off，测试已跳过”；来源为项目覆盖时注明“项目配置”。
+
+因 `ask` 新写入，或本轮实际消费的继承 dirty `.openspec.yaml` 决策，SHALL 随既有 `git add -- openspec/` 进入归档 commit；若门禁失败，决策可保留为 dirty 并如实报告。
 
 - 按项目实际提供的脚本选择（例如 `package.json` 的 `scripts.test` / `scripts.typecheck` / `scripts.build`，或项目 README/AGENTS.md 声明的等价命令）。
 - 项目未提供的类别 SHALL 跳过并在报告中注明（例如"未提供 typecheck 脚本"），SHALL NOT 因缺失判定失败。

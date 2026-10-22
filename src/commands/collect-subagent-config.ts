@@ -35,6 +35,7 @@ export interface SubagentConfigCollected {
 const TEST_MODE_FIELDS = [
   { value: 'normal', labelKey: 'init:testMode.normal' },
   { value: 'off', labelKey: 'init:testMode.off' },
+  { value: 'ask', labelKey: 'init:testMode.ask' },
 ] as const
 
 // 审查范围候选（顺序与取值见 ReviewMode）

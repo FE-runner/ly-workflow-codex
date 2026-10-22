@@ -13,7 +13,13 @@ argument-hint: '[<change-name>]'
 - **`"main"`（默认）**：主 agent SHALL 在当前会话直接实施——读取该 change 的 `tasks.md` 逐任务实施 + 验证 + 勾选；SHALL NOT spawn 子代理、SHALL NOT 读取 `codingModel` / `codingReasoningEffort`、SHALL NOT 产生 `[回退]` 标记。
 - **`"subagent"`**：主会话 spawn 一个 coding subagent，**非 fork spawn**（只携带 TASK，软上下文经该 change 目录下的 `context.md` 到达）并在任务中点名"只实施 change 范围"；模型按 `codingModel`、非空推理档按 `codingReasoningEffort` 传入。coding subagent 读取 tasks.md 逐任务实施 + 验证 + 勾选后，将改动与结果**回传主会话，不自行 commit**。
 
-两条路径共同遵守：实施前读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时停止并提示运行 `lycx doctor`。主会话确认后回写 `context.md`（实施决策）并按共用 index 隔离协议统一提交 apply 阶段 commit（message 为 CC 前缀 + `Change-Stage: apply` + `Change-Name: <change-name>` trailer），作为 `@lyx-review-code` 的审查对象。失败区分两阶段：**环境级不可用**（仅 `subagent` 路径可能发生——宿主无 subagent 能力、初始 spawn 失败）按回退口径回退主 agent 直接实施，输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为业务失败；**实施中/验证失败** SHALL 原样呈报转人工，不自动重试、不自动兜底。隔离 worktree 的询问/新建统一收敛到 `@lyx-propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
+两条路径共同遵守：实施前读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时停止并提示运行 `lycx doctor`。
+
+配置为 `normal` / `off` 时直接作为最终模式，历史 `testModeDecision` 不覆盖配置。配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失视为决策缺失；`lyx` 非 mapping 或 `testModeDecision` 为 object/list/number 时结构非法并停止；`null`、空白或非法字符串视为缺失；合法 `normal` / `off` 直接沿用。决策缺失时询问一次并写入 `lyx.testModeDecision`，保留其他字段；用户取消或环境无法交互时停止。
+
+最终模式为 `normal` 时，若历史决策为 `off` 但配置覆盖为 `normal`，或决策缺失后补问为 `normal`，而 proposal/tasks 没有测试任务或测试执行计划，SHALL 在实施前停止并要求更新 change artifacts 或恢复配置，SHALL NOT 临时添加范围外测试。
+
+主会话确认后回写 `context.md`（实施决策）并按共用 index 隔离协议统一提交 apply 阶段 commit（message 为 CC 前缀 + `Change-Stage: apply` + `Change-Name: <change-name>` trailer），作为 `@lyx-review-code` 的审查对象。本轮新写入，或继承并实际消费的 dirty `.openspec.yaml` 决策，SHALL 纳入待提交清单。失败区分两阶段：**环境级不可用**（仅 `subagent` 路径可能发生——宿主无 subagent 能力、初始 spawn 失败）按回退口径回退主 agent 直接实施，输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为业务失败；**实施中/验证失败** SHALL 原样呈报转人工，不自动重试、不自动兜底；若决策已写入或消费，允许保留为 dirty 并如实报告。隔离 worktree 的询问/新建统一收敛到 `@lyx-propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
 
 ## 步骤
 
@@ -48,7 +54,7 @@ argument-hint: '[<change-name>]'
 4. **范围点名（只实施 change 范围）**：任务点名"只实施 change 范围"——读取 `openspec/changes/<change-name>/tasks.md`，按需读取同目录 `proposal.md`/`design.md`/`context.md` 及任务引用的上下文文件，理解现有模式；SHALL NOT 改动范围外文件。
 5. **实施规范**（coding subagent 内部执行）：
    - 自顶向下逐任务实施，每完成一个任务立即验证：只修改任务列出的文件，不添加任务之外的功能/重构/注释；按 tasks.md 指定的验证方式运行验证（如 typecheck/build/test），失败则修复后重试，每个任务最多 3 次修复尝试；验证通过后，把 tasks.md 中对应条目从 `- [ ]` 改为 `- [x]`，继续下一个任务。
-   - `testMode = "off"` 时不新增或修改测试文件、不执行测试命令。测试专用任务跳过、输出 `[跳过] <任务>（testMode=off）`；来源为项目覆盖时写为 `[跳过] <任务>（testMode=off，项目配置）`。把 `tasks.md` 对应条目标为 `- [x]` 且注明 `（testMode=off，已跳过）`，来源为项目覆盖时注明项目来源；混合任务只跳过测试部分，实现部分照常执行。
+   - 最终模式为 `testMode = "off"` 时不新增或修改测试文件、不执行测试命令。测试专用任务跳过、输出 `[跳过] <任务>（testMode=off）`；来源为项目覆盖时写为 `[跳过] <任务>（testMode=off，项目配置）`。把 `tasks.md` 对应条目标为 `- [x]` 且注明 `（testMode=off，已跳过）`，来源为项目覆盖时注明项目来源；混合任务只跳过测试部分，实现部分照常执行。
    - 不询问——任务描述有歧义时按最简方案处理，直接落地并在回传结果中说明选择。
 6. **回传不 commit**：coding subagent SHALL NOT 自行执行任何 git commit——实施完成后，将实际改动的文件清单、验证结果与逐任务完成情况回传主会话。
 
@@ -57,7 +63,7 @@ argument-hint: '[<change-name>]'
 ### 3. 主会话确认并统一提交（全部任务完成时执行）
 
 1. 主会话收到回传的改动与结果后确认（subagent 路径以 coding subagent 回传清单为对照；**环境级不可用回退的自实施路径无 subagent 回传清单，以主会话自己记录的实施改动文件清单——逐项列出并展示给用户——充当回传清单，快照与核对规则一致**）。确认前先识别 **partial apply**：残留判据限定为"改动路径落在本次实施目标文件集合内"——若步骤 2 快照中已存在的 dirty 路径 ∩ 本次实施目标文件集合（tasks.md 指向的 `templates/`、`src/` 等路径）≠ ∅，或该 change 目录下 tasks.md 已出现勾选但对应改动未提交，SHALL 判定 partial apply 并停止转人工（与本次实施无关的既存改动明确不算残留，交由快照差集与重叠规则处理）。随后确认时再执行一次 `git status --porcelain`，与步骤 2 spawn 前记录的快照**比对**：比对只针对快照之后新增/变化的路径——既存改动（快照中已存在的路径且状态未变）不参与比对、不纳入本次提交范围（保持"预存改动未被提交"口径，`git add` 范围仅限本次实际改动的文件，并在报告中说明"预存改动未被提交"）。仅当**快照之后出现回传清单之外的改动**、或**回传清单中的文件实际未变动**时才判定不一致：不一致 SHALL 停止并逐项列出差异路径报告，不执行 commit、不照单全收，转人工确认。**快照前已 dirty 的路径出现在回传清单**（与本次改动重叠，无法机械区分同一文件内既存与本轮的 hunk）→ SHALL 停止转人工，不得猜测性提交，报告中 SHALL 回指 propose 步骤 1 的既存改动处置选择，说明该路径下既存改动与实施目标文件重叠会使 apply 停止。
-2. 确认一致后，**回写 context.md（实施软上下文）**：把实施阶段新产生的关键决策（实现取舍、对方案的偏差及理由、发现的坑）更新进 `openspec/changes/<change-name>/context.md`——增量追加或修订，SHALL NOT 重写或删除 propose 阶段已沉淀的内容（确已过时的条目标注"已过时"保留痕迹）；实施无新增软上下文时保持原样不强行凑写。`context.md` 缺失（历史 change）时跳过回写并在报告中注明。**回写了 context.md 时 SHALL 把它并入"本次待提交文件清单"**（清单 = coding subagent 回传清单 ∪ 回写后的 `context.md`；自实施路径同理——主会话记录的实施改动清单 ∪ `context.md`），后续暂存与提交校验均以更新后的清单为准。
+2. 确认一致后，**回写 context.md（实施软上下文）**：把实施阶段新产生的关键决策（实现取舍、对方案的偏差及理由、发现的坑）更新进 `openspec/changes/<change-name>/context.md`——增量追加或修订，SHALL NOT 重写或删除 propose 阶段已沉淀的内容（确已过时的条目标注"已过时"保留痕迹）；实施无新增软上下文时保持原样不强行凑写。`context.md` 缺失（历史 change）时跳过回写并在报告中注明。**回写了 context.md 时 SHALL 把它并入"本次待提交文件清单"**（清单 = coding subagent 回传清单 ∪ 回写后的 `context.md`；自实施路径同理——主会话记录的实施改动清单 ∪ `context.md`）；若本轮新写入或实际消费了 dirty `.openspec.yaml` 决策，SHALL 把该文件并入清单。后续暂存与提交校验均以更新后的清单为准。
 3. 确认一致后提交，按共用 index 隔离协议执行（目标范围为本次待提交文件清单）：
    - 先 `git add -- <本次待提交文件清单>`（不用 `git add -A`）。
    - **步骤 2 快照中已存在 staged 内容时**：用 `git commit --only -F "$MSG_FILE" -- <本次待提交文件清单>` 仅提交该清单（**`-F` 必须放在 `--` 之前**；`MSG_FILE` 由 `git rev-parse --git-path COMMIT_EDITMSG` 获取；清单含未跟踪新文件时**必须先 `git add`**，否则 `--only` 报 `pathspec ... did not match any file(s) known to git`；SHALL NOT 用全量 `git commit` 吞并 index 既存 staged 内容），或先 unstage 非本次文件、提交后恢复原暂存状态；范围外文件保留原暂存状态。

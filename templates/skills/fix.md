@@ -14,7 +14,7 @@ argument-hint: '<问题或需求描述>'
 
 - SHALL NOT 创建 OpenSpec change 目录，SHALL NOT 写 `context.md`；MAY 写 `review-findings.md`（如追加解决标注），写入内容属于本次修复的待提交单元；
 - SHALL NOT 询问隔离方式或全自动/手动，SHALL NOT 创建分支或 worktree，直接在当前分支工作（需要隔离时由用户先自行 `@lyx-worktree`）；
-- 执行主体固定为主 agent：仅解析当前项目的有效 `testMode`，审查/实施执行者、审查范围与模型字段均不影响本命令，SHALL NOT spawn 子代理。
+- 执行主体固定为主 agent：仅解析当前项目的有效配置 `testMode`；配置为 `ask` 时每次调用询问一次，审查/实施执行者、审查范围与模型字段均不影响本命令，SHALL NOT spawn 子代理。
 
 主 spec 同步是本命令的强制职责——轻流程绕开了 delta 与归档，spec 不随改动同步就会漂移。
 
@@ -42,10 +42,12 @@ SHALL NOT 在未给出分流结论的情况下开始实施。
 
 ### 3. 实施（按测试风险执行）
 
-实施前 SHALL 读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时 SHALL 停止并提示运行 `lycx doctor`，SHALL NOT 静默按 `normal` 继续。宿主配置缺失、不可读或解析失败时 SHALL 停止并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
+实施前 SHALL 读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时 SHALL 停止并提示运行 `lycx doctor`，SHALL NOT 静默按 `normal` 继续。宿主配置缺失、不可读或解析失败时 SHALL 停止并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
+
+配置为 `ask` 时，fix SHALL 在实施前每次调用询问一次 `normal` / `off`；选择只对本次调用生效，SHALL NOT 读取/写入 change 元数据或宿主配置。用户取消或环境无法交互时停止，不开始实施或运行测试。
 
 - `testMode = "off"`：SHALL NOT 新增或修改测试文件、SHALL NOT 生成测试任务、SHALL NOT 运行任何测试命令；行为或契约改动仍正常实施，并改用类型检查、构建或其他非测试验证。混合任务只跳过测试部分，不跳过实现部分。来源为项目覆盖时，跳过状态写为 `[跳过] ...（testMode=off，项目配置）`。
-- `testMode = "normal"`：按 `risk-based-testing-policy` 对改动单元分类并记录测试策略：
+- 选择或配置为 `normal` 时按 `risk-based-testing-policy` 对改动单元分类并记录测试策略：
 
 1. **行为或契约改动、逻辑缺陷修复**：在可自动化时先编写能复现问题或刻画新行为的测试并运行，**确认其失败**，记录失败输出（供自审⑤核对）；再修改实现直到该测试与相关测试通过。B 类同时就地修改主 spec。
 2. **纯 UI、文案、样式**：改动只涉及静态展示、文案、样式、布局或图标，且不改变状态、事件、条件分支、数据流、业务计算、公开组件契约、接口或配置行为时，SHALL NOT 被要求新增自动化测试；仍须运行相关既有测试、类型检查或构建，并在可用时执行视觉检查。

@@ -93,6 +93,7 @@ describe('createDefaultConfig (codex 宿主配置文件)', () => {
 
   it('stores testMode when provided and omits it when unset or invalid', () => {
     expect(createDefaultConfig({ ...baseOptions, host: { testMode: 'off' } }).host).toEqual({ testMode: 'off' })
+    expect(createDefaultConfig({ ...baseOptions, host: { testMode: 'ask' } }).host).toEqual({ testMode: 'ask' })
     expect(createDefaultConfig({ ...baseOptions, host: { testMode: 'invalid' as never } }).host).toBeUndefined()
   })
 
@@ -625,9 +626,10 @@ describe('sanitizeReviewMode', () => {
 })
 
 describe('sanitizeTestMode / testMode config', () => {
-  it('accepts normal and off with trimming', () => {
+  it('accepts normal, off and ask with trimming', () => {
     expect(sanitizeTestMode('normal')).toBe('normal')
     expect(sanitizeTestMode(' off ')).toBe('off')
+    expect(sanitizeTestMode(' ask ')).toBe('ask')
   })
 
   it('treats blank, invalid and non-string values as unset', () => {
@@ -643,6 +645,7 @@ describe('sanitizeTestMode / testMode config', () => {
       reviewMode: 'full',
     })
     expect(mergeCodexHostConfig({ testMode: 'normal' }, { testMode: 'off' })).toEqual({ testMode: 'off' })
+    expect(mergeCodexHostConfig({ testMode: 'normal' }, { testMode: 'ask' })).toEqual({ testMode: 'ask' })
     expect(mergeCodexHostConfig({ testMode: 'off' }, { testMode: undefined })).toBeUndefined()
   })
 })
