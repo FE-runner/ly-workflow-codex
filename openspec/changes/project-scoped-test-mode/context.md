@@ -30,3 +30,14 @@
 - `init/update` 必须区分配置 missing/ok/invalid；任一所选宿主 invalid 时在任何写入前整体停止，避免默认配置覆盖项目表。
 - CLI 目标配置需先全部预校验并检查规范化路径冲突；冲突或预检失败不写，任何多宿主写入中途失败时报告已完成项，不自动回滚或猜测性修复。
 - `--unset` 目标是所有规范化等价原始键；逐项删测试模式，条目空则删条目，其他字段保留；仅完全无匹配键时幂等成功。
+
+## 实施决策
+
+- 配置读取新增 `HostConfigReadResult`（missing / ok / invalid）；`init/update` 在宿主选择后、任何写入前预检全部所选宿主，invalid 时整体停止。菜单配置入口同样拒绝覆盖 invalid 配置。
+- `resolveProjectKey` 独立于 OpenSpec root 校验；实现覆盖 normal / separate-git-dir / submodule / linked worktree / bare worktree / 非 Git cwd。
+- 项目解析保留原始键，按规范化等价键集合匹配；冲突或匹配条目非法时不采用项目覆盖，回退宿主默认并产生诊断。
+- CAC 不支持 `project test-mode` 这种多 token 子命令直接挂 options，实际注册为 `project <action> [mode]` 并在 action 中只接受 `test-mode`；用户调用方式仍是 `lycx project test-mode`。
+- 项目命令在写入前预校验全部目标；设置时 canonical 键可被覆盖，规范化等价别名键与目标值冲突则整体失败且不写；`--unset` 删除全部等价键中的 testMode。
+- doctor/status 使用同一有效模式解析；doctor 输出宿主默认、有效值、来源、规范化路径和路径来源，项目结构/字段/冲突问题输出 WARN。
+- 六个共享模板和四份审查角色词统一改为有效模式规则，覆盖的跳过状态明确标注项目来源。
+- 当前有效 `testMode=off`，未新增或修改任何测试文件，也未运行测试命令；验证使用 smoke、静态检查、typecheck、build 与 OpenSpec validate。

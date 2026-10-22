@@ -8,7 +8,7 @@
 
 ## 项目定位
 
-**ly-workflow-codex**：Codex / Claude Code 双宿主单 Agent 工作流——同一会话内自己完成探索 / 方案 / 实施 / 审查编排，两个宿主共享同一套命令流程（codex 调用写法 `@lyx-*`，Claude Code 为 `/lyx-*`）。`[host] testMode = normal | off` 控制测试义务：默认 `normal`，`off` 为无测试模式（不写测试、不跑测试，保留 typecheck/build）。审查范围由当前宿主配置的 `[host] reviewMode`（`full` / `plan-only` / `code-only` / `off`，未配置等价 `full`）门控 `@lyx-propose` 编排入口执行哪些审查关卡，直接调用审查命令不受影响；审查与实施主体由 `[host] reviewExecutor` / `codingExecutor` 决定：未配置等价 `main`（主 agent 直接执行，默认），显式配置 `subagent` 才 spawn 独立子代理（非 fork spawn + 范围点名；软上下文经 change 目录 `context.md` 到达），模型经 `[host] reviewModel`/`codingModel` 指定、非空推理档经 `reviewReasoningEffort`/`codingReasoningEffort` 落实（codex 随对应 spawn 传入；Claude Code 渲染进 `~/.claude/agents/lyx-*.md`，未配置为 `model: inherit`）（执行者为 `main` 时这些字段不生效，`lycx doctor` 输出 WARN）。慢验证（测试 / 类型检查 / 构建）统一由 `@lyx-archive` 的归档前关卡执行；`testMode=off` 时测试类别跳过。无 wrapper、无 Web UI、无 routing/implementer 概念；配置每宿主一个文件（`~/.codex/lyx/config.toml` / `~/.claude/lyx/config.toml`，文件存在即已安装；历史 `[codexHost]` 节兼容读取；本包私有目录，不做任何自动迁移）。代码按宿主包组织：共享层 `src/utils/` 只认适配器接口与注册表，宿主专属内容在 `src/hosts/<id>/` 与 `templates/hosts/<id>/`。对外说明见 [README.md](./README.md) 与 [README.zh-CN.md](./README.zh-CN.md)。
+**ly-workflow-codex**：Codex / Claude Code 双宿主单 Agent 工作流——同一会话内自己完成探索 / 方案 / 实施 / 审查编排，两个宿主共享同一套命令流程（codex 调用写法 `@lyx-*`，Claude Code 为 `/lyx-*`）。有效 `testMode = normal | off` 按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析：默认 `normal`，`off` 为无测试模式（不写测试、不跑测试，保留 typecheck/build）；项目覆盖与宿主默认都保存在各宿主 `config.toml`。审查范围由当前宿主配置的 `[host] reviewMode`（`full` / `plan-only` / `code-only` / `off`，未配置等价 `full`）门控 `@lyx-propose` 编排入口执行哪些审查关卡，直接调用审查命令不受影响；审查与实施主体由 `[host] reviewExecutor` / `codingExecutor` 决定：未配置等价 `main`（主 agent 直接执行，默认），显式配置 `subagent` 才 spawn 独立子代理（非 fork spawn + 范围点名；软上下文经 change 目录 `context.md` 到达），模型经 `[host] reviewModel`/`codingModel` 指定、非空推理档经 `reviewReasoningEffort`/`codingReasoningEffort` 落实（codex 随对应 spawn 传入；Claude Code 渲染进 `~/.claude/agents/lyx-*.md`，未配置为 `model: inherit`）（执行者为 `main` 时这些字段不生效，`lycx doctor` 输出 WARN）。慢验证（测试 / 类型检查 / 构建）统一由 `@lyx-archive` 的归档前关卡执行；有效 `testMode=off` 时测试类别跳过。无 wrapper、无 Web UI、无 routing/implementer 概念；配置每宿主一个文件（`~/.codex/lyx/config.toml` / `~/.claude/lyx/config.toml`，文件存在即已安装；历史 `[codexHost]` 节兼容读取；本包私有目录，不做任何自动迁移）。代码按宿主包组织：共享层 `src/utils/` 只认适配器接口与注册表，宿主专属内容在 `src/hosts/<id>/` 与 `templates/hosts/<id>/`。对外说明见 [README.md](./README.md) 与 [README.zh-CN.md](./README.zh-CN.md)。
 
 ## 常用命令
 
@@ -16,6 +16,8 @@
 npx ly-workflow-codex        # 交互式菜单（裸命令）
 npx ly-workflow-codex init   # 选择宿主并安装 15 个 skills + 配置；OpenSpec 默认 check-only（不写当前项目）
 npx ly-workflow-codex init --init-openspec  # 宿主确认后为所选宿主初始化当前项目 OpenSpec root/skills
+lycx project test-mode normal|off [--host ...]  # 设置当前主仓库根的项目测试模式覆盖
+lycx project test-mode --unset [--host ...]    # 移除当前项目全部规范化等价覆盖
 lycx doctor / status [--host <hosts>]       # 体检 / 安装概览（按宿主分组）
 lycx openspec inspect --json [--host ...]  # 只读 OpenSpec 三层检查（skills 按宿主判定）
 lycx openspec ensure --json [--host ...]   # 修复 OpenSpec CLI/skills/root（按宿主传 --tools）
@@ -47,7 +49,7 @@ lycx uninstall [--host <hosts>]             # 按宿主卸载（缺省 = 全部�
 - 审查范围 = **按 `reviewMode` 门控**（`full` / `plan-only` / `code-only` / `off`，未配置等价 `full`）：只决定 `@lyx-propose` 编排入口跑哪些审查关卡（`plan-only` 跳过 review-code、`code-only` 跳过 review-plan、`off` 两级都跳过；apply 始终执行），被跳过的关卡打印 `[跳过]` 状态行、其节点前置校验一并跳过；直接调用 `@lyx-review-plan` / `@lyx-review-code` 与 `@lyx-apply` / 归档前验证不受影响；`lycx init` / 菜单先采集 `testMode`，再采集 `reviewMode`（`off` 跳过 review 侧提问），`lycx doctor` 展示并告警非法取值与 `off` + review 侧字段非空
 - 软上下文 = **change 目录 `context.md`**：propose 产出（内容边界自检：无整段重复、决策可溯源、≤100 行）→ apply 维护（实施决策回写，只增不删）→ review-plan / review-code / coding subagent 消费（TASK 只传路径）
 - 测试策略 = **`risk-based-testing-policy`**：行为或契约与逻辑缺陷要求相称测试；纯 UI、文案、样式在不改变状态、事件、分支、数据流、计算或契约时可免新增测试；补充边界只记录为 `可自动修复：否` / `影响落地：否`，不自动补、不阻塞清零。archive 完整验证不变
-- 无测试模式 = **`[host] testMode = "off"`**：fix/propose/apply 不写测试、不生成测试任务、不跑测试；review 不报测试缺失类发现；archive 跳过 test 但保留 typecheck/build。配置不可读/解析失败时停止并提示 doctor，默认 `normal`
+- 无测试模式 = **有效 `testMode = "off"`**：按项目覆盖 > 宿主默认 > `normal` 解析；fix/propose/apply 不写测试、不生成测试任务、不跑测试；review 不报测试缺失类发现；archive 跳过 test 但保留 typecheck/build。项目键按主仓库根归一，linked worktree 共用；设置/移除用 `lycx project test-mode`。配置不可读/解析失败或 init/update 遇不可读既有配置时停止并提示 doctor
 - 审查未修项快照 = **change 目录 `review-findings.md`**（快照式留痕，非台账）：review-plan / review-code 循环结束时按节 upsert 写入最后一轮**未被自动修复的 Warning**（不收 Info / Critical），Warning 条目连续编号；正常清零在统一 commit **之后**写（保持未跟踪），随 `@lyx-archive` 的 `git add -- openspec/` 落库并搬入 `archive/`；`@lyx-explore` 进入时扫描并**先询问后只列出未解决条目**（有 `- 解决：` 子项即视为已解决、不展示不计数；全部已解决时不询问）；该文件被排除在审查范围与中间 commit 之外。历史 Warning 被后续 change 解决时，在新 change 的 `proposal.md` 用 `## 解决的审查未修项` 声明锚点，由 `@lyx-archive` 向已归档快照追加追加式解决说明（原文不改、幂等、失败不阻断归档）；同一 change 内修复的 Warning 在 active 快照就地标注 `- 解决：本 change 内修复（commit <短 hash>）— …`（审查后同会话修复并提交后标注，或 `@lyx-archive` 归档前核对未标注条目、用户逐条确认后标注；必带 commit hash、按 hash 幂等、不新增提交）；`@lyx-commit --all` 与 propose WIP commit 的全量暂存以 `':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md'` 排除进行中快照
 - **驳回硬线**（终止条件）：（a）同一 Critical 复现且再被驳回；（b）连续 2 轮对当轮全部 Critical 均不认可——命中即停转人工
 - 实施 = **按 `codingExecutor` 切换**：`main`（默认）= 主 agent 直接实施；`subagent` = spawn coding subagent（非 fork，只实施 change 范围 + context.md），模型 = `[host] codingModel`。两条路径均由主会话统一提交 `apply: <change-name>`；subagent 路径环境级不可用回退主 agent，业务失败原样呈报转人工

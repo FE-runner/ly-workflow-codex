@@ -19,6 +19,11 @@ export interface HostConfigLocation {
   lyDir?: string
 }
 
+export type HostConfigReadResult
+  = | { status: 'missing', path: string }
+    | { status: 'ok', path: string, config: LyConfig }
+    | { status: 'invalid', path: string, error: string }
+
 export function getHostLyDir(host: HostId, location: HostConfigLocation = {}): string {
   return location.lyDir ?? getAdapter(host).defaultPaths().lyDir
 }
@@ -84,18 +89,26 @@ export function normalizeLyConfig(parsed: Record<string, unknown>, host: HostId)
   return parsed as unknown as LyConfig
 }
 
-export async function readLyConfig(host: HostId = DEFAULT_HOST, location: HostConfigLocation = {}): Promise<LyConfig | null> {
+export async function readLyConfigState(host: HostId = DEFAULT_HOST, location: HostConfigLocation = {}): Promise<HostConfigReadResult> {
+  const file = getHostConfigPath(host, location)
+  if (!(await fs.pathExists(file)))
+    return { status: 'missing', path: file }
   try {
-    const file = getHostConfigPath(host, location)
-    if (await fs.pathExists(file)) {
-      const parsed = parse(await fs.readFile(file, 'utf-8')) as Record<string, unknown>
-      return normalizeLyConfig(parsed, host)
+    const parsed = parse(await fs.readFile(file, 'utf-8')) as Record<string, unknown>
+    return { status: 'ok', path: file, config: normalizeLyConfig(parsed, host) }
+  }
+  catch (error) {
+    return {
+      status: 'invalid',
+      path: file,
+      error: error instanceof Error ? error.message : String(error),
     }
   }
-  catch {
-    // Config doesn't exist or is invalid
-  }
-  return null
+}
+
+export async function readLyConfig(host: HostId = DEFAULT_HOST, location: HostConfigLocation = {}): Promise<LyConfig | null> {
+  const result = await readLyConfigState(host, location)
+  return result.status === 'ok' ? result.config : null
 }
 
 export async function writeLyConfig(config: LyConfig, host: HostId = DEFAULT_HOST, location: HostConfigLocation = {}): Promise<void> {
@@ -108,6 +121,8 @@ export async function writeLyConfig(config: LyConfig, host: HostId = DEFAULT_HOS
 export function createDefaultConfig(options: {
   language: SupportedLang
   installedWorkflows: string[]
+  /** 既有路径键项目表；重装时原样透传 */
+  projects?: LyConfig['projects']
   /** 目标宿主（决定 paths 取值）；缺省为默认宿主 */
   hostId?: HostId
   host?: HostSection
@@ -127,6 +142,7 @@ export function createDefaultConfig(options: {
       prompts: paths.promptsDir,
       backup: join(paths.lyDir, 'backup'),
     },
+    ...(options.projects !== undefined ? { projects: options.projects } : {}),
   }
   const testMode = sanitizeTestMode(options.host?.testMode)
   const reviewExecutor = sanitizeExecutor(options.host?.reviewExecutor)

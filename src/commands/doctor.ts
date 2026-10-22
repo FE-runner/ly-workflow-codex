@@ -5,12 +5,14 @@ import fs from 'fs-extra'
 import { join } from 'pathe'
 import { version as packageVersion } from '../../package.json'
 import { i18n } from '../i18n'
-import { getHostConfigPath, readLyConfig, sanitizeExecutor } from '../utils/config'
+import { getHostConfigPath, sanitizeExecutor } from '../utils/config'
 import { listPrefixedDirs } from '../utils/fs-helpers'
 import { getAdapter } from '../utils/host-adapters'
 import { resolveTargetHosts } from '../utils/host-selection'
 import { PACKAGE_NAME } from '../utils/package-meta'
 import { inspectOpenspec } from '../utils/preflight'
+import { readEffectiveProjectTestMode } from '../utils/project-config'
+import type { ProjectConfigWarning, TestModeSource } from '../utils/project-config'
 
 const OK = ansis.green('✓')
 const WARN = ansis.yellow('⚠')
@@ -53,17 +55,56 @@ export interface HostOpsOptions {
 
 const STATUS_ICON: Record<HostDoctorCheck['status'], string> = { ok: OK, warn: WARN, fail: FAIL }
 
+function testModeSourceLabel(source: TestModeSource): string {
+  if (source === 'project')
+    return i18n.t('doctor:testMode.sourceProject')
+  if (source === 'host')
+    return i18n.t('doctor:testMode.sourceHost')
+  return i18n.t('doctor:testMode.sourceDefault')
+}
+
+function projectWarningLabel(warning: ProjectConfigWarning): string {
+  if (warning.code === 'projects-invalid-shape')
+    return i18n.t('doctor:testMode.warnProjectsShape')
+  if (warning.code === 'project-entry-invalid-shape')
+    return i18n.t('doctor:testMode.warnEntryShape', { key: warning.key ?? '?' })
+  if (warning.code === 'project-test-mode-missing')
+    return i18n.t('doctor:testMode.warnMissingMode', { key: warning.key ?? '?' })
+  if (warning.code === 'project-test-mode-invalid')
+    return i18n.t('doctor:testMode.warnInvalidMode', { key: warning.key ?? '?' })
+  return i18n.t('doctor:testMode.warnPathConflict', { keys: warning.keys?.join(', ') ?? '?' })
+}
+
 /** 按宿主收集体检项（配置 + 适配器提供的宿主专属体检项），供输出与测试共用 */
 export async function collectHostDoctorChecks(host: HostId): Promise<HostDoctorCheck[]> {
   const adapter = getAdapter(host)
-  const config = await readLyConfig(host)
+  const effective = await readEffectiveProjectTestMode(host)
+  const config = effective.status === 'ok' ? effective.config : null
   const checks: HostDoctorCheck[] = [{
     label: 'config',
-    status: config ? 'ok' : 'warn',
-    detail: config
-      ? `v${config.general?.version || '?'}, lang=${config.general?.language || '?'} (${getHostConfigPath(host)})`
-      : i18n.t('doctor:configMissing', { path: getHostConfigPath(host) }),
+    status: effective.status === 'ok' ? 'ok' : 'warn',
+    detail: effective.status === 'ok'
+      ? `v${effective.config.general?.version || '?'}, lang=${effective.config.general?.language || '?'} (${effective.config ? getHostConfigPath(host) : ''})`
+      : effective.status === 'invalid'
+        ? i18n.t('doctor:configInvalid', { path: effective.path, error: effective.error })
+        : i18n.t('doctor:configMissing', { path: effective.path }),
   }]
+  if (effective.status === 'ok') {
+    const warnings = effective.effective.warnings.map(projectWarningLabel)
+    checks.push({
+      label: i18n.t('doctor:testMode.label'),
+      status: warnings.length > 0 || effective.effective.hostTestModeInvalid ? 'warn' : 'ok',
+      detail: [
+        i18n.t('doctor:testMode.defaultMode', { mode: effective.effective.hostTestMode }),
+        i18n.t('doctor:testMode.effective', {
+          mode: effective.effective.mode,
+          source: testModeSourceLabel(effective.effective.source),
+          path: `${effective.effective.projectPath} [${effective.effective.projectPathSource}]`,
+        }),
+        ...warnings,
+      ].join('; '),
+    })
+  }
   checks.push(...await collectHostDoctorChecksWith(host, adapter.defaultPaths(), config?.host))
   return checks
 }
@@ -176,7 +217,8 @@ export async function status(options: HostOpsOptions = {}): Promise<void> {
 
   for (const host of hosts) {
     const adapter = getAdapter(host)
-    const config = await readLyConfig(host)
+    const effective = await readEffectiveProjectTestMode(host)
+    const config = effective.status === 'ok' ? effective.config : null
     const installedVer = config?.general?.version || 'unknown'
     let cmdCount: string
     try {
@@ -191,6 +233,12 @@ export async function status(options: HostOpsOptions = {}): Promise<void> {
     console.log(`  ${ansis.bold('Commands')}       ${cmdCount} (${adapter.commandPrefix}lyx-*)`)
     console.log(`  ${ansis.bold('Config')}         ${getHostConfigPath(host)}`)
     console.log(`  ${ansis.bold('Executors')}      review=${executor('reviewExecutor')}, coding=${executor('codingExecutor')}`)
+    if (effective.status === 'ok') {
+      console.log(`  ${ansis.bold('Test mode')}      ${effective.effective.mode} (${testModeSourceLabel(effective.effective.source)}; ${effective.effective.projectPath} [${effective.effective.projectPathSource}])`)
+    }
+    else {
+      console.log(`  ${ansis.bold('Test mode')}      ${ansis.yellow(effective.status === 'invalid' ? i18n.t('doctor:configInvalid', { path: effective.path, error: effective.error }) : i18n.t('doctor:configMissing', { path: effective.path }))}`)
+    }
     console.log()
   }
 

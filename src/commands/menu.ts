@@ -11,7 +11,7 @@ import { join } from 'pathe'
 import { parse as parseTOML } from 'smol-toml'
 import { version } from '../../package.json'
 import { i18n } from '../i18n'
-import { getConfigPath, getHostConfigPath, listInstalledHosts, mergeHostConfig, readLyConfig, sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, sanitizeTestMode, writeLyConfig } from '../utils/config'
+import { getConfigPath, getHostConfigPath, listInstalledHosts, mergeHostConfig, readLyConfig, readLyConfigState, sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, sanitizeTestMode, writeLyConfig } from '../utils/config'
 import { DEFAULT_HOST, getAdapter, listRegisteredHosts } from '../utils/host-adapters'
 import { getCoreCommandIds, getWorkflowConfigs, installWorkflows } from '../utils/installer'
 import { PACKAGE_NAME } from '../utils/package-meta'
@@ -212,7 +212,7 @@ export async function showMainMenu(): Promise<void> {
     if (sanitizeReviewModel(config?.host?.reviewModel)) {
       statusParts.push(ansis.green(`review model: ${config?.host?.reviewModel}`))
     }
-    statusParts.push(ansis.cyan(`test: ${sanitizeTestMode(config?.host?.testMode) ?? 'normal'}`))
+    statusParts.push(ansis.cyan(`test default: ${sanitizeTestMode(config?.host?.testMode) ?? 'normal'}`))
     statusParts.push(ansis.cyan(`review: ${sanitizeReviewMode(config?.host?.reviewMode) ?? 'full'}`))
 
     drawHeader(statusParts)
@@ -339,7 +339,13 @@ function readLyConfigSync(): any {
 export async function configExecutorsAndModels(): Promise<void> {
   const hosts = await pickInstalledHosts('menu:hostPick.config', { single: true })
   const host = hosts?.[0] ?? DEFAULT_HOST
-  const config = await readLyConfig(host)
+  const configState = await readLyConfigState(host)
+  if (configState.status === 'invalid') {
+    console.log(`  ${ansis.yellow('⚠')} ${i18n.t('init:configInvalid', { path: configState.path, error: configState.error })}`)
+    console.log(ansis.gray(`  ${i18n.t('init:configInvalidHint')}`))
+    return
+  }
+  const config = configState.status === 'ok' ? configState.config : null
   if (!config) {
     console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized (${host})`)
     return
@@ -371,7 +377,13 @@ export async function configExecutorsAndModels(): Promise<void> {
     return
   }
 
-  const fresh = await readLyConfig(host)
+  const freshState = await readLyConfigState(host)
+  if (freshState.status === 'invalid') {
+    console.log(`  ${ansis.yellow('⚠')} ${i18n.t('init:configInvalid', { path: freshState.path, error: freshState.error })}`)
+    console.log(ansis.gray(`  ${i18n.t('init:configInvalidHint')}`))
+    return
+  }
+  const fresh = freshState.status === 'ok' ? freshState.config : null
   if (!fresh) {
     console.log(`  ${ansis.yellow('⚠')} ${PACKAGE_NAME} config not initialized (${host})`)
     return

@@ -9,6 +9,7 @@ import { doctor, status } from './commands/doctor'
 import { init } from './commands/init'
 import { showMainMenu } from './commands/menu'
 import { runOpenspecCommand } from './commands/openspec'
+import { runProjectTestMode } from './commands/project'
 import { describeUninstallTargets, printUninstallResult, resolveUninstallHosts, runUninstall } from './commands/uninstall'
 import { i18n, initI18n } from './i18n'
 import { readLyConfig } from './utils/config'
@@ -31,6 +32,7 @@ function customizeHelp(sections: any[]): any[] {
       `  ${ansis.cyan(`${BIN_NAME} status`)}       Show installation overview`,
       `  ${ansis.cyan(`${BIN_NAME} openspec inspect`)}  Inspect OpenSpec dependency state`,
       `  ${ansis.cyan(`${BIN_NAME} openspec ensure`)}   Ensure OpenSpec CLI/skills/root`,
+      `  ${ansis.cyan(`${BIN_NAME} project test-mode`)}  ${i18n.t('cli:help.commandDescriptions.projectTestMode')}`,
       `  ${ansis.cyan(`${BIN_NAME} uninstall`)}    Uninstall ${PACKAGE_NAME} (per host)`,
       '',
       ansis.gray(`  ${i18n.t('cli:help.shortcuts')}`),
@@ -138,6 +140,20 @@ export async function setupCommands(cli: CAC): Promise<void> {
     .option('--host <hosts>', i18n.t('cli:help.hostOption'))
     .action(async (action: string, options: OpenspecCommandOptions) => {
       await runOpenspecCommand(action, options)
+    })
+
+  // Project-scoped test mode (path-keyed override inside each host config)
+  cli
+    .command('project <action> [mode]', 'Manage project-scoped settings')
+    .option('--unset', 'Remove the current project testMode override')
+    .option('--host <hosts>', i18n.t('cli:help.hostOption'))
+    .action(async (action: string, mode: string | undefined, options: { unset?: boolean, host?: string }) => {
+      if (action === 'test-mode') {
+        await runProjectTestMode(mode, options)
+        return
+      }
+      console.error(ansis.red(i18n.t('project:unknownAction', { action })))
+      process.exitCode = 1
     })
 
   // Doctor: environment health check（按宿主分组）

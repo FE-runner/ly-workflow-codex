@@ -1,5 +1,6 @@
 export { init } from './commands/init'
 export { showMainMenu } from './commands/menu'
+export { runProjectTestMode } from './commands/project'
 export { update } from './commands/update'
 export { changeLanguage, i18n, initI18n } from './i18n'
 // ly-workflow-codex — 精简工作流：多宿主（codex / claude）共享同一套命令流程 + 独立审查关卡
@@ -17,8 +18,16 @@ export {
   getLyPromptsDir,
   listInstalledHosts,
   readLyConfig,
+  readLyConfigState,
   writeLyConfig,
 } from './utils/config'
+export {
+  normalizeProjectPath,
+  projectEntriesForPath,
+  readEffectiveProjectTestMode,
+  resolveProjectKey,
+  resolveProjectTestMode,
+} from './utils/project-config'
 export { ADAPTERS, type HostAdapter, type HostId, listRegisteredHosts } from './utils/host-adapters'
 export {
   getWorkflowById,

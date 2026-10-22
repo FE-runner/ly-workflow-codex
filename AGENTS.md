@@ -50,6 +50,7 @@ src/commands/
                              共享层不做宿主名分支
   menu.ts                    交互式菜单（按宿主展示；更新 / 配置模式、执行者与模型 / 卸载可选宿主；
                              配置入口复用 collect-subagent-config，两宿主同口径）
+  project.ts                 当前项目 testMode 路径键覆盖管理（设置 / 移除 / 冲突与不可读配置预校验）
   doctor.ts                  doctor / status：通用项 + 按宿主分组的适配器体检项
   update.ts                  按宿主决策：版本落后重装 / 定义偏差本地重渲染 / 跳过；按宿主备份回滚
   uninstall.ts               卸载宿主集合解析、确认范围描述、结果输出
@@ -71,7 +72,8 @@ src/utils/                   共享层（不出现宿主名与宿主路径）
   host-adapters.ts           HostAdapter 接口 + 宿主注册表（唯一登记处；惰性求值避免模块循环）
   host-selection.ts          宿主集合解析：探测、非交互集合、交互默认勾选、--host 解析、运维目标
   config.ts                  每宿主配置文件读写（[host] 节归一、历史节名兼容、installedHosts 丢弃）、
-                             listInstalledHosts（配置文件存在即已安装）、字段清洗与合并
+                             listInstalledHosts（配置文件存在即已安装）、字段清洗与合并、missing/ok/invalid 读取状态
+  project-config.ts          主仓库根与 worktree 项目键解析、[projects] 有效 testMode 与来源/诊断计算
   installer.ts               安装 / 卸载主流程：按宿主遍历适配器，结果按宿主记录
   installer-template.ts      PACKAGE_ROOT 解析、宿主片段注入、~/ 展开、共享变量
   installer-data.ts          15 个命令注册
@@ -95,6 +97,8 @@ npx ly-workflow-codex        # 一键安装/菜单（默认动作，含 prefligh
 npx ly-workflow-codex init   # 选择宿主并安装 15 个 skills + 配置；OpenSpec 默认 check-only（i 为别名）
 npx ly-workflow-codex init --init-openspec  # 宿主确认后，为所选宿主初始化当前项目 OpenSpec root/skills
 lycx init --skip-prompt [--host codex,claude]  # 非交互：已安装宿主 → 探测宿主 → 兜底 codex
+lycx project test-mode normal|off [--host <hosts>]  # 写入当前主仓库根的项目测试模式覆盖
+lycx project test-mode --unset [--host <hosts>]    # 移除当前项目全部规范化等价覆盖
 lycx doctor / status [--host <hosts>]          # 体检 / 安装概览（按宿主分组）
 lycx openspec inspect|ensure [--host <hosts>] --json  # OpenSpec 依赖检查 / 按宿主修复
 lycx uninstall [--host <hosts>]                # 按宿主卸载（缺省 = 全部已安装宿主）
@@ -119,7 +123,7 @@ prompts  = "..."
 backup   = "..."
 
 [host]                     # 宿主配置节（历史节名 [codexHost] 兼容读取，下次写入归一为 [host]）
-testMode = "normal"        # normal（默认/未配置：保留测试义务）| off（无测试模式：不写测试、不跑测试）
+testMode = "normal"        # 宿主默认；未命中项目覆盖时生效（normal | off）
 reviewMode = "full"        # full（方案+代码审查，默认/未配置）| plan-only（仅方案审查）| code-only（仅代码审查）| off（跳过审查）
 reviewExecutor = "main"    # main（主 agent 直接执行，默认/未配置）| subagent
 codingExecutor = "main"
@@ -128,7 +132,14 @@ codingModel = "..."
 reviewReasoningEffort = "..."   # 空白不传 / 不写
 codingReasoningEffort = "..."
 spawnableModels = [...]    # 仅 codex：本机实测可 spawn 的模型清单（提示参考，不作候选或校验来源）
+
+[projects."/canonical/main-repository-root"]  # 路径键项目覆盖；同一主仓库的 worktree 共用
+testMode = "off"
 ```
+
+- 有效 `testMode`：当前项目路径覆盖 > `[host].testMode` > `normal`。项目键按主仓库根归一：普通 checkout / separate-git-dir / 子模块使用各自 `show-toplevel`；非 bare linked worktree 使用主工作树根；bare worktree 使用当前 worktree 根；非 Git 目录使用规范化 cwd。
+- 项目条目缺失或非法时回退宿主默认；同一规范化路径的多个原始键取值冲突时忽略覆盖并由 doctor WARN。`lycx doctor` / `status` 展示宿主默认、当前项目有效值、来源与路径。
+- `lycx init` / update / 菜单写回保留全部 `[projects]` 与未知字段；任一所选宿主配置存在但不可读或 TOML 非法时，在写入任何宿主前停止，避免默认配置覆盖既有项目表。
 
 - codex 宿主：模型与推理档经"模板指示 + 宿主 spawn 能力"按次传入。
 - claude 宿主：向导与菜单采集面与 codex 一致（执行者二连 → 模型二连 → 推理档二连；推理档建议清单 = `low`/`medium`/`high`/`xhigh`/`max`，codex 侧保持 `minimal`/`low`/`medium`/`high`/`max`；清单挂在宿主适配层）；模型与推理档在安装 / 更新时写入 `~/.claude/agents/lyx-*.md` 的 `model` / `effort`，未配置为 `model: inherit`；配置改动后未重装时 `lycx doctor` 提示偏差，`lycx update` 按当前配置重渲染。lyx **不写** Claude Code 自身的 provider / settings 配置。
@@ -160,11 +171,13 @@ spawnableModels = [...]    # 仅 codex：本机实测可 spawn 的模型清单�
 6. **OpenSpec 依赖检查统一为共享三层模型，按宿主判定与修复**：`lycx init` / `@lyx-init` / `lycx doctor` 共用 CLI、skills、root 三层检查；skills 按 OpenSpec profile 推导，每个宿主只在自己的技能根里判定（codex：项目/全局 `.agents`、`.codex`；claude：项目/全局 `.claude/skills`），整体取最差；项目级修复按缺失技能的宿主执行 `openspec init --tools <宿主>`，不重建另一宿主产物；无任何宿主配置文件时只读诊断，写入型修复延后到宿主确认之后；`global-only` WARN 并继续，不自动固化。
 7. **Claude 侧以 main 为基线，子代理为可选增强**：子代理定义始终安装（执行者只决定是否使用），不启用 worktree 隔离（实施改动须留在主检出由主会话统一提交），审查子代理工具含 Bash 但正文限定只读 git / openspec；`@lyx-init` 在 Claude 宿主下额外产出导入 `AGENTS.md` 的 `CLAUDE.md`。
 
-8. **小改动走 `@lyx-fix` 轻量路径，spec 同步是它的强制职责**：不创建 OpenSpec change、不询问隔离与自动化档位、只读取宿主配置的 `testMode`（执行主体仍固定主 agent），一次完成定位 → spec 分流（A 对齐既有 spec / B 同一 commit 就地改主 spec，不走 delta / C 超出范围转 `@lyx-propose`）→ 按测试风险实施与验证 → 五项自审（修对 / spec 一致 / 漏改 / 改多 / 验证充分）→ 最终验证门禁 → B 类提交前确认 → 单个非 change 生命周期 commit（正文追加 `- spec：` / `- 自审：` / `- 验证：`，无 Change trailer）。理由：流程越重越容易被绕开，绕开的改动才是 spec 漂移的主要来源；`git log -- openspec/specs/` 即可追溯轻流程的 spec 改动。
+8. **小改动走 `@lyx-fix` 轻量路径，spec 同步是它的强制职责**：不创建 OpenSpec change、不询问隔离与自动化档位、只解析当前项目有效 `testMode`（执行主体仍固定主 agent），一次完成定位 → spec 分流（A 对齐既有 spec / B 同一 commit 就地改主 spec，不走 delta / C 超出范围转 `@lyx-propose`）→ 按测试风险实施与验证 → 五项自审（修对 / spec 一致 / 漏改 / 改多 / 验证充分）→ 最终验证门禁 → B 类提交前确认 → 单个非 change 生命周期 commit（正文追加 `- spec：` / `- 自审：` / `- 验证：`，无 Change trailer）。理由：流程越重越容易被绕开，绕开的改动才是 spec 漂移的主要来源；`git log -- openspec/specs/` 即可追溯轻流程的 spec 改动。
 
 9. **测试义务由风险决定，跨 fix / propose / review 共用**：`risk-based-testing-policy` 定义行为或契约改动、逻辑缺陷修复、纯展示改动与补充边界覆盖的统一口径。纯 UI、文案、样式在不改变状态、事件、分支、数据流、业务计算或契约时可免新增测试，但必须运行项目已有的相称验证；补充边界覆盖只记录为 `否+否` Warning，不自动扩为 tasks/tests。`@lyx-propose` 按该策略生成 spec/tasks；`@lyx-review-plan` / `@lyx-review-code` 按该策略判级。逻辑缺陷复现、核心行为覆盖、契约一致性及 `@lyx-archive` 完整验证均不放宽。
 
-10. **无测试模式是宿主级显式 opt-in**：`[host].testMode = "off"` 时不新增/修改测试文件、不生成测试任务、不执行测试命令；fix 仍实施，propose 仍生成必要 spec，review 不产生测试缺失类发现，archive 跳过测试但仍执行 typecheck/build。配置缺失、不可读或解析失败时命令停止并提示 `lycx doctor`，不得静默回退 `normal`；未配置 `testMode` 的旧用户默认 `normal`。
+10. **无测试模式是宿主默认 + 项目覆盖的显式 opt-in**：有效 `testMode = "off"` 时不新增/修改测试文件、不生成测试任务、不执行测试命令；fix 仍实施，propose 仍生成必要 spec，review 不产生测试缺失类发现，archive 跳过测试但仍执行 typecheck/build。配置缺失、不可读或解析失败时命令停止并提示 `lycx doctor`，不得静默回退 `normal`；无项目条目时沿用宿主默认，未配置的旧用户默认 `normal`。
+
+11. **项目测试模式按主仓库根而非 checkout 路径区分**：项目覆盖存于每宿主 `lyx/config.toml` 的 `[projects."<path>"]`，linked worktree 与主工作区共享同一键；`lycx project test-mode` 只修改当前路径键，设置遇规范化别名冲突时失败且不写，`--unset` 删除全部规范化等价键中的 `testMode`。该字段不进入项目仓库，继续由宿主本地配置承载。
 
 ## 改动对称清单
 

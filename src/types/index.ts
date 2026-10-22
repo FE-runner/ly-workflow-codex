@@ -12,6 +12,12 @@ export type ReviewMode = 'full' | 'plan-only' | 'code-only' | 'off'
 // 测试模式：normal = 保留现有测试义务；off = 不写测试文件、不执行测试
 export type TestMode = 'normal' | 'off'
 
+// 路径键项目配置条目；当前只解释 testMode，其他字段原样保留
+export interface ProjectSection {
+  testMode?: TestMode
+  [key: string]: unknown
+}
+
 // ly-workflow-codex 配置
 export interface LyConfig {
   general: {
@@ -27,6 +33,8 @@ export interface LyConfig {
     prompts: string
     backup: string
   }
+  // 宿主本地配置中的路径键项目覆盖；键为规范化绝对项目路径
+  projects?: Record<string, ProjectSection>
   // 宿主配置节（每宿主配置文件内的 [host] 节；字段语义全部宿主一致）
   host?: HostSection
 }

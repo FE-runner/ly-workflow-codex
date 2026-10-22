@@ -14,7 +14,7 @@ import {
   getHostConfigPath,
   listInstalledHosts,
   mergeHostConfig,
-  readLyConfig,
+  readLyConfigState,
   sanitizeExecutor,
   sanitizeModelField,
   sanitizeReasoningEffort,
@@ -23,6 +23,7 @@ import {
   sanitizeTestMode,
   writeLyConfig,
 } from '../utils/config'
+import type { HostConfigReadResult } from '../utils/config'
 import { getAdapter, listRegisteredHosts } from '../utils/host-adapters'
 import { defaultInteractiveHosts, detectHosts, parseHostList, resolveNonInteractiveHosts } from '../utils/host-selection'
 import { getCoreCommandIds, installWorkflows } from '../utils/installer'
@@ -272,9 +273,13 @@ export async function init(options: InitOptions = {}): Promise<void> {
   // ═══════════════════════════════════════════════════════
   const installedHosts = await listInstalledHosts()
   const detectedHosts = await detectHosts()
+  const existingConfigStates = new Map<HostId, HostConfigReadResult>()
   const existingConfigs = new Map<HostId, LyConfig | null>()
-  for (const host of listRegisteredHosts())
-    existingConfigs.set(host, await readLyConfig(host))
+  for (const host of listRegisteredHosts()) {
+    const state = await readLyConfigState(host)
+    existingConfigStates.set(host, state)
+    existingConfigs.set(host, state.status === 'ok' ? state.config : null)
+  }
 
   // ═══════════════════════════════════════════════════════
   // Step 1: Language selection (FIRST interactive step)
@@ -329,6 +334,17 @@ export async function init(options: InitOptions = {}): Promise<void> {
   const hosts = options.skipPrompt
     ? explicitHosts ?? resolveNonInteractiveHosts({ installed: installedHosts, detected: detectedHosts })
     : await pickHosts(explicitHosts ?? defaultInteractiveHosts({ installed: installedHosts, detected: detectedHosts }))
+
+  const invalidSelectedConfigs = hosts
+    .map(host => existingConfigStates.get(host))
+    .filter((state): state is Extract<HostConfigReadResult, { status: 'invalid' }> => state?.status === 'invalid')
+  if (invalidSelectedConfigs.length > 0) {
+    for (const invalid of invalidSelectedConfigs)
+      console.error(ansis.red(`  ✗ ${i18n.t('init:configInvalid', { path: invalid.path, error: invalid.error })}`))
+    console.error(ansis.yellow(`  ${i18n.t('init:configInvalidHint')}`))
+    process.exitCode = 1
+    return
+  }
 
   const selectedWorkflows = getCoreCommandIds()
 
@@ -395,6 +411,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
       const config = createDefaultConfig({
         language,
         installedWorkflows: selectedWorkflows,
+        projects: existingConfigs.get(host)?.projects,
         hostId: host,
         host: hostSection,
       })
