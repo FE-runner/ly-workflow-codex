@@ -15,7 +15,7 @@ argument-hint: '[<change-name>]'
 
 两条路径共同遵守：实施前读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时停止并提示运行 `lycx doctor`。
 
-配置为 `normal` / `off` 时直接作为最终模式，历史 `testModeDecision` 不覆盖配置。配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失视为决策缺失；`lyx` 非 mapping 或 `testModeDecision` 为 object/list/number 时结构非法并停止；`null`、空白或非法字符串视为缺失；合法 `normal` / `off` 直接沿用。决策缺失时询问一次并写入 `lyx.testModeDecision`，保留其他字段；用户取消或环境无法交互时停止。
+配置为 `normal` / `off` 时直接作为最终模式，历史 `testModeDecision` 不覆盖配置。配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失视为决策缺失；`lyx` 非 mapping，或 `testModeDecision` 存在且既不是 string 也不是 null 时结构非法并停止；`null`、空白或非法字符串视为缺失；合法 `normal` / `off` 直接沿用。决策缺失时询问一次并写入 `lyx.testModeDecision`，保留其他字段；用户取消或环境无法交互时停止。
 
 最终模式为 `normal` 时，若历史决策为 `off` 但配置覆盖为 `normal`，或决策缺失后补问为 `normal`，而 proposal/tasks 没有测试任务或测试执行计划，SHALL 在实施前停止并要求更新 change artifacts 或恢复配置，SHALL NOT 临时添加范围外测试。
 

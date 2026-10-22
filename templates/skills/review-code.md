@@ -22,7 +22,7 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 循环执行期间默认不提交；仅当循环以"正常清零"结束时，才对审查目标全部文件（`git diff HEAD` 圈定的原始改动 + 循环修复一并暂存）统一提交一次。传入 `--no-commit` 时，连这次最终的统一提交也不做。
 
-**测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失或无合法 `lyx.testModeDecision` 时询问一次 `normal` / `off` 并写回，保留其他字段；`lyx` 非 mapping 或 decision 为 object/list/number、文件不可读/解析失败时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `.openspec.yaml`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
+**测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失或无合法 `lyx.testModeDecision` 时询问一次 `normal` / `off` 并写回，保留其他字段；`lyx` 非 mapping，或 decision 存在且既不是 string 也不是 null、文件不可读/解析失败时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `.openspec.yaml`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
 
 ## 判级标准（先定级，再写条目）
 

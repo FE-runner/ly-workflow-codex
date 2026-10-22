@@ -22,7 +22,7 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 循环执行期间默认不提交；仅当循环以"正常清零"结束时，才对审查目标全部文件（该 change 的 artifact 与 delta spec，含编排方已暂存的产物与循环修复）统一提交一次（见步骤 5）。传入 `--no-commit` 时，连这次最终的统一提交也不做。
 
-**测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失或无合法 `lyx.testModeDecision` 时询问一次 `normal` / `off` 并写回，保留其他字段；`lyx` 非 mapping 或 decision 为 object/list/number、文件不可读/解析失败时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `.openspec.yaml`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
+**测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失或无合法 `lyx.testModeDecision` 时询问一次 `normal` / `off` 并写回，保留其他字段；`lyx` 非 mapping，或 decision 存在且既不是 string 也不是 null、文件不可读/解析失败时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `.openspec.yaml`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
 
 ## 判级标准（先定级，再写条目）
 
@@ -248,7 +248,7 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 
 **正常清零结束：**
 
-先执行统一提交：先 `git add` 该 change 目录下的 `proposal.md`/`design.md`/`tasks.md` 及全部 delta spec 文件（审查目标全部文件——编排方（`@lyx-propose`）已暂存的产物与循环期间修复的改动一并暂存；若产物此前已在暂存区则保持，修复改动由本次 `git add` 覆盖进 index），再执行一次统一 commit（仅暂存并提交这些文件，不做范围外的 `git add`），提交信息先用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取路径并按 `@lyx-commit` 正文规范写入完整 message，采用 Conventional Commits 前缀 + 正文 + trailer 结构：CC 前缀形如 `fix(<scope>): review-plan 反馈修复（N 轮）`，正文至少含 `- 动机：` / `- 改动：` / `- 影响：`，并说明本轮 Critical、修复动作与验证，末尾带 `Change-Stage: review-plan-fix` 与 `Change-Name: <change-name>` trailer，提交命令使用 `git commit -F "$MSG_FILE"`。**不存在"循环开始前已脏文件的隔离跳过"**——该 change 目录下的 artifact 与 delta spec 是合法审查对象，产物与修复是同一个待提交单元，全部一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若统一提交本身执行失败，在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
+先执行统一提交：先 `git add` 该 change 目录下的 `proposal.md`/`design.md`/`tasks.md` 及全部 delta spec 文件；若本轮新写入决策，或本轮实际消费了继承的 dirty `.openspec.yaml` 决策，SHALL 同时加入该 `.openspec.yaml`（审查目标全部文件——编排方（`@lyx-propose`）已暂存的产物与循环期间修复的改动一并暂存；若产物此前已在暂存区则保持，修复改动由本次 `git add` 覆盖进 index），再执行一次统一 commit（仅暂存并提交这些文件，不做范围外的 `git add`），提交信息先用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取路径并按 `@lyx-commit` 正文规范写入完整 message，采用 Conventional Commits 前缀 + 正文 + trailer 结构：CC 前缀形如 `fix(<scope>): review-plan 反馈修复（N 轮）`，正文至少含 `- 动机：` / `- 改动：` / `- 影响：`，并说明本轮 Critical、修复动作与验证，末尾带 `Change-Stage: review-plan-fix` 与 `Change-Name: <change-name>` trailer，提交命令使用 `git commit -F "$MSG_FILE"`。**不存在"循环开始前已脏文件的隔离跳过"**——该 change 目录下的 artifact 与 delta spec 是合法审查对象，产物与修复是同一个待提交单元，全部一并提交。若循环全程没有任何实际修复或决策写入/消费，不创建空 commit。若统一提交本身执行失败，在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
 
 ```
 📋 方案审查：<change-name>

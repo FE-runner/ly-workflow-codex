@@ -415,6 +415,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(apply).toContain('配置为 `ask` 时读取目标 change')
     expect(apply).toContain('继承并实际消费的 dirty `.openspec.yaml` 决策')
     expect(apply).toContain('proposal/tasks 没有测试任务或测试执行计划')
+    expect(apply).toContain('既不是 string 也不是 null')
 
     const archive = read('archive.md')
     expect(archive).toContain('testMode = "off"')
@@ -424,6 +425,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(archive).toContain('字段缺失、空白或非法时按 `normal` 处理')
     expect(archive).toContain('配置为 `ask` 时读取目标 change')
     expect(archive).toContain('实际消费的继承 dirty `.openspec.yaml` 决策')
+    expect(archive).toContain('最终决策来自 change 元数据')
   })
 
   it('explore convergence hint routes small changes to fix and others to propose', () => {
