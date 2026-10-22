@@ -45,11 +45,12 @@ testMode = "off"
 
 新增共享项目路径解析，输入为当前工作目录：
 
-1. 在 Git 仓库内同时读取 `git rev-parse --show-toplevel`、`--git-dir` 与 `--git-common-dir`，并把相对结果按 cwd 转绝对、`realpath` 归一。
-2. `git-dir` 与 `git-common-dir` 相同时，当前目录是普通 checkout（包含使用 separate-git-dir 的普通仓库），项目键取 `--show-toplevel`。
-3. 两者不同且不是子模块误判时，当前目录是 linked worktree，项目键取 common git dir 的父目录，即主工作树根。子模块按自身 `--show-toplevel` 处理，不归并到 superproject。
-4. 不在 Git 仓库内或 Git 解析失败时，使用 `realpath(cwd)`；目录不存在时回退 `path.resolve(cwd)`。
-5. 返回规范化绝对路径，并保留“解析来源”（git-root / worktree-main-root / cwd）供 doctor 展示。
+1. 在 Git 仓库内同时读取 `git rev-parse --show-toplevel`、`--git-dir`、`--git-common-dir` 与 `--show-superproject-working-tree`，并把相对结果按 cwd 转绝对、`realpath` 归一。
+2. `--show-superproject-working-tree` 非空时判定为子模块，项目键取子模块自身 `--show-toplevel`，不归并到 superproject。
+3. 非子模块且 `git-dir` 与 `git-common-dir` 相同时，当前目录是普通 checkout（包含 separate-git-dir），项目键取 `--show-toplevel`。
+4. 非子模块且 `git-dir` 与 `git-common-dir` 不同时，当前目录是 linked worktree。先以 common git dir 为 `--git-dir` 探测 `git rev-parse --is-bare-repository`：非 bare 时取 common git dir 的父目录作为主工作树根；bare 时不存在主工作树根，取当前 worktree 的 `--show-toplevel`。
+5. 不在 Git 仓库内或 Git 解析失败时，使用 `realpath(cwd)`；目录不存在时回退 `path.resolve(cwd)`。
+6. 返回规范化绝对路径，并保留“解析来源”（git-root / submodule-root / worktree-main-root / worktree-root-bare / cwd）供 doctor 展示。
 
 替代方案继续使用 `--show-toplevel` 会让每个 linked worktree 拥有独立配置键，与已确认方案冲突。`--show-superproject-working-tree` 不作为主键来源；子模块按自身 Git 仓库处理。
 
@@ -83,7 +84,9 @@ testMode = "off"
 
 `readLyConfig` / `writeLyConfig` 保留 `projects`。`createDefaultConfig` 增加项目表透传入口，`lycx init` 从既有配置读取后传入；菜单已经基于完整 fresh config 局部合并 `host`，仍需在重装 smoke 中确认项目表不会因配置重建丢失。
 
-新增项目命令只修改目标路径键内的 `testMode`。`--unset` 删除该字段；条目为空时删除条目。其他项目条目、宿主字段、路径和未知字段不做规范化或重排，保持语义等价。
+新增面向写入链路的配置读取结果，区分 `missing` / `ok` / `invalid`，不得继续把“文件存在但不可读或 TOML 非法”折叠成 `null` 后按全新安装处理。`lycx init` / `update` 在宿主选择完成后、写入任何配置前，预检全部所选宿主的既有配置；任一配置为 `invalid` 时整体停止，报告全部路径并提示 `lycx doctor`，不写任何宿主的默认配置。普通菜单编辑读取到 `invalid` 时同样停止，不覆盖原文件。
+
+设置命令只修改 canonical 目标路径键内的 `testMode`。`--unset` 的目标集合是所有规范化后等于当前项目根的原始键：逐项删除 `testMode`，条目为空时删除条目，条目仍含其他字段时保留；没有任何规范化等价键才视为无需移除。其他项目条目、宿主字段、路径和未知字段不做规范化或重排，保持语义等价。
 
 替代方案让 `createDefaultConfig` 重建后再单独写回项目表会破坏“一次写入、原子失败”和未知字段保留；本方案在创建配置时即携带既有项目表。
 
@@ -100,8 +103,8 @@ lycx project test-mode --unset [--host <hosts>]
 
 - 复用既有 `--host` 解析；未指定时使用全部已安装宿主。
 - 对每个目标宿主读取配置；配置文件不存在时报告未安装并跳过，SHALL NOT 创建新宿主安装。
-- 写入前先预校验全部目标配置可读且可解析；存在可提前发现的目标错误时不写入任何文件。
-- 写入当前规范化主仓库根对应的项目条目，或将 `--unset` 作为幂等成功处理。
+- 写入前先预校验全部目标配置可读且可解析，并在每个目标配置内检查其他原始键规范化后是否指向当前主仓库根且与目标值冲突；存在任一可提前发现的目标错误或冲突键时不写入任何文件，并列出全部冲突路径键。
+- 设置时写入当前规范化主仓库根对应的项目条目。`--unset` 时遍历所有规范化等价原始键并删除其 `testMode`；仅在没有任何匹配键时作为幂等成功处理。
 - 参数冲突、目标宿主为空或预校验失败时以非零状态退出且不写入；多宿主实际写入中途失败时停止后续写入，并逐项报告已成功与失败的目标，不自动回滚已成功文件或猜测性修复。
 
 该命令只管理测试模式，不复用 `collectSubagentConfig`，避免把宿主默认值采集与项目覆盖编辑混成一个交互流程。
@@ -144,12 +147,14 @@ doctor 的每宿主配置检查增加三类信息：
 - **非法项目条目静默改变测试义务** → 非法覆盖不参与解析并回退宿主默认，doctor 输出 WARN；整个配置不可读则停止测试动作。
 - **绝对路径配置跨机器不可移植** → 配置是宿主本地文件，不随项目仓库提交；每台机器独立维护自己的项目条目。
 - **重复路径键造成不确定结果** → 规范化后冲突且值不同则忽略覆盖并告警，不按 TOML 枚举顺序猜测。
+- **管理命令写入一个被冲突覆盖遮蔽的新键** → 写入前检查规范化等价键；存在冲突时整体失败且不写，避免“命令成功但运行时不生效”。
+- **重装覆盖不可读配置** → 配置读取区分 missing/ok/invalid；任何所选宿主 invalid 时在写入前整体停止。
 - **并发写入造成后写覆盖前写** → 保持现有单用户 CLI 语义并明确最后写入者生效；本变更不引入跨进程锁，命令逐项报告实际写入结果。
 
 ## Migration Plan
 
 1. 扩展配置类型、清洗与保留逻辑，并加入项目路径解析与有效模式解析。
-2. 修正 `lycx init` / 配置创建链路，确保既有 `[projects]` 重装不丢。
+2. 修正 `lycx init` / 配置创建链路，确保既有 `[projects]` 重装不丢，并阻止不可读配置被默认配置覆盖。
 3. 新增 `lycx project test-mode` 与 i18n/help 文案。
 4. 接入 Codex / Claude doctor 与 status。
 5. 更新六个工作流模板、四份审查角色词与静态规则检查。

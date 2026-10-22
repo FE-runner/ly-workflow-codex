@@ -1,12 +1,12 @@
 ## 1. 配置模型与有效值解析
 
 - [ ] 1.1 在 `src/types/index.ts` 增加项目测试模式条目与 `LyConfig.projects` 类型，并在 `src/utils/config.ts` 增加项目表清洗/保留辅助；让 `readLyConfig` / `writeLyConfig` / `createDefaultConfig` 显式携带 `[projects]`，验证 `pnpm typecheck` 通过且 `smol-toml` 读写样例保留项目表
-- [ ] 1.2 新增共享项目配置解析模块：实现主仓库根归一（普通仓库、子目录、linked worktree、无 Git fallback）、项目条目精确匹配、有效 `testMode` 与来源/诊断返回，并用 `pnpm exec tsx` 对内联临时路径样例验证项目覆盖、宿主回退与冲突诊断
-- [ ] 1.3 修改 `src/commands/init.ts`，在 `createDefaultConfig` 时传入既有 `projects`；验证临时 HOME 环境下先写入多项目条目、再执行 `init --skip-prompt` 后条目仍原样存在
+- [ ] 1.2 新增共享项目配置解析模块：实现主仓库根归一（普通 checkout、separate-git-dir、子模块、linked worktree、bare 仓库 worktree、无 Git fallback）、当前项目的规范化等价键集合、有效 `testMode` 与来源/诊断返回，并用 `pnpm exec tsx` 对内联临时路径样例验证项目覆盖、宿主回退、bare fallback 与冲突诊断
+- [ ] 1.3 修改配置读取与 `src/commands/init.ts`：写入链路区分 missing/ok/invalid，在 `createDefaultConfig` 时传入既有 `projects`；任一所选宿主配置存在但不可读/TOML 非法时，在任何写入前停止并报告路径。验证临时 HOME 环境下合法多项目条目经 `init --skip-prompt` 原样保留，非法配置不被覆盖
 
 ## 2. 项目级 CLI 管理
 
-- [ ] 2.1 新增 `src/commands/project.ts` 与 `src/cli-setup.ts` 命令注册，实现 `lycx project test-mode normal|off`、`--unset`、`--host`、已安装宿主解析、未安装跳过、全部目标写入前预校验与中途失败逐项报告；验证非法参数或预校验失败不写配置且帮助文本列出命令
+- [ ] 2.1 新增 `src/commands/project.ts` 与 `src/cli-setup.ts` 命令注册，实现 `lycx project test-mode normal|off`、`--unset`（遍历所有规范化等价原始键）、`--host`、已安装宿主解析、未安装跳过、全部目标写入前预校验、设置时的规范化路径冲突预校验与中途失败逐项报告；验证别名键移除、非法参数、不可读配置或冲突键均按契约处理且帮助文本列出命令
 - [ ] 2.2 在 `src/i18n/index.ts` 的 zh-CN / en 同步增加项目命令提示、成功、跳过、无目标宿主与错误文案；用静态键检查确认两种语言无单边缺失
 - [ ] 2.3 使用临时 HOME、临时 Git 仓库与 linked worktree 手工 smoke：从子目录设置/更新/移除项目条目，验证写入主仓库根键、worktree 命中同一键、其他项目条目和其他宿主字段保持不变
 

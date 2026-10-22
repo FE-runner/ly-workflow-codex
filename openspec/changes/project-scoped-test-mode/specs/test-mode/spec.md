@@ -12,7 +12,7 @@
 2. `[host].testMode`；
 3. `normal`。
 
-项目路径 SHALL 归一到主仓库根：当前目录位于 Git 仓库内时，普通仓库取仓库根，子目录归一到该根，linked worktree 归一到其主工作树根；当前目录不在 Git 仓库内时，取规范化后的当前目录。匹配 SHALL 使用规范化后的绝对路径，SHALL NOT 依赖调用时的原始相对路径。
+项目路径 SHALL 归一到主仓库根：普通 checkout 与 separate-git-dir checkout 取 `show-toplevel`；子模块取子模块自身的 `show-toplevel`；非 bare 仓库上的 linked worktree 取主工作树根；bare repository 上的 linked worktree 因不存在主工作树根，取当前 worktree 的 `show-toplevel`；当前目录不在 Git 仓库内时，取规范化后的当前目录。匹配 SHALL 使用规范化后的绝对路径，SHALL NOT 依赖调用时的原始相对路径。
 
 匹配项目条目缺失、项目条目内的 `testMode` 缺失/空白/非法，或项目覆盖表形态非法时，有效模式 SHALL 回退到 `[host].testMode`；非法项目覆盖形态 SHALL 由 `lycx doctor` 输出 WARN。宿主配置整体缺失、不可读或 TOML 解析失败时，SHALL 视为“测试模式未知”并在执行任何测试文件写入、测试任务生成或测试命令前停止，明确提示运行 `lycx doctor` 检查；SHALL NOT 静默按 `normal` 继续。
 
@@ -50,6 +50,14 @@
 - **WHEN** 用户在 linked worktree 内运行 lyx 工作流，主仓库根存在匹配项目条目
 - **THEN** 当前 worktree 使用主仓库根的同一项目条目，不需要为 worktree 路径单独配置
 
+#### Scenario: 子模块使用自身仓库根
+- **WHEN** 用户在 Git 子模块内运行 lyx 工作流
+- **THEN** 项目键使用子模块自身的 `show-toplevel`，不归并到 superproject
+
+#### Scenario: bare 仓库 worktree 使用自身路径
+- **WHEN** 用户位于 bare repository 的 linked worktree 内
+- **THEN** 项目键使用当前 worktree 的 `show-toplevel`，因为该仓库不存在可共享的主工作树根
+
 #### Scenario: 项目条目缺失时回退宿主默认
 - **WHEN** 当前主仓库根没有对应 `[projects]` 条目，且 `[host].testMode = "off"`
 - **THEN** 有效测试模式回退为 `off`
@@ -61,6 +69,10 @@
 #### Scenario: 重装保留项目覆盖条目
 - **WHEN** 配置中已存在多个 `[projects]` 条目，用户运行 `lycx update` 或编辑宿主默认字段
 - **THEN** 全部项目条目原样保留，不因非交互重装或未触碰项目字段的编辑而丢失
+
+#### Scenario: 重装遇到不可读配置不覆盖
+- **WHEN** 任一所选宿主的配置文件存在但不可读或 TOML 解析失败，用户运行 `lycx init` 或 `lycx update`
+- **THEN** 命令在写入任何宿主配置前停止，报告全部不可读配置路径并提示运行 `lycx doctor`，不得以默认配置覆盖既有项目表或未知字段
 
 ### Requirement: testMode 的采集与展示
 
@@ -98,9 +110,9 @@ lyx SHALL 提供 `lycx project test-mode normal|off` 与 `lycx project test-mode
 
 命令 SHALL 按与运行时相同的规则解析规范化主仓库根路径。`--host <hosts>` SHALL 复用既有宿主参数解析；未指定时 SHALL 作用于全部已安装宿主。目标宿主的配置文件不存在时，命令 SHALL 将其报告为未安装并跳过，SHALL NOT 隐式安装宿主或创建安装配置文件。
 
-设置时，命令 SHALL 在目标宿主配置中新增或更新 `[projects."<规范化项目根>"]` 的 `testMode`，并保留其他宿主配置、其他项目条目与同一配置中的无关字段。移除时，命令 SHALL 删除当前项目条目的 `testMode`；若该条目不再含任何字段，SHALL 删除该空条目；移除不存在覆盖 SHALL 作为幂等成功处理并明确报告。
+设置时，命令 SHALL 在目标宿主配置中新增或更新 `[projects."<规范化项目根>"]` 的 `testMode`，并保留其他宿主配置、其他项目条目与同一配置中的无关字段。移除时，命令 SHALL 把目标集合定义为所有规范化后等于当前项目根的原始项目键：逐个删除这些条目中的 `testMode`；若条目删除后不再含任何字段，SHALL 删除该空条目；若条目仍含其他字段，SHALL 保留该条目与字段。没有任何规范化等价键时，移除 SHALL 作为幂等成功处理并明确报告。
 
-命令写入任何配置前 SHALL 先完成参数、目标宿主集合与全部目标配置可读性预校验，避免因可提前发现的错误产生部分写入。单宿主写入失败或多宿主后续写入失败时 SHALL 以非零退出状态如实报告已成功与失败的目标；至少覆盖无已安装目标宿主、`--host` 非法、模式参数缺失、模式与 `--unset` 同时出现、目标配置不可读或写入失败。
+命令写入任何配置前 SHALL 先完成参数、目标宿主集合、全部目标配置可读性与规范化路径冲突预校验，避免因可提前发现的错误产生部分写入。若其他原始项目键规范化后指向当前主仓库根，且与目标 `testMode` 冲突，命令 SHALL 不写任何配置并以非零状态列出全部冲突键；SHALL NOT 自动合并、删除或改写既有别名键。单宿主写入失败或多宿主后续写入失败时 SHALL 以非零退出状态如实报告已成功与失败的目标；至少覆盖无已安装目标宿主、`--host` 非法、模式参数缺失、模式与 `--unset` 同时出现、目标配置不可读、路径冲突或写入失败。
 
 #### Scenario: 设置当前项目无测试模式
 - **WHEN** 用户在项目内运行 `lycx project test-mode off`
@@ -118,6 +130,10 @@ lyx SHALL 提供 `lycx project test-mode normal|off` 与 `lycx project test-mode
 - **WHEN** 用户运行 `lycx project test-mode --unset`
 - **THEN** 当前项目条目的 `testMode` 被移除，后续有效值回退宿主默认
 
+#### Scenario: 移除覆盖包含规范化别名键
+- **WHEN** 当前项目覆盖只存在于非 canonical 的原始路径键，该键规范化后等于当前主仓库根
+- **THEN** 命令移除该原始键的 `testMode`；条目为空时删除条目，仍含其他字段时保留字段，避免覆盖继续生效
+
 #### Scenario: 移除不存在覆盖仍成功
 - **WHEN** 当前项目没有路径键覆盖，用户运行 `lycx project test-mode --unset`
 - **THEN** 命令不修改配置并报告无需移除，退出状态为成功
@@ -133,6 +149,10 @@ lyx SHALL 提供 `lycx project test-mode normal|off` 与 `lycx project test-mode
 #### Scenario: 目标配置不可读时预校验阻止写入
 - **WHEN** 任一目标宿主配置文件存在但不可读或 TOML 解析失败
 - **THEN** 命令在写入任何目标前失败并报告该宿主，不产生部分配置更新
+
+#### Scenario: 规范化路径冲突阻止写入
+- **WHEN** 当前主仓库根已有多个规范化等价但原始写法不同的项目键，且取值互相冲突
+- **THEN** 设置命令不写入任何目标配置，以非零状态列出冲突键并报告需要人工处理
 
 ### Requirement: 工作流使用项目有效测试模式
 

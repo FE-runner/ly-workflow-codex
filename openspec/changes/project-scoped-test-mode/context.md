@@ -25,5 +25,8 @@
 - `lycx init` 当前通过 `createDefaultConfig` 重建配置；必须显式传入既有 `projects`，否则重装会丢项目表。
 - `resolveProjectRoot` 在 `src/utils/preflight.ts` 中服务 OpenSpec root 校验，仍返回当前 checkout 的 `show-toplevel`；测试模式项目键必须使用独立解析，不能直接复用。
 - 普通仓库可能使用 separate-git-dir；这类 checkout 的 `git-dir == git-common-dir`，应使用 `show-toplevel`，不能一律取 common dir 父目录。
+- 子模块按自身 `show-toplevel`；bare repository 的 linked worktree 没有主工作树根，回退当前 worktree 的 `show-toplevel`。
 - 项目字段非法时回退宿主默认并让 doctor WARN；宿主配置整体不可读或 TOML 非法时停止测试相关动作。
-- CLI 目标配置需先全部预校验；多宿主写入中途失败时报告已完成项，不自动回滚或猜测性修复。
+- `init/update` 必须区分配置 missing/ok/invalid；任一所选宿主 invalid 时在任何写入前整体停止，避免默认配置覆盖项目表。
+- CLI 目标配置需先全部预校验并检查规范化路径冲突；冲突或预检失败不写，任何多宿主写入中途失败时报告已完成项，不自动回滚或猜测性修复。
+- `--unset` 目标是所有规范化等价原始键；逐项删测试模式，条目空则删条目，其他字段保留；仅完全无匹配键时幂等成功。
