@@ -313,10 +313,10 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
   })
 
   it('full-tree staging excludes in-progress review-findings snapshots', () => {
-    const pathspec = "':(top,exclude,glob)openspec/changes/*/review-findings.md'"
+    const pathspec = '\':(top,exclude,glob)openspec/changes/*/review-findings.md\''
     for (const name of ['commit.md', 'propose.md']) {
       const content = read(name)
-      expect(content, name).toContain("git add -A -- ':/' " + pathspec)
+      expect(content, name).toContain(`git add -A -- ':/' ${pathspec}`)
       // 以仓库顶层为锚点：不得退化为以当前目录为锚点的写法
       expect(content, name).not.toContain('git add -A -- .')
       expect(content, name).not.toContain('git add -A &&')

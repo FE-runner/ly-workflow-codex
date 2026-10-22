@@ -2,7 +2,7 @@
 
 > 多宿主（Codex / Claude Code）单 Agent 工作流：同一会话内自己完成聊天 / 分析 / 规划 / 实施，两个宿主共享同一套命令流程。审查与实施主体由当前宿主配置文件的 `[host] reviewExecutor` / `codingExecutor` 决定（未配置等价 `main` = 主 agent 直接执行；`subagent` = spawn 独立子代理，非 fork spawn + 主会话逐条裁决异议）；慢验证统一由 `@lyx-archive` 的归档前关卡执行。执行约定内联于各 skill 模板（[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED）。
 
-**Last Updated**: 2026-10-21 (v0.12.0)
+**Last Updated**: 2026-10-22 (v0.13.0)
 
 ---
 
@@ -110,30 +110,34 @@ codex：`~/.codex/lyx/config.toml`；claude：`~/.claude/lyx/config.toml`。**�
 
 ```toml
 [general]
-version = "0.6.1"          # 该宿主那次安装的包版本（update 据此只刷新落后的宿主）
-language = "zh-CN"         # zh-CN / en
-createdAt = "..."          # ISO 时间
+version = "0.6.1" # 该宿主那次安装的包版本（update 据此只刷新落后的宿主）
+language = "zh-CN" # zh-CN / en
+createdAt = "..." # ISO 时间
 
 [workflows]
-installed = ["init-project", "commit", ...]
+installed = [
+  "init-project",
+  "commit",
+  "..."
+] # 实际安装列表可更长
 
-[paths]                    # 取值按宿主（codex：~/.codex/lyx/...；claude：~/.claude/lyx/...）
+[paths] # 取值按宿主（codex：~/.codex/lyx/...；claude：~/.claude/lyx/...）
 commands = "..."
-prompts  = "..."
-backup   = "..."
+prompts = "..."
+backup = "..."
 
-[host]                     # 宿主配置节（历史节名 [codexHost] 兼容读取，下次写入归一为 [host]）
-testMode = "normal"        # 宿主默认；未命中项目覆盖时生效（normal | off | ask）
-reviewMode = "full"        # full（方案+代码审查，默认/未配置）| plan-only（仅方案审查）| code-only（仅代码审查）| off（跳过审查）
-reviewExecutor = "main"    # main（主 agent 直接执行，默认/未配置）| subagent
+[host] # 宿主配置节（历史节名 [codexHost] 兼容读取，下次写入归一为 [host]）
+testMode = "normal" # 宿主默认；未命中项目覆盖时生效（normal | off | ask）
+reviewMode = "full" # full（方案+代码审查，默认/未配置）| plan-only（仅方案审查）| code-only（仅代码审查）| off（跳过审查）
+reviewExecutor = "main" # main（主 agent 直接执行，默认/未配置）| subagent
 codingExecutor = "main"
-reviewModel = "..."        # 仅 reviewExecutor = "subagent" 时生效；未配置回退当前会话模型
+reviewModel = "..." # 仅 reviewExecutor = "subagent" 时生效；未配置回退当前会话模型
 codingModel = "..."
-reviewReasoningEffort = "..."   # 空白不传 / 不写
+reviewReasoningEffort = "..." # 空白不传 / 不写
 codingReasoningEffort = "..."
-spawnableModels = [...]    # 仅 codex：本机实测可 spawn 的模型清单（提示参考，不作候选或校验来源）
+spawnableModels = [ "..." ] # 仅 codex：本机实测可 spawn 的模型清单（提示参考，不作候选或校验来源）
 
-[projects."/canonical/main-repository-root"]  # 路径键项目覆盖；同一主仓库的 worktree 共用
+[projects."/canonical/main-repository-root"] # 路径键项目覆盖；同一主仓库的 worktree 共用
 testMode = "off"
 ```
 
@@ -200,7 +204,7 @@ testMode = "off"
 
 ## 发版规则
 
-1. 更新 `package.json` 版本号（当前 0.12.0）
+1. 更新 `package.json` 版本号（当前 0.13.0）
 2. 更新 `CHANGELOG.md`（新条目在顶部）
 3. 同步根文档中的版本引用与行为描述
 4. `pnpm typecheck && pnpm build && pnpm test` 全绿后 commit

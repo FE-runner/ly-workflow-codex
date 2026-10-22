@@ -16,7 +16,6 @@
 
 ### New Capabilities
 
-
 ### Modified Capabilities
 
 - `installer-preflight-checks`: 将单层“CLI + 任一 skill”检查升级为共享三层检查，明确 `lycx init` 默认 check-only、`--init-openspec`、`lycx doctor` 共用结果模型，以及 `global-only` WARN 语义。

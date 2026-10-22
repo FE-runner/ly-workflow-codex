@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.13.0] - 2026-10-22
+
+测试模式从宿主级开关扩展为支持项目覆盖与 change 级运行时询问，并打通 fix / propose / apply / review / archive 全流程。
+
+### Added
+
+- 新增无测试模式：`testMode = "off"` 时不新增或修改测试文件、不生成测试任务、不执行测试命令，归档仍保留 typecheck / build 门禁
+- 新增项目级 `testMode` 覆盖：保存到各宿主 `config.toml` 的 `[projects."<主仓库根>"]`，支持 `lycx project test-mode normal|off|ask|--unset`、路径归一、冲突预校验与 doctor/status 展示
+- 新增 `testMode = "ask"`：change 级命令首次需要测试决策时询问一次并写入 `.openspec.yaml` 的 `lyx.testModeDecision`；`@lyx-fix` 每次调用询问
+
+### Changed
+
+- propose / apply / review-plan / review-code / archive 统一消费配置与 change 决策，最终 `normal` / `off` 决定测试任务、审查判级和归档验证
+- ask 决策可随阶段 commit 落库；`--no-commit`、非清零终止或阶段失败时允许保留 dirty 决策供恢复复用
+- 同步 Codex / Claude 双宿主配置采集、模板、角色词、测试与中英文 README
+
 ## [0.12.0] - 2026-10-21
 
 测试义务改为按改动风险确定：纯展示改动可免新增测试，补充边界覆盖只记录不阻塞；逻辑缺陷、核心行为与契约风险仍保留原门禁。

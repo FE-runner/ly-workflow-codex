@@ -21,13 +21,6 @@ export {
   readLyConfigState,
   writeLyConfig,
 } from './utils/config'
-export {
-  normalizeProjectPath,
-  projectEntriesForPath,
-  readEffectiveProjectTestMode,
-  resolveProjectKey,
-  resolveProjectTestMode,
-} from './utils/project-config'
 export { ADAPTERS, type HostAdapter, type HostId, listRegisteredHosts } from './utils/host-adapters'
 export {
   getWorkflowById,
@@ -35,6 +28,13 @@ export {
   installWorkflows,
   uninstallWorkflows,
 } from './utils/installer'
+export {
+  normalizeProjectPath,
+  projectEntriesForPath,
+  readEffectiveProjectTestMode,
+  resolveProjectKey,
+  resolveProjectTestMode,
+} from './utils/project-config'
 export {
   checkForUpdates,
   compareVersions,

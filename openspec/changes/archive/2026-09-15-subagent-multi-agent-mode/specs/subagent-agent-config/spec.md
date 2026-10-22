@@ -17,4 +17,3 @@
 #### Scenario: 宿主无 subagent 能力
 - **WHEN** 当前 codex 环境不提供 subagent spawn 能力，用户运行 `@lyx-review-plan`
 - **THEN** 提示"当前环境无 subagent 能力，已回退为当前会话直接审查"，审查流程以当前会话继续执行
-

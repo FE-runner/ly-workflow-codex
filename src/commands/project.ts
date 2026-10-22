@@ -2,9 +2,9 @@ import type { LyConfig, ProjectSection, TestMode } from '../types'
 import type { HostId } from '../utils/host-adapters'
 import ansis from 'ansis'
 import { i18n } from '../i18n'
+import { readLyConfigState, sanitizeTestMode, writeLyConfig } from '../utils/config'
 import { listRegisteredHosts } from '../utils/host-adapters'
 import { parseHostList } from '../utils/host-selection'
-import { readLyConfigState, sanitizeTestMode, writeLyConfig } from '../utils/config'
 import { projectEntriesForPath, resolveProjectKey } from '../utils/project-config'
 
 export interface ProjectTestModeOptions {

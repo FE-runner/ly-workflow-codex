@@ -26,4 +26,3 @@
 
 - **WHEN** 用户运行 `@lyx-archive <change-name>`，项目 `package.json` 未定义 `typecheck` 脚本
 - **THEN** 命令跳过该项并在报告中注明"未提供 typecheck 脚本"，其余存在的验证照常执行，不因该项缺失判定失败
-

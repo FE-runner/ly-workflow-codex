@@ -1,4 +1,5 @@
 import type { HostAdapterConfig, HostDoctorCheck, HostId, HostPaths } from '../utils/host-adapters'
+import type { ProjectConfigWarning, TestModeSource } from '../utils/project-config'
 import { execSync } from 'node:child_process'
 import ansis from 'ansis'
 import fs from 'fs-extra'
@@ -12,7 +13,6 @@ import { resolveTargetHosts } from '../utils/host-selection'
 import { PACKAGE_NAME } from '../utils/package-meta'
 import { inspectOpenspec } from '../utils/preflight'
 import { readEffectiveProjectTestMode } from '../utils/project-config'
-import type { ProjectConfigWarning, TestModeSource } from '../utils/project-config'
 
 const OK = ansis.green('✓')
 const WARN = ansis.yellow('⚠')

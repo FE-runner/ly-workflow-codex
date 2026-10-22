@@ -137,7 +137,7 @@ lyx:
   sourceBranch: <ISOLATION_SOURCE_BRANCH 或 null>
   developmentBranch: <DEVELOPMENT_BRANCH 或 null>
   worktreePath: <WORKTREE_PATH；仅 worktree 模式>
-  testModeDecision: normal | off  # 仅 effective testMode = ask 且用户已选择时写入
+  testModeDecision: normal | off # 仅 effective testMode = ask 且用户已选择时写入
 ```
 
 `isolation: none` 时 `sourceBranch` 仍记录当前分支，`developmentBranch` / `worktreePath` 为 `null`。`sourceBranch` 缺失时写 `null`，不得猜测。`ask` 选择只写入 `testModeDecision`，保留 `.openspec.yaml` 其他字段。该 metadata 属于 propose 提交单元，随步骤 6 的 `git add -- openspec/changes/<change-name>/` 一起提交。若 propose commit 在决策写入后、提交前中断，允许决策保留为 dirty 并如实报告，后续恢复可复用。

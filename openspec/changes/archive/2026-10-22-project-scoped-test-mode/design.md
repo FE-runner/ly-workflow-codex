@@ -61,7 +61,7 @@ testMode = "off"
 新增单一解析函数，返回至少：
 
 ```ts
-{
+interface EffectiveTestModeResolution {
   mode: 'normal' | 'off'
   source: 'project' | 'host' | 'default'
   projectPath: string

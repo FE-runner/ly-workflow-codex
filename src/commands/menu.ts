@@ -1,5 +1,5 @@
-import type { HostId } from '../utils/host-adapters'
 import type { TestMode } from '../types'
+import type { HostId } from '../utils/host-adapters'
 import type { SubagentConfigCollected } from './collect-subagent-config'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'

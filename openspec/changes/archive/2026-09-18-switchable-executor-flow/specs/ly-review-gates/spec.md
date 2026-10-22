@@ -45,4 +45,3 @@
 #### Scenario: spawn 不可用时回退 main 路径
 - **WHEN** 配置 `reviewExecutor = "subagent"` 但宿主不支持 spawn 或首次 spawn 失败
 - **THEN** 命令回退主 agent 直接审查并输出 `[回退] subagent 不可用: <原始报错>`，流程不中断
-

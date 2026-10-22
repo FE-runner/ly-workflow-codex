@@ -16,26 +16,21 @@
 - **WHEN** 模型配置合法但宿主初始 spawn 失败（如报错原文含 `Unknown model ... Available models: ...`）
 - **THEN** 如实展示报错原文并提示改用报错中 Available models 列表内模型或当前会话模型；按回退口径回退为当前会话直接执行，输出 `[回退] subagent 不可用: <原始报错>` 标记，不作为流程失败
 
-
 #### Scenario: 配置了任意模型（含清单外或自定义输入）
 - **WHEN** 用户 `[codexHost] reviewModel = "glm-5.3-flash"`（不在任何内置/维护清单内，或经向导自定义输入写入）
 - **THEN** 作为审查 agent A 的模型指定 spawn，是否可用由宿主实际报错判定，SHALL NOT 因不在清单而被预判"配置无效"
-
 
 #### Scenario: 模板运行时无法读取配置
 - **WHEN** 审查/实施子代理 spawn 前读取 `~/.ly/config.toml` 失败（缺文件或解析错误）
 - **THEN** 明确提示"无法读取配置，请运行 `lycx doctor` 检查"，按"配置状态未知"处理，SHALL NOT 按"未配置"静默继承回退
 
-
 #### Scenario: 配置了推理档时随 spawn 传入
 - **WHEN** 用户 `[codexHost]` 同时配置 `reviewModel = "glm-5.3-flash"` 与 `reviewReasoningEffort = "low"`，用户运行 `@lyx-review-plan`
 - **THEN** 审查 agent A 的 spawn 指示读取该字段并把 `reasoning_effort: "low"` 随模型一并传入，SHALL NOT 因模板未写死该模型而忽略该字段
 
-
 #### Scenario: 未配置推理档时不传该参数
 - **WHEN** 用户未配置 `reviewReasoningEffort`，用户运行 `@lyx-review-plan`
 - **THEN** 审查 agent A 的 spawn 不传推理档参数，由宿主/模型使用默认档，SHALL NOT 传空值或占位值
-
 
 #### Scenario: 推理档被宿主或上游拒绝
 - **WHEN** 配置的推理档取值不被宿主或上游接受（如报错原文含不受支持的档位说明）

@@ -507,13 +507,21 @@ describe('multi-host skills inspection and repair (add-claude-host)', () => {
   })
 })
 
-
 describe('outside-project root', () => {
   it('marks a healthy root outside the project as outside-project', async () => {
     execFileMock.mockImplementation((cmd: string, args: any[], _opts: any, cb: (err: any, out: string) => void) => {
-      if (cmd === 'git' && args[0] === 'rev-parse') { cb(null, `${process.cwd()}\n`); return }
-      if (cmd === 'openspec' && args[0] === 'doctor') { cb(null, JSON.stringify({ root: { healthy: true, path: '/tmp/not-this-project' }, status: [] })); return }
-      if (cmd === 'openspec' && args[0] === 'config') { cb(null, JSON.stringify({ workflows: ['propose', 'explore', 'apply', 'archive'] })); return }
+      if (cmd === 'git' && args[0] === 'rev-parse') {
+        cb(null, `${process.cwd()}\n`)
+        return
+      }
+      if (cmd === 'openspec' && args[0] === 'doctor') {
+        cb(null, JSON.stringify({ root: { healthy: true, path: '/tmp/not-this-project' }, status: [] }))
+        return
+      }
+      if (cmd === 'openspec' && args[0] === 'config') {
+        cb(null, JSON.stringify({ workflows: ['propose', 'explore', 'apply', 'archive'] }))
+        return
+      }
       cb(null, '1.7.0\n')
     })
     const result = await inspectOpenspec()
@@ -523,9 +531,18 @@ describe('outside-project root', () => {
 
   it('keeps a root inside the project healthy', async () => {
     execFileMock.mockImplementation((cmd: string, args: any[], _opts: any, cb: (err: any, out: string) => void) => {
-      if (cmd === 'git' && args[0] === 'rev-parse') { cb(null, `${process.cwd()}\n`); return }
-      if (cmd === 'openspec' && args[0] === 'doctor') { cb(null, JSON.stringify({ root: { healthy: true, path: process.cwd() }, status: [] })); return }
-      if (cmd === 'openspec' && args[0] === 'config') { cb(null, JSON.stringify({ workflows: ['propose', 'explore', 'apply', 'archive'] })); return }
+      if (cmd === 'git' && args[0] === 'rev-parse') {
+        cb(null, `${process.cwd()}\n`)
+        return
+      }
+      if (cmd === 'openspec' && args[0] === 'doctor') {
+        cb(null, JSON.stringify({ root: { healthy: true, path: process.cwd() }, status: [] }))
+        return
+      }
+      if (cmd === 'openspec' && args[0] === 'config') {
+        cb(null, JSON.stringify({ workflows: ['propose', 'explore', 'apply', 'archive'] }))
+        return
+      }
       cb(null, '1.7.0\n')
     })
     const result = await inspectOpenspec()
@@ -533,13 +550,21 @@ describe('outside-project root', () => {
   })
 })
 
-
 describe('outside-project root (sibling branch)', () => {
   it('marks an in-project root that does not cover cwd as outside-project', async () => {
     execFileMock.mockImplementation((cmd: string, args: any[], _opts: any, cb: (err: any, out: string) => void) => {
-      if (cmd === 'git' && args[0] === 'rev-parse') { cb(null, `${process.cwd()}\n`); return }
-      if (cmd === 'openspec' && args[0] === 'doctor') { cb(null, JSON.stringify({ root: { healthy: true, path: `${process.cwd()}/packages/other` }, status: [] })); return }
-      if (cmd === 'openspec' && args[0] === 'config') { cb(null, JSON.stringify({ workflows: ['propose', 'explore', 'apply', 'archive'] })); return }
+      if (cmd === 'git' && args[0] === 'rev-parse') {
+        cb(null, `${process.cwd()}\n`)
+        return
+      }
+      if (cmd === 'openspec' && args[0] === 'doctor') {
+        cb(null, JSON.stringify({ root: { healthy: true, path: `${process.cwd()}/packages/other` }, status: [] }))
+        return
+      }
+      if (cmd === 'openspec' && args[0] === 'config') {
+        cb(null, JSON.stringify({ workflows: ['propose', 'explore', 'apply', 'archive'] }))
+        return
+      }
       cb(null, '1.7.0\n')
     })
     const result = await inspectOpenspec()

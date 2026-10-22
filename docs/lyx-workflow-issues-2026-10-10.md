@@ -50,8 +50,11 @@ $ openspec context --json
 `openspec doctor --json` 也报 `healthy: true`。而 `lycx openspec ensure --host codex --yes --json` 返回：
 
 ```json
-{ "root": { "status": "healthy", "doctor": { "root": { "path": "/Users/ly", "source": "nearest", "healthy": true } } },
-  "actions": null, "executed": [] }
+{
+  "root": { "status": "healthy", "doctor": { "root": { "path": "/Users/ly", "source": "nearest", "healthy": true } } },
+  "actions": null,
+  "executed": []
+}
 ```
 
 即：**不会在项目里建 openspec root**。

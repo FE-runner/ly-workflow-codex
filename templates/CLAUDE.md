@@ -2,7 +2,7 @@
 
 > [根目录](../CLAUDE.md) > **templates**
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-22
 
 ---
 

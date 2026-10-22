@@ -44,26 +44,21 @@ review-plan 与 review-code 的主会话 spawn 审查 subagent 后 SHALL 遵守�
 - **WHEN** 主会话把审查 agent A 的结论发送给 agent B 等待复核时，等待失败（超时或 agent 无响应）
 - **THEN** 命令终止本轮，如实报告"交换结论阶段失败（agent B 复核等待超时）"，不推测补全 B 的意见，不进入归并
 
-
 #### Scenario: 返回内容格式不符
 - **WHEN** 审查 subagent 返回内容不符合约定输出结构, 无法解析出 Critical/Warning/Info
 - **THEN** 命令按独立终止条件处理, 报告原始返回内容与解析失败原因, 不猜测改写后继续
-
 
 #### Scenario: 双审查 agent 均调用失败
 - **WHEN** 两个审查 subagent 均无法产出结论（spawn 失败或超时）
 - **THEN** 按独立终止条件结束审查, 如实报告"审查调用失败"及原因, 不进入下一轮
 
-
 #### Scenario: 环境级 subagent 不可用, 回退当前会话直接审查
 - **WHEN** 当前 codex 环境无 subagent 能力或在初始 spawn 即不可用, 用户运行 `/ly:review-plan` 或 `/ly:review-code`
 - **THEN** 命令回退为当前会话直接执行审查并如实报告"已回退, 原因：subagent 不可用", SHALL NOT 视为流程失败中断整体编排
 
-
 #### Scenario: 单一 agent 失败且另一 agent 结论完整
 - **WHEN** 双审查中一个审查 agent 调用失败, 另一个 agent 返回完整结论
 - **THEN** 命令以完整一方结论继续审查并如实报告降级（含失败 agent 与原因）, 不归入"分歧未决"; 是否补跑或重试由主会话决定
-
 
 #### Scenario: 模板运行前读取配置失败
 - **WHEN** 审查 subagent spawn 前读取 `~/.ly/config.toml` 失败（缺文件或解析错误）
@@ -104,91 +99,73 @@ review-plan 与 review-code 的主会话 spawn 审查 subagent 后 SHALL 遵守�
 - **WHEN** 审查-修复循环期间工作区出现一次非本循环统一提交的中途 commit
 - **THEN** 命令如实报告该提交及其影响（仍以固定基线重新计算 `git diff <固定SHA>`，核对该中途 commit 是否落在审查范围内，核对不等于替换基线），不静默忽略，也不仅因此自动终止
 
-
 #### Scenario: 一轮修复后 Critical 清零（review-code）
 - **WHEN** `/ly:review-code` 第一轮审查发现 2 个 Critical, 当前会话 修复后自动触发第二轮审查, 第二轮 Critical 数为 0, 且两轮修复后的验证均通过
 - **THEN** 循环在第二轮结束, 命令报告"本次已自动修复 2 个 Critical", 列出第二轮的 Warning/Info, 不再触发第三轮
-
 
 #### Scenario: 一轮修复后 Critical 清零（review-plan）
 - **WHEN** `/ly:review-plan` 第一轮审查在 `design.md` 发现 1 个 Critical（如"未注明范围"）, 当前会话 修改 `design.md` 后自动触发第二轮, `openspec validate` 通过, 第二轮 Critical 数为 0
 - **THEN** 循环在第二轮结束, 命令报告"本次已自动修复 1 个 Critical", 列出最后一轮 Warning/Info
 
-
 #### Scenario: 修复对象包含 delta spec 文件
 - **WHEN** `/ly:review-plan` 某一轮审查发现的 Critical 是"spec 的 Requirement 未覆盖 proposal 的 What Changes"（锚定在 `specs/<capability>/spec.md`）, 当前会话 判断认可
 - **THEN** 修复该 Critical 的方式是编辑该 delta spec 文件补对 Requirement/Scenario, 这被记录在改动文件清单中, 不视为走出修复对象范围
-
 
 #### Scenario: 修复后问题转移到不同文件或不同类别, 循环继续
 - **WHEN** 第一轮审查在 `a.ts` 发现一个"空指针"类 Critical, 当前会话 修复后, 第二轮审查在 `a.ts` 发现一个不同的“未处理异常”类 Critical（问题类型不同）
 - **THEN** 命令视为新问题, 不判定熔断, 继续处理新 Critical 并触发下一轮
 
-
 #### Scenario: 同一文件内两个独立的同类问题不被误判为熔断
 - **WHEN** 第一轮审查在 `c.ts` 的 `handleLogin` 发现“SQL 注入”类 Critical, 当前会话 修复后第二轮在同一 `c.ts` 但 `handleSearch`（不同锚点）又发现一条“SQL 注入”类 Critical
 - **THEN** 命令视为新问题（锚点不同）, 不判定熔断, 继续处理
-
 
 #### Scenario: 同一问题连续两轮未解决, 触发熔断
 - **WHEN** 第一轮审查在 `b.ts` 的 `parseInput` 判定“SQL 注入”类 Critical, 当前会话 认可并尝试修复, 第二轮在同一 `b.ts` 同一 `parseInput` 仍判同一条“SQL 注入”未解决
 - **THEN** 命令立即停止循环, 报告标注该问题文件/类别/锚点及两轮判定, 需要人工介入
 
-
 #### Scenario: 熔断场景同样适用于 review-plan
 - **WHEN** review-plan 第一轮审查判定 `proposal.md` 的“Purposes”章节与 tasks.md 不一致类 Critical, 当前会话 认可并修改后, 第二轮在同一章节与类别仍然判定存在
 - **THEN** 命令立即停止循环, 报告该问题所在 artifact/章节/类别及两轮判定, 转人工
-
 
 #### Scenario: Critical 需要业务决策, 判定为无法安全自动修复
 - **WHEN** 某一轮 Critical 是"该接口未做权限校验", 但修复方式依赖产品未明确的权限模型
 - **THEN** 命令不做猜测性修改, 立即停止循环, 报告 Critical 原因及“无法安全修复”的理由, 以及建议的人工方向
 
-
 #### Scenario: 修复后验证失败, 触发停止
 - **WHEN** review-code 某一轮修复后运行测试失败；或 review-plan 该轮修复后 `openspec validate` 报错
 - **THEN** 命令停止循环, 不再继续下一轮, 报告本轮改动文件, 及验证失败的具体错误, 需要人工介入
-
 
 #### Scenario: 循环中途 Warning/Info 变化不影响终止判定
 - **WHEN** 某一轮 Critical 清零但 Warning 数量较上一轮增加
 - **THEN** 循环仍按正常清零在该轮结束（终止只看 Critical）, 最终报告只列出最后一轮的 Warning, 不合并此前轮
 
-
 #### Scenario: 修复范围扩展到必需的依赖条目, 并说明关联性
 - **WHEN** review-plan 的一个 Critical “proposal.md 的 Impact 章节与 tasks.md 任务不一致”, 该 Critical 锚定 proposal.md, 但真正修复需同时改 `tasks.md`
 - **THEN** 当前会话 同时改 proposal.md 和 tasks.md, 本轮报告逐项说明改动与 Critical 的关联, 不视为违反修复范围
-
 
 #### Scenario: 连续 3 轮同类系统性误判, 触发新终止条件
 - **WHEN** review-plan 连续 3 轮的 Critical 都以“代码库尚未实现该方案条目”为理由（各轮具体任务不同）, 当前会话 每轮不认可并说明“方案阶段正常状态”
 - **THEN** 命令在第 3 轮后停止, 报告"审查对象类型持续系统性误判", 列出 3 轮原文与判定理由, 转人工（如检查角色提示词是否需要调整）
 
-
 #### Scenario: 系统性误判类别不连续, 不触发新终止条件
 - **WHEN** 第一、三轮 Critical 均以“代码库尚未实现”而被判不认可, 但第二轮是一条被认可并修复的真实文档缺陷
 - **THEN** 不触发“持续系统性误判”（未连续 3 轮), 循环按原有终止条件继续判定
-
 
 #### Scenario: 第二轮 TASK 路径清单覆盖改动文件与全部上一轮 Critical 指向的文件
 - **WHEN** review-code 第一轮 3 个 Critical, 当前会话 认可并修复 2 个（涉及 a.ts/b.ts）, 不认可第 3 个（指向 c.ts 未改动）
 - **THEN** 第二轮 TASK 包含: 该 3 条 Critical 逐字原文及路径清单 a.ts、b.ts、c.ts；其它未被本轮改动和未由任何上一轮 Critical 指向的文件不整体传入, 审查 agent 自行读取这 3 个文件判断前 2 条是否已解决、第 3 条是否存在
 
-
 #### Scenario: 跨文件/范围性 Critical 的路径列出全部相关文件
 - **WHEN** review-plan 第一轮“proposal.md Impact 与 tasks.md 范围不一致”（不存在单个目标文件）
 - **THEN** 该 Critical 的位置字段列出 proposal.md 与 tasks.md 两个路径；第二轮路径清单必须同时包含两个, 不取其一
-
 
 #### Scenario: Critical 位置字段缺失可解析路径, 保守纳入全部 artifact
 - **WHEN** 某轮一条 Critical 缺失可解析路径（角色提示词未被遵守）
 - **THEN** 命令不得静默丢弃, 必须将该 change 目录全部 artifact/delta spec 路径统一纳入下一轮路径清单, 并在报告中说明“该条 Critical 缺少路径, 已扩大范围”
 
-
 #### Scenario: 每轮报告展示 Codex 原始发现与 当前会话 判定的并排对照
 - **WHEN** 某轮返回 2 个 Critical: 当前会话 认可第 1 个并修改 `design.md`, 不认可第 2 个（误报）
 - **THEN** 本轮报告“逐字原文”区块展示 2 条原文, 并排展示 当前会话 对每条认可/不认可及理由, 用户直接对照
-
 
 #### Scenario: 轮间续聊开启时, 第 2 轮仍按增量传递语义构造 TASK
 - **WHEN** `/ly:review-plan` 第 2 轮重新 spawn 一对全新审查 subagent（fork 当前会话上下文）

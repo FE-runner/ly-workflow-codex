@@ -25,16 +25,13 @@
 - **WHEN** apply 实施阶段未正常收尾（coding subagent 报告失败，主会话未提交 `apply:` commit），流水线尝试进入 review-code
 - **THEN** 前置校验发现 `apply:` commit 不存在，命令停在该节点如实报告实施失败详情，SHALL NOT 进入 review-code
 
-
 #### Scenario: 历史存在旧 apply commit 但 SHA 与本次记录不符
 - **WHEN** 中断恢复或重跑后，历史存在旧 `apply:` commit，但最近一期 `apply: <change-name>` commit 的 SHA ≠ 本次 apply 运行记录的 SHA（本次实施未产生新提交）
 - **THEN** 节点前置校验发现 SHA 不符，命令停在该节点如实报告"旧 commit 不得作为本次审查对象"，SHALL NOT 以旧 commit 为审查对象进入 review-code
 
-
 #### Scenario: 手动路径下选跑审查且清零后不再问 worktree
 - **WHEN** 手动路径下用户对"是否跑 review-plan"选"是"，`/ly:review-plan` 清零（统一提交修复），随后 apply/review-code 也清零
 - **THEN** 全程只在创建方案前问过 worktree，审查清零后不再出现任何 worktree 询问、不自动 archive
-
 
 #### Scenario: 全自动路径下 review-code 非清零终止即停
 - **WHEN** 全自动路径下实施完成后 `/ly:review-code` 的审查-修复循环非清零终止
@@ -49,7 +46,6 @@
 #### Scenario: 手动路径下选择跑审查
 - **WHEN** 手动路径下用户对"是否要跑 review-plan 审查"选择"是"
 - **THEN** 命令调用 `/ly:review-plan <change-name>`，审查对象是 `propose:` commit；清零时循环统一提交修复，不出现在循环外的提交/worktree 询问；询问时已展示当前阶段与下一步摘要
-
 
 #### Scenario: 手动路径下选择不跑审查
 - **WHEN** 手动路径下用户对"是否要跑 review-plan 审查"选择"否"
@@ -67,21 +63,17 @@
 - **WHEN** `/ly:review-plan` 首轮确定 `propose:` commit 为基线，第一轮修复未提交，第二轮审查启动
 - **THEN** 第二轮审查范围仍以首轮固定的基线 commit 差异 + `git diff <固定基线>` + 未跟踪清单计算，不重新执行 `git log --grep` 定位
 
-
 #### Scenario: review-plan 审查 propose commit
 - **WHEN** `/ly:propose` 已 commit `propose: <change>` 后调用 `/ly:review-plan <change>`
 - **THEN** 审查范围取该 `propose:` commit 的差异并把未提交修复计入，修复循环结束统一提交
-
 
 #### Scenario: review-code 审查 apply commit
 - **WHEN** `/ly:apply` 已 commit `apply: <change>` 后调用 `/ly:review-code <change>`
 - **THEN** 审查范围取该 `apply:` commit 的差异并把未提交修复计入，修复循环结束统一提交
 
-
 #### Scenario: 该相关 commit 不存在时退化为未提交 diff
 - **WHEN** 仓库零 commit，或审查时目标 change 最近一期相关 commit（`propose:`/`apply:`）尚不存在
 - **THEN** 审查范围退化为 `git diff HEAD` + 未跟踪文件清单的现状组合
-
 
 #### Scenario: 提交的相关 commit 存在但工作区干净，仍按相关 commit 审查
 - **WHEN** `apply:`/`propose:` commit 已存在、当前工作区/暂存区完全干净（无未提交改动）
@@ -105,16 +97,13 @@
 - **WHEN** apply 启动前工作区已有与本次无关的未提交改动（propose 步骤 1"留在当前分支原样保留"路径），spawn 前已记录 porcelain 快照，coding subagent 回传清单仅含本次改动文件
 - **THEN** 主会话比对只针对快照之后新增/变化的路径，既存改动不参与比对、不纳入提交范围，`apply:` commit 只含本次改动，报告中说明"预存改动未被提交"
 
-
 #### Scenario: 环境级回退自实施按主会话清单核对
 - **WHEN** 环境无 subagent spawn 能力，主会话按 `subagent-agent-config` 回退口径自实施（输出 `[回退] subagent 不可用: <原始报错>`），实施完成无 subagent 回传清单
 - **THEN** 主会话以自己记录的实施改动文件清单（逐项列出并展示给用户）充当回传清单，按快照差集规则比对，一致才提交 `apply: <change-name>`
 
-
 #### Scenario: 既存改动与实施目标文件重叠时停止并回指 propose 处置选择
 - **WHEN** 快照前已 dirty 的路径出现在 coding subagent 回传清单中（与本次实施目标文件重叠），且该既存改动来自 propose 步骤 1"留在当前分支原样保留"路径
 - **THEN** 主会话停止转人工，报告中回指 propose 步骤 1 的既存改动处置选择，说明该路径下既存改动与实施目标文件重叠会使 apply 停止，不猜测性提交
-
 
 #### Scenario: coding subagent 实施失败
 - **WHEN** coding subagent 报告任务未完成或验证失败

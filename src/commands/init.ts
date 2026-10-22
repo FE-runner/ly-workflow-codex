@@ -1,5 +1,6 @@
 import type { CodexModelProvider } from '../hosts/codex/provider'
 import type { ExecutorKind, InitOptions, InstallResult, LyConfig, ReviewMode, SupportedLang, TestMode } from '../types'
+import type { HostConfigReadResult } from '../utils/config'
 import type { HostId } from '../utils/host-adapters'
 import type { SubagentConfigCollected } from './collect-subagent-config'
 import ansis from 'ansis'
@@ -23,7 +24,6 @@ import {
   sanitizeTestMode,
   writeLyConfig,
 } from '../utils/config'
-import type { HostConfigReadResult } from '../utils/config'
 import { getAdapter, listRegisteredHosts } from '../utils/host-adapters'
 import { defaultInteractiveHosts, detectHosts, parseHostList, resolveNonInteractiveHosts } from '../utils/host-selection'
 import { getCoreCommandIds, installWorkflows } from '../utils/installer'

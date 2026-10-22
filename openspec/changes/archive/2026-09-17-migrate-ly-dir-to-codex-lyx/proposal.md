@@ -34,4 +34,3 @@
 - **文档**：`AGENTS.md`、`README.md`、根目录 `CLAUDE.md`、`templates/CLAUDE.md`、`workflow.md`（流程图中的 worktree 路径）中所有 `~/.ly` 路径引用及"共享命名空间"相关表述。
 - **测试**：`src/utils/__tests__/config.test.ts`（现有对 `~/.ly/prompts`、`~/.ly/backup`、`~/.ly/config.toml` 等路径的断言需更新为 `~/.codex/lyx/...`，不只是删除覆盖 `migrateLegacyConfig` 的用例）；`src/utils/__tests__/host-adapters.test.ts`（路径断言更新；覆盖 `migrateLegacyPrompts` 的测试随函数移除一并删除；新增覆盖 uninstall 新行为——含 worktree 存活检测——的测试）；`legacy-cleanup.test.ts` 视排查结果决定是否需要更新。
 - **用户侧影响**：已安装用户升级后需要在 `~/.codex/lyx/config.toml` 重新配置模型字段；`lycx uninstall` 行为变化（真正删除配置而非保留）。
-

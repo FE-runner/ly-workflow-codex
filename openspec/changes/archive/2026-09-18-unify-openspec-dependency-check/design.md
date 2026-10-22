@@ -26,7 +26,7 @@
 
 ```ts
 interface OpenspecInspection {
-  cli: { status: 'ok' | 'missing' | 'unhealthy'; version?: string }
+  cli: { status: 'ok' | 'missing' | 'unhealthy', version?: string }
   skills: {
     status: 'project-ready' | 'global-only' | 'missing' | 'unknown'
     required: string[]
@@ -34,7 +34,7 @@ interface OpenspecInspection {
     missing: string[]
     roots: string[]
   }
-  root: { status: 'healthy' | 'missing' | 'unhealthy' | 'not-checked'; doctor?: unknown }
+  root: { status: 'healthy' | 'missing' | 'unhealthy' | 'not-checked', doctor?: unknown }
   actions: OpenspecAction[]
 }
 ```
