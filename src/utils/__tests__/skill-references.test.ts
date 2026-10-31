@@ -29,6 +29,13 @@ describe('skill reference declarations', () => {
     await fs.ensureDir(skillDir)
     writeFileSync(join(skillDir, 'SKILL.md'), content.replace('references/a.md', 'references/../secret.md'))
     expect(await listMissingSkillReferences(skillDir)).toContain('references/../secret.md')
+
+    writeFileSync(join(skillDir, 'SKILL.md'), content.replace('references/a.md', 'references/foo\\..\\..\\secret.md'))
+    expect(await listMissingSkillReferences(skillDir)).toContain('references/foo\\..\\..\\secret.md')
+
+    await fs.ensureDir(join(skillDir, 'references', 'a.md'))
+    writeFileSync(join(skillDir, 'SKILL.md'), content)
+    expect(await listMissingSkillReferences(skillDir)).toContain('references/a.md')
   })
 
   it('installs rendered references for both hosts and removes stale reference files on force update', async () => {
@@ -81,6 +88,10 @@ describe('skill reference declarations', () => {
       return { ...mod, PACKAGE_ROOT: fakeRoot }
     })
     const { installWorkflows: installWithBrokenPackage } = await import('../installer')
+    const preservedSkill = join(base, 'broken-skills', 'lyx-review-code')
+    await fs.ensureDir(join(preservedSkill, 'references'))
+    writeFileSync(join(preservedSkill, 'SKILL.md'), '# preserved\n')
+    writeFileSync(join(preservedSkill, 'references', 'old.md'), '# old\n')
     const result = await installWithBrokenPackage(['review-code'], '', true, {
       hosts: ['codex'],
       hostPaths: {
@@ -94,5 +105,7 @@ describe('skill reference declarations', () => {
     vi.doUnmock('../installer-template')
     expect(result.success).toBe(false)
     expect(result.hosts?.codex?.errors.join('\n')).toContain('Skill reference template missing')
+    expect(readFileSync(join(preservedSkill, 'SKILL.md'), 'utf-8')).toBe('# preserved\n')
+    expect(readFileSync(join(preservedSkill, 'references', 'old.md'), 'utf-8')).toBe('# old\n')
   })
 })

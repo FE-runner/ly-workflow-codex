@@ -149,7 +149,7 @@ lyx:
 
 自审完成（含其修复）与 context.md 产出后执行。自审产生的 artifact 修复与 context.md 属于本次待提交内容——产物、自审修复与 context.md 是同一个待提交单元，随这次 commit 一次干净落库，不产生"commit + 未提交自审修复"的混合状态。
 
-1. `git add -- openspec/changes/<change-name>/`（该目录含 `.openspec.yaml` 元数据、proposal/design/tasks、context.md 与全部 delta spec，集群暂存，不用 `git add -A`）。
+1. `git add -- openspec/changes/<change-name>/`（该目录含 `.openspec.yaml` 元数据、proposal/design/tasks、context.md、run-state.md 与全部 delta spec，集群暂存，不用 `git add -A`）。
 2. **按共用 index 隔离协议提交**——目标范围为 `openspec/changes/<change-name>/` 目录，协议分支：
    - index 中无该目录外的已暂存内容 → 直接 commit（见第 3 步命令）。
    - index 中存在该目录外的已暂存内容、且与目标范围无文件重叠 → 用 `git commit --only -F "$MSG_FILE" -- openspec/changes/<change-name>/` 隔离提交（**`-F` 必须放在 `--` 之前**；`MSG_FILE` 由 `git rev-parse --git-path COMMIT_EDITMSG` 获取；目标范围含未跟踪新文件时**必须先 `git add`**，否则 `--only` 报 `pathspec ... did not match any file(s) known to git`），或先 unstage 非目标文件、提交后恢复原暂存状态；范围外文件保留原暂存状态。

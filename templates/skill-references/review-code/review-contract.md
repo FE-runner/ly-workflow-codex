@@ -14,7 +14,7 @@
 
 审查 subagent 模型按 `[host] reviewModel` 指定，未配置或空白时继承当前会话模型。SHALL NOT spawn 第二个审查 agent、SHALL NOT 实现"并行双审、交换结论、共识归并"环节——单 agent 的分级结论即本轮唯一审查发现来源，质量把关由当前会话逐条裁决与"驳回硬线"终止条件承担。Critical 修复由当前会话执行。
 
-循环执行期间默认不提交；仅当循环以"正常清零"结束时，才对审查目标全部文件（`git diff HEAD` 圈定的原始改动 + 循环修复一并暂存）统一提交一次。传入 `--no-commit` 时，连这次最终的统一提交也不做。
+循环执行期间默认不提交；仅当循环以"正常清零"结束时，才对审查目标全部文件（`git diff HEAD` 圈定的原始改动 + 循环修复 + `run-state.md` 一并暂存）统一提交一次。传入 `--no-commit` 时，连这次最终的统一提交也不做。
 
 **测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失或无合法 `lyx.testModeDecision` 时询问一次 `normal` / `off` 并写回，保留其他字段；`lyx` 非 mapping，或 decision 存在且既不是 string 也不是 null、文件不可读/解析失败时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `.openspec.yaml`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
 
@@ -236,7 +236,7 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证统一�
 
 **正常清零结束：**
 
-先执行统一提交：先 `git add` 审查范围内的全部文件（审查范围首轮判定的 `git diff HEAD` 圈定的文件 —— 原始改动与循环期间修复的改动一并暂存；未跟踪的新建文件，扫描 `??` 清单得到的路径同样 `git add`，直到审查目标内不再有未暂存的改动），再对审查目标执行一次统一 commit（不做审查范围外的 `git add`），提交信息先用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取路径并按 `@lyx-commit` 正文规范写入完整 message，采用 Conventional Commits 前缀 + 正文 + trailer 结构：CC 前缀形如 `fix(<scope>): review-code 反馈修复（N 轮）`，正文至少含 `- 动机：` / `- 改动：` / `- 影响：`，并说明本轮 Critical、代码修复动作与验证，末尾带 `Change-Stage: review-code-fix` 与 `Change-Name: <change-name>` trailer，提交命令使用 `git commit -F "$MSG_FILE"`。审查目标为审查范围圈定的全部文件（有 apply 阶段 commit 时为该 commit 差异叠加循环修复；退化场景下才是未提交变更），原始内容与循环产生的修复是同一个待提交单元，不做隔离，一并提交。若循环全程没有任何 Critical 被认可修复（从未发生实际改动），不创建空 commit。若这次统一提交本身执行失败（Git hook 拒绝、身份未配置、锁文件冲突等），在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但要指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
+先执行统一提交：先 `git add` 审查范围内的全部文件与 `run-state.md`（审查范围首轮判定的 `git diff HEAD` 圈定的文件 —— 原始改动与循环期间修复的改动一并暂存；未跟踪的新建文件，扫描 `??` 清单得到的路径同样 `git add`，直到审查目标内不再有未暂存的改动），再对审查目标执行一次统一 commit（不做审查范围外的 `git add`），提交信息先用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取路径并按 `@lyx-commit` 正文规范写入完整 message，采用 Conventional Commits 前缀 + 正文 + trailer 结构：CC 前缀形如 `fix(<scope>): review-code 反馈修复（N 轮）`，正文至少含 `- 动机：` / `- 改动：` / `- 影响：`，并说明本轮 Critical、代码修复动作与验证，末尾带 `Change-Stage: review-code-fix` 与 `Change-Name: <change-name>` trailer，提交命令使用 `git commit -F "$MSG_FILE"`。审查目标为审查范围圈定的全部文件（有 apply 阶段 commit 时为该 commit 差异叠加循环修复；退化场景下才是未提交变更）与 `run-state.md`；排除 `review-findings.md` 后若有任何实际变更，即执行统一提交，SHALL NOT 以“未修复 Critical”为由跳过 run-state 变更。统一提交成功后 SHALL 用 `git show --name-only` 校验文件集合包含实际变更的 `run-state.md`，且不超出审查目标范围。若这次统一提交本身执行失败（Git hook 拒绝、身份未配置、锁文件冲突等），在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但报告必须明确指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
 
 ```
 📋 代码审查报告

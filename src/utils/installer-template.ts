@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import fs from 'fs-extra'
-import { dirname, join } from 'pathe'
+import { dirname, isAbsolute, join, relative, resolve } from 'pathe'
 import { ISSUES_URL } from './package-meta'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -118,20 +118,51 @@ export function parseSkillReferences(content: string): string[] {
 export function isValidSkillReference(reference: string): boolean {
   return reference.startsWith('references/')
     && reference.endsWith('.md')
+    && !reference.includes('\\')
+    && !reference.includes('\0')
     && !reference.split('/').includes('..')
     && reference.length > 'references/'.length
+}
+
+/** 解析后目标必须仍位于指定根目录内。 */
+export function isPathInside(root: string, target: string): boolean {
+  const rel = relative(resolve(root), resolve(target))
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+export function isSafeSkillReference(skillDir: string, reference: string): boolean {
+  return isValidSkillReference(reference) && isPathInside(skillDir, resolve(skillDir, reference))
 }
 
 /** 返回安装目录中无效或缺失的 frontmatter references；主 SKILL.md 缺失时一并报告。 */
 export async function listMissingSkillReferences(skillDir: string): Promise<string[]> {
   const skillFile = join(skillDir, 'SKILL.md')
-  if (!(await fs.pathExists(skillFile)))
-    return ['SKILL.md']
+  try {
+    if (!(await fs.stat(skillFile)).isFile())
+      return ['SKILL.md']
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      return ['SKILL.md']
+    throw error
+  }
   const refs = parseSkillReferences(await fs.readFile(skillFile, 'utf-8'))
   const missing: string[] = []
   for (const reference of refs) {
-    if (!isValidSkillReference(reference) || !(await fs.pathExists(join(skillDir, reference))))
+    if (!isSafeSkillReference(skillDir, reference)) {
       missing.push(reference)
+      continue
+    }
+    try {
+      if (!(await fs.stat(join(skillDir, reference))).isFile())
+        missing.push(reference)
+    }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+        missing.push(reference)
+      else
+        throw error
+    }
   }
   return missing
 }

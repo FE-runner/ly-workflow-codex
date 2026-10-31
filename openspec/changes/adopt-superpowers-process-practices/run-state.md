@@ -1,11 +1,11 @@
 # Run State
 
 - Change: adopt-superpowers-process-practices
-- Stage: apply-implemented-pending-commit
+- Stage: review-code-cleared
 - Source branch: main
 - Development branch: codex/superpowers-alignment
-- Last good commit: fbf4124
-- Next safe action: commit apply stage, then review-code
+- Last good commit: 5d51e24
+- Next safe action: user-triggered archive
 
 ## Task Evidence
 
@@ -42,6 +42,8 @@
 - Round 3: 0 Critical, 1 Warning; accepted, fixing eval subsections and per-skill fail-fast verification commands.
 - Round 4: 0 Critical, 1 new mechanical Warning; accepted, correcting awk parenthesis escaping in verification commands.
 - Round 5: 0 Critical, 0 Warning, 0 Info findings; normal clearance confirmed with extraction and validation evidence.
+- Code round 1: 2 Critical, 3 Warning; accepted, fixing reference traversal, transactional installation, review run-state commits, empty-commit criteria, and reference file-type checks.
+- Code round 2: 0 Critical, 0 Warning, 0 Info findings; normal clearance confirmed with containment, rollback, run-state commit and file-type evidence.
 
 ## Verification
 
@@ -54,7 +56,8 @@
 - `pnpm test -- src/utils/__tests__/host-adapters.test.ts src/utils/__tests__/installer.test.ts`: exit 0; compact main size and references install assertions passed
 - `openspec validate --all --json`: exit 0, 24/24 items valid
 - review-plan unified commit: 02cbd59
-- apply unified commit: pending
+- apply unified commit: 5d51e24
+- review-code unified commit: pending
 
 ## Rulings
 
