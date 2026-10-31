@@ -1,11 +1,21 @@
 # Run State
 
 - Change: execute-skill-behavior-evals
-- Stage: review-code
+- Stage: archived
 - Source branch: main
 - Development branch: codex/run-skill-evals
 - Last good commit: 1d34e84
-- Next safe action: 等待用户决定是否归档
+- Next safe action: archive commit
+
+## Archive
+
+- Final testMode: normal
+- Source: project config `[projects."/Users/ly/codes/learn/ly-workflow-codex"]`
+- Archived to: `openspec/changes/archive/2026-10-31-execute-skill-behavior-evals`
+- `pnpm test`: exit 0，25 files / 452 tests passed
+- `pnpm typecheck`: exit 0
+- `pnpm build`: exit 0
+- `pnpm lint`: exit 0
 
 ## Task Evidence
 
