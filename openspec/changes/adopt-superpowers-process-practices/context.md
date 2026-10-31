@@ -28,3 +28,10 @@
 - references 被拆出后，主文件若漏写读取步骤会让 agent 跳过细则；用强制读取语句、引用存在性测试和行为场景共同约束。
 - run-state 可能与 git 事实漂移；恢复时必须以 git、tasks 和文件内容核对并记录冲突。
 - 人工行为评测可能被跳过；提交证据必须显式写“未执行”及原因，不得用字符串断言冒充通过。
+
+## 实施阶段决策（apply）
+
+- 过长 skill 采用“完整 contract reference + recovery/evidence reference”的两文件拆分，未在首轮设计中继续细分为多个小 reference；原因是机械搬移完整语义风险最低，且三个主文件均已远低于 20,000 字节。
+- 主 `SKILL.md` frontmatter 的 `references:` 列表成为 installer、verify、doctor 和测试共用的 required-reference 契约。
+- run-state 作为受版本控制的 change artifact，避免新增未跟踪运行文件的脏工作区特例；恢复仍要求与 git/tasks/files 交叉核对。
+- 当前 `codingExecutor=main` 禁止 apply 内 spawn 评测子代理，因此行为评测记录为 `not-executed`，并附最终模板静态复核与自动化结构测试证据；该限制不能被描述为行为通过。

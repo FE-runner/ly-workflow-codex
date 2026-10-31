@@ -127,6 +127,7 @@ export const claudeAdapter: HostAdapter = {
 
   promptsTarget: ctx => ({
     sourceDir: join(ctx.templateDir, 'skills'),
+    referencesSourceDir: join(ctx.templateDir, 'skill-references'),
     targetDir: ctx.paths.skillsDir,
     filePrefix: 'lyx-',
   }),

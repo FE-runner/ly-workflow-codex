@@ -84,3 +84,54 @@ export function replaceHomePathsInTemplate(content: string, _installDir: string)
   // 模板中的 ~/ 展开为用户 home（如角色词绝对路径）
   return content.replace(/~\//g, `${toForwardSlash(homedir())}/`)
 }
+
+/**
+ * 从 SKILL.md frontmatter 中解析 `references:` 字符串列表。
+ * 仅接受简单 YAML block list；路径必须位于 `references/` 下，阻止目录穿越。
+ */
+export function parseSkillReferences(content: string): string[] {
+  const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!frontmatter)
+    return []
+
+  const lines = frontmatter[1].split(/\r?\n/)
+  const refs: string[] = []
+  let inReferences = false
+  for (const line of lines) {
+    if (/^references\s*:\s*$/.test(line)) {
+      inReferences = true
+      continue
+    }
+    if (!inReferences)
+      continue
+    const trimmedStart = line.trimStart()
+    if (trimmedStart !== line && trimmedStart.startsWith('- ')) {
+      refs.push(trimmedStart.slice(2).trim().replace(/^['"]|['"]$/g, ''))
+      continue
+    }
+    if (!/^\s/.test(line))
+      break
+  }
+  return refs
+}
+
+export function isValidSkillReference(reference: string): boolean {
+  return reference.startsWith('references/')
+    && reference.endsWith('.md')
+    && !reference.split('/').includes('..')
+    && reference.length > 'references/'.length
+}
+
+/** 返回安装目录中无效或缺失的 frontmatter references；主 SKILL.md 缺失时一并报告。 */
+export async function listMissingSkillReferences(skillDir: string): Promise<string[]> {
+  const skillFile = join(skillDir, 'SKILL.md')
+  if (!(await fs.pathExists(skillFile)))
+    return ['SKILL.md']
+  const refs = parseSkillReferences(await fs.readFile(skillFile, 'utf-8'))
+  const missing: string[] = []
+  for (const reference of refs) {
+    if (!isValidSkillReference(reference) || !(await fs.pathExists(join(skillDir, reference))))
+      missing.push(reference)
+  }
+  return missing
+}

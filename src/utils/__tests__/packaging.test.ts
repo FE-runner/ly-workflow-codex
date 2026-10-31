@@ -53,6 +53,11 @@ describe('package.json files ↔ template source dirs (9.1)', () => {
     expect(files).toContain('dist')
     expect(files.some(f => f.startsWith('src'))).toBe(false)
   })
+
+  it('ships the behavior-eval guide referenced from the README', () => {
+    expect(files).toContain('docs/skill-behavior-evals.md')
+    expect(fs.existsSync(join(ROOT, 'docs', 'skill-behavior-evals.md'))).toBe(true)
+  })
 })
 
 describe('incomplete package is reported, never a silent success (multi-host-install)', () => {

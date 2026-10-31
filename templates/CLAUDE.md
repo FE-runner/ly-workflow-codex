@@ -8,11 +8,12 @@
 
 ## 目录总览
 
-模板**正文单源共享**，宿主差异收敛到 `hosts/<id>/`，安装期由各宿主适配器（`src/hosts/<id>/adapter.ts`）渲染。模板不随 TS 宿主包迁入 `src/`：`PACKAGE_ROOT` 解析要求包根存在顶层 `templates/`，`package.json` 的 `files` 也只收录 `templates/hosts/` 与 `templates/skills/`（见 add-claude-host design D15）。
+模板**正文单源共享**，宿主差异收敛到 `hosts/<id>/`，安装期由各宿主适配器（`src/hosts/<id>/adapter.ts`）渲染。长 skill 的主 `SKILL.md` 通过 frontmatter `references:` 声明同目录 `references/`，安装器从 `skill-references/` 渲染并复制。模板不随 TS 宿主包迁入 `src/`：`PACKAGE_ROOT` 解析要求包根存在顶层 `templates/`，`package.json` 的 `files` 收录 `templates/hosts/`、`templates/skill-references/` 与 `templates/skills/`。
 
 | 目录 | 用途 | 安装目标 |
 |------|------|----------|
 | `skills/` | 15 个 SKILL.md 共享正文（`name`/`description`/`argument-hint` frontmatter）。宿主差异处以 `{{HOST_FRAGMENT:<片段>}}` 占位，另有 `{{LYX_CONFIG_FILE}}` / `{{HOST_ID}}` 两个宿主变量；正文中的 `@lyx-<command>` 是**命令标识**（codex 原样保留，claude 渲染为 `/lyx-<command>`，`@openspec-<skill>` 渲染为 `openspec-<skill>`） | codex：`~/.agents/skills/lyx-*/SKILL.md`；claude：`~/.claude/skills/lyx-*/SKILL.md` |
+| `skill-references/<command>/` | 长 skill 的按需 references（完整编排、恢复/证据规则）。主文件 frontmatter 的 `references:` 列表是唯一 required-reference 契约；不进入命令注册表 | `<skillsDir>/lyx-<command>/references/` |
 | `hosts/codex/fragments/<命令>/` | codex 宿主片段（审查 / 实施子代理的 spawn、`send_input` 复用、模型与推理档、ROLE_FILE 角色词路径、`codex "…"` 兜底续接命令等） | 渲染进 codex 产物 |
 | `hosts/codex/prompts/` | 2 个审查角色提示词（plan-reviewer / reviewer），codex 审查命令 ROLE_FILE 以绝对路径引用 | `~/.codex/lyx/prompts/codex/` |
 | `hosts/claude/fragments/<命令>/` | claude 宿主片段（`Agent` 工具调用自定义子代理、`SendMessage` 续跑、等待语义如实标注、模型经子代理定义落实、`claude "…"` 兜底续接命令、`@lyx-init` 额外产出 `CLAUDE.md`） | 渲染进 claude 产物 |
@@ -26,12 +27,12 @@
 |------|------|------|
 | `init.md` | 真逻辑 | 生成 AGENTS.md（claude 宿主额外产出导入它的 `CLAUDE.md`）+ `lycx openspec ensure --host <当前宿主>` + 自动 commit |
 | `explore.md` | 薄壳委托 | 直接调用 `@openspec-explore skill`，收敛到方案时按规模提示转 `@lyx-fix` / `@lyx-propose` |
-| `propose.md` | 真逻辑 | 委托 `@openspec-propose skill` + 创建方案前隔离三选一 + 记录 isolation metadata + 全自动/手动两路径 + `ask` 时首次询问并写入 `lyx.testModeDecision` + change 名确认后同步会话标题（宿主片段） + 按最终 testMode / 风险策略生成 spec/tasks + commit 前方案自审 + context.md 软上下文产出 |
-| `apply.md` | 真逻辑 | 按 `codingExecutor` 实施：`main`（默认）= 主 agent 直接实施；`subagent` = coding subagent（非 fork，经 context.md 获取软上下文）读 tasks.md 逐任务实施+验证+勾 checkbox 后回传。两条路径均由主会话确认后回写 context.md，并按共用 index 隔离协议统一提交 apply 阶段 commit（CC 前缀 + `Change-Stage: apply` trailer）；subagent 路径环境级不可用回退主 agent，业务失败转人工 |
-| `fix.md` | 真逻辑 | 小需求 / bug 轻量路径：不建 change；配置 `ask` 时每次调用询问，normal 按风险测试策略、off 不写不跑测试；spec 分流 A/B/C（B 就地改主 spec）→ 五项自审 → 最终验证门禁 → B 类确认 → 单个非 change 生命周期 commit |
-| `archive.md` | 真逻辑 | 委托 `@openspec-archive-change skill` 归档 + 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
-| `review-plan.md` | 真逻辑 | 按 `reviewExecutor` 审方案；Warning 双轴；解析 change 的最终 normal/off（ask 时读取/补写 `lyx.testModeDecision`），off 抑制全部测试相关发现。两条路径清零后统一提交 |
-| `review-code.md` | 真逻辑 | 按 `reviewExecutor` 审代码；使用 change 最终 normal/off，off 时抑制测试缺失类发现并保留非测试门禁；慢验证由 `@lyx-archive` 归档前执行 |
+| `propose.md` | 主文件 + references | 主文件只保留入口；`propose-contract.md` 承载隔离、提交、流水线与方案自审，`recovery-and-evidence.md` 承载 run-state、机械裁决和证据规则 |
+| `apply.md` | 真逻辑 | 启动先读 run-state 并核对 git/tasks；按 `codingExecutor` 实施、逐任务记录证据与机械裁决，主会话确认后回写 context/run-state 并统一提交 apply 阶段 commit |
+| `fix.md` | 真逻辑 | 小需求 / bug 轻量路径：不建 change；bug 分支执行根因调查、单假设验证、3 次失败后质疑架构；最终输出命令、退出码和结果摘要 |
+| `archive.md` | 真逻辑 | 启动恢复核对 + archive 前完整验证 + final testMode/证据写入 run-state + 归档 commit + 分支收尾 |
+| `review-plan.md` | 主文件 + references | 主文件只保留入口；完整审查契约与恢复/证据规则在 references，含实施可执行性检查 |
+| `review-code.md` | 主文件 + references | 主文件只保留入口；完整审查契约与恢复/证据规则在 references，含 run-state 与新鲜证据要求 |
 | `commit.md` `rollback.md` `clean-branches.md` | Git 工具 | 不变 |
 | `worktree.md` | Git 工具 | 默认 `~/.ly/worktrees/<项目名>/` 单层平铺；`switch` 子命令已移除，隔离切换由 `@lyx-propose` 触发；propose 创建隔离时负责记录 metadata |
 | `release.md` | 真逻辑 | GitFlow 四场景（feature/release/hotfix/dev-offline），SemVer + Conventional Commits 自动推导版本号 |

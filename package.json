@@ -33,7 +33,9 @@
     "bin/lycx.mjs",
     "dist",
     "docs/codex-exec-contract.md",
+    "docs/skill-behavior-evals.md",
     "templates/hosts/",
+    "templates/skill-references/",
     "templates/skills/"
   ],
   "engines": {

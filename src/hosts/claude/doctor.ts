@@ -4,6 +4,7 @@ import { join } from 'pathe'
 import { i18n } from '../../i18n'
 import { sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeTestMode } from '../../utils/config'
 import { listPrefixedDirs } from '../../utils/fs-helpers'
+import { listMissingSkillReferences } from '../../utils/installer-template'
 import { CLAUDE_AGENT_DEFINITIONS, renderAgentModelLines } from './adapter'
 import { CLAUDE_AGENTS_DIR } from './paths'
 
@@ -48,6 +49,18 @@ export async function claudeDoctorChecks(ctx: HostInspectContext): Promise<HostD
     label: 'Commands',
     status: cmdCount > 0 ? 'ok' : 'fail',
     detail: `${cmdCount} installed (${ctx.paths.skillsDir}/lyx-*/)`,
+  })
+
+  const skillDirs = await listPrefixedDirs(ctx.paths.skillsDir, 'lyx-')
+  const missingReferences: string[] = []
+  for (const skillDir of skillDirs) {
+    for (const missing of await listMissingSkillReferences(skillDir))
+      missingReferences.push(`${skillDir.split('/').pop()}/${missing}`)
+  }
+  checks.push({
+    label: 'References',
+    status: missingReferences.length === 0 ? 'ok' : 'fail',
+    detail: missingReferences.length === 0 ? 'all required references readable' : missingReferences.join(', '),
   })
 
   const present: string[] = []

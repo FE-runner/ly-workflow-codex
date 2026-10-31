@@ -1,16 +1,37 @@
 # Run State
 
 - Change: adopt-superpowers-process-practices
-- Stage: review-plan-cleared
+- Stage: apply-implemented-pending-commit
 - Source branch: main
 - Development branch: codex/superpowers-alignment
 - Last good commit: fbf4124
-- Next safe action: apply
+- Next safe action: commit apply stage, then review-code
 
 ## Task Evidence
 
-- Completed tasks: 0/32
-- Planning artifacts created; implementation tasks not started.
+- Completed tasks: 32/32
+- Eval assets, references installer, compact skill split, run-state lifecycle, readiness checks, debugging rules, evidence rules, docs and tests completed.
+
+## Baseline Eval
+
+- propose: not-executed — main codingExecutor path prohibits spawning eval agents in apply; scenario and current behavior reviewed manually.
+- apply: not-executed — main codingExecutor path prohibits spawning eval agents in apply; scenario and current behavior reviewed manually.
+- review-plan: not-executed — main codingExecutor path prohibits spawning eval agents in apply; scenario and current behavior reviewed manually.
+- review-code: not-executed — main codingExecutor path prohibits spawning eval agents in apply; scenario and current behavior reviewed manually.
+
+## Modified Eval (intermediate)
+
+- propose: not-executed — main codingExecutor path prohibits spawning eval agents; structural and bundle tests passed.
+- apply: not-executed — main codingExecutor path prohibits spawning eval agents; run-state and evidence contracts statically validated.
+- review-plan: not-executed — main codingExecutor path prohibits spawning eval agents; reference bundle and readiness rules statically validated.
+- review-code: not-executed — main codingExecutor path prohibits spawning eval agents; reference bundle and evidence rules statically validated.
+
+## Modified Eval (final)
+
+- propose: not-executed — main codingExecutor path prohibits spawning eval agents; final scenario reviewed against the installed bundle, reference reads, run-state fields and commit rules.
+- apply: not-executed — main codingExecutor path prohibits spawning eval agents; final scenario reviewed against recovery, ruling and evidence rules.
+- review-plan: not-executed — main codingExecutor path prohibits spawning eval agents; final scenario reviewed against readiness and review-loop references.
+- review-code: not-executed — main codingExecutor path prohibits spawning eval agents; final scenario reviewed against false-positive adjudication and run-state evidence rules.
 
 ## Review State
 
@@ -26,10 +47,19 @@
 
 - `openspec validate --changes adopt-superpowers-process-practices`: exit 0, 1/1 change valid
 - `git diff --check`: exit 0, no whitespace errors
-- review-plan unified commit: pending
+- `pnpm lint`: exit 0
+- `pnpm typecheck`: exit 0
+- `pnpm test`: exit 0, 25 files / 435 tests passed
+- `pnpm build`: exit 0
+- `pnpm test -- src/utils/__tests__/host-adapters.test.ts src/utils/__tests__/installer.test.ts`: exit 0; compact main size and references install assertions passed
+- `openspec validate --all --json`: exit 0, 24/24 items valid
+- review-plan unified commit: 02cbd59
+- apply unified commit: pending
 
 ## Rulings
 
 - Ruling: 使用独立 `templates/skill-references/` 源目录；理由：保持命令注册与单文件主模板假设；错误代价：安装器需新增 sidecar 复制逻辑。
 - Ruling: run-state 受版本控制；理由：避免未跟踪运行文件触发全仓 dirty 例外；错误代价：各阶段 commit 需显式包含 run-state 变更。
 - Ruling: required reference 由主 `SKILL.md` frontmatter `references:` 列表声明；理由：安装器、doctor 与测试共享机器可判定契约；错误代价：主文件 frontmatter 增加非流程字段。
+- Ruling: review/plan contract 采用单个完整 `review-contract.md`，而不是设计初稿中的多文件拆分；理由：机械搬移语义最稳且主文件已显著低于 20KB；错误代价：单个 reference 较大但仅在关键步骤按需读取。
+- Ruling: 行为评测 agent 未在当前 apply 阶段执行；理由：`codingExecutor=main` 明确禁止 apply 内 spawn 子代理；错误代价：当前证据是最终模板静态复核 + 自动化结构测试，不能替代真实 agent 行为评测。

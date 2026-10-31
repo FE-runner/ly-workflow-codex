@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `@lyx-propose` 在真实 change 名（需求名）确认后立即同步当前会话标题；Codex 直接调用会话标题工具，Claude Code 当前版本提示用户执行 `/rename <change-name>`，同步失败不阻断方案流程
+- 新增核心 skill 行为评测资产：`docs/skill-behavior-evals.md` 与 `evals/skills/` 覆盖 propose / apply / review-plan / review-code 的基线、修改后和最终压力场景
+- 新增 change 级 `run-state.md`：记录阶段、任务进度、审查轮次、验证证据、机械裁决和下一步，支持压缩/中断后恢复
+- 新增 `templates/skill-references/` 分层安装：主 `SKILL.md` 通过 frontmatter `references:` 声明 sidecar，installer / verify / doctor 共用同一契约
+
+### Changed
+
+- `propose`、`review-plan`、`review-code` 拆为紧凑主文件 + 按需 references，双宿主渲染主文件均低于 20,000 字节；description 收敛为触发条件
+- propose / review-plan 增加实施就绪检查：文件/锚点、接口、验证命令、预期结果和独立交付边界
+- apply / review / archive 统一记录“命令 + 退出码 + 结果摘要”的新鲜证据；subagent 自报成功需由主会话核对 diff/文件清单
+- `@lyx-fix` 的 bug 分支增加系统调试门槛：根因调查、单假设验证，连续 3 次失败后停止猜修复并质疑架构
 
 ## [0.13.0] - 2026-10-22
 

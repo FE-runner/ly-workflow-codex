@@ -58,6 +58,8 @@ export interface HostAdapterContext {
 /** 命令模板的源目录与安装目标 */
 export interface HostTemplateTarget {
   sourceDir: string
+  /** 可选：skill sidecar references 源根目录；各命令源文件位于 <root>/<command>/ */
+  referencesSourceDir?: string
   targetDir: string
   /** 目标目录名前缀（'lyx-' → <targetDir>/lyx-<cmd>/SKILL.md） */
   filePrefix?: string

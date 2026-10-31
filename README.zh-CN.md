@@ -34,13 +34,14 @@ lyx:
 - 执行者与推理档：`[host] reviewExecutor` / `codingExecutor`（取值 `main` / `subagent`，未配置等价 `main`）决定审查与实施由谁执行；`reviewReasoningEffort` / `codingReasoningEffort` 分别对应 `reviewModel` / `codingModel`，仅在对应执行者为 `subagent` 且值非空时随 spawn 传入 `reasoning_effort`。执行者为 `main` 时模型与推理档字段不生效，`lycx doctor` 输出 WARN。取值不做枚举强校验；交互 init / 菜单可选择"不覆盖（继承默认）"或覆盖指定档位，非交互 update 保留原值
 - 初始化向导采集流程：语言 → **宿主多选**（默认按已安装宿主与 `~/.codex` / `~/.claude` 是否存在勾选）→ 逐宿主采集：**两个宿主同一采集面 = 测试模式 → 审查范围 → 执行者二连 → 模型二连 → 推理档二连**（模型候选 = **默认继承当前会话模型（留空）** + **自定义输入** + 既有值；推理档候选 = **不覆盖（继承默认）** + 该宿主建议档位 + 自定义输入 + 既有值，codex = minimal/low/medium/high/max、Claude Code = low/medium/high/xhigh/max；不以 provider `/models` 或任何内置/维护清单为候选来源）→ 配置摘要；**Codex 额外前置**：API 提供方（`~/.codex/config.toml` 现有 `[model_providers.*]` / OpenAI 官方 / 自定义）→ **Codex 现状检测（只读**：主会话模型 `~/.codex/config.toml` 顶层 `model` / provider 条目 / `~/.codex/models.json` 注册规模）。Claude Code 侧仍不采集、不写入其自身的 provider / settings 配置
 - 菜单"配置模式、执行者与模型"：按宿主选择后走与 `lycx init` 相同的采集面（测试模式 → 审查范围 → 执行者二连 → 模型二连 → 推理档二连）；未触碰字段保留既有值，写回后按当前配置重渲染产物（Claude Code 同时重渲子代理定义）
+- 流程可靠性：`propose` / `review-plan` / `review-code` 使用主 `SKILL.md` + 按需 `references/`，最终主文件低于 20,000 字节；每个 change 使用 `run-state.md` 记录阶段、任务、审查轮次、验证证据、机械裁决和下一步；核心 skill 行为评测见 [docs/skill-behavior-evals.md](./docs/skill-behavior-evals.md)
 
 ## 宿主
 
 | | Codex | Claude Code |
 |---|---|---|
 | 调用写法 | `@lyx-<command>` | `/lyx-<command>` |
-| 命令产物 | `~/.agents/skills/lyx-*/SKILL.md` | `~/.claude/skills/lyx-*/SKILL.md` |
+| 命令产物 | `~/.agents/skills/lyx-*/SKILL.md` + `references/` | `~/.claude/skills/lyx-*/SKILL.md` + `references/` |
 | 角色词 / 子代理 | `~/.codex/lyx/prompts/codex/`（ROLE_FILE） | `~/.claude/agents/lyx-{plan-reviewer,reviewer,implementer}.md`（始终安装） |
 | 配置 | `~/.codex/lyx/config.toml` | `~/.claude/lyx/config.toml` |
 | 子代理模型 / 推理档 | 按 `[host]` 取值随每次 spawn 传入 | 渲染进子代理定义（未配置 = `model: inherit`）；配置改动后 `lycx doctor` 提示偏差，`lycx update` 重渲染 |
@@ -56,18 +57,18 @@ lyx:
 |------|------|
 | `@lyx-init` | 生成项目 AGENTS.md + 初始化 OpenSpec 目录结构 + 自动 commit |
 | `@lyx-explore` | 想清楚再动手（委托 `@openspec-explore skill`）；委托前扫描 `review-findings.md` 审查未修项快照，有命中则**先询问**再列出；收敛到方案时按规模提示转 `@lyx-fix`（小改动）或 `@lyx-propose` |
-| `@lyx-propose` | 创建方案前问一次隔离方式（三选一：隔离 worktree【从当前分支 HEAD 切出、同会话 cd 续跑，续接命令为异常兜底】/ 本项目切新分支【仅分支隔离，脏改动三选处置】/ 留在当前分支）+ 问"全自动/手动" → 委托 `@openspec-propose skill` → 记录 sourceBranch/developmentBranch/worktreePath metadata → 真实 change 名确认后同步当前会话标题（Codex 直接调用标题工具；Claude Code 提示 `/rename <change-name>`）→ 按风险测试策略生成 spec/tasks 并方案自审（四项检查 + 逐项结论清单；核心断链直接修、业务判断类问用户）→ commit `propose: <change>`；全自动 = review-plan → apply → review-code 流水线，手动 = 逐步确认 |
-| `@lyx-apply` | **按 `codingExecutor` 实施**：`main`（默认）= 主 agent 直接读 tasks.md 逐任务实施 + 验证 + 勾 checkbox；`subagent` = spawn coding subagent（非 fork，经 context.md 获取软上下文 + 只实施 change 范围，模型按 `codingModel`）。两条路径均由主会话确认后回写 context.md 并统一 commit `apply: <change>`；subagent 路径环境级不可用回退主 agent，业务失败转人工 |
-| `@lyx-fix` | 小需求 / bug 轻量路径：不建 change；spec 分流（A 代码对齐 spec / B 同一 commit 就地改主 spec / C 转 `@lyx-propose`）→ 按风险测试策略实施与验证（逻辑 bug 先红后绿，纯展示可免新增测试）→ 主 agent 一轮五项自审 → 最终验证门禁 → B 类提交前确认 → 单个 commit（无 Change trailer） |
-| `@lyx-archive` | 归档完成的 change（委托 `@openspec-archive-change skill`）+ 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
-| `@lyx-review-plan` | 审方案：按 `reviewExecutor` 决定主体——`main`（默认）= 主 agent 直接自审，无逐条裁决 / 驳回硬线，最多 2 轮；`subagent` = 单审查 subagent（角色词 `plan-reviewer.md`，非 fork + context.md 路径引用，模型按 `reviewModel`）分级审查 + 主会话逐条裁决，按风险策略把补充边界记为 `否+否`，循环直到正常清零或终止（全局轮数上限 5）。循环结束后写 `review-findings.md` 的 `## 方案审查` 节 |
-| `@lyx-review-code` | 审代码：同上（角色词 `reviewer.md`），Critical/Warning/Info 分级；纯展示缺新增测试不形成发现，补充边界记为 `否+否`；循环结束后写 `review-findings.md` 的 `## 代码审查` 节 |
+| `@lyx-propose` | 创建方案前问一次隔离方式 + 问"全自动/手动" → 委托 `@openspec-propose skill` → 记录 isolation metadata → 同步会话标题 → 风险测试策略生成 spec/tasks + 五项方案自审 → 创建 run-state → commit；全自动 = review-plan → apply → review-code |
+| `@lyx-apply` | 启动读取 run-state 并用 git/tasks 核对；按 `codingExecutor` 实施，逐任务记录证据与机械裁决，主会话确认后回写 context/run-state 并统一 commit |
+| `@lyx-fix` | 小需求 / bug 轻量路径：不建 change；bug 分支执行根因调查、单假设验证、3 次失败后质疑架构；最终验证与提交输出新鲜证据 |
+| `@lyx-archive` | 启动恢复核对 + 完整验证 + final testMode/证据写入 run-state + 归档 commit + 按 isolation metadata 分支收尾 |
+| `@lyx-review-plan` | 读取 run-state 和 references；检查方案完整性及实施就绪（文件/锚点、接口、验证命令、预期结果、独立边界），执行审查/修复循环并写快照与新鲜证据 |
+| `@lyx-review-code` | 读取 run-state 和 references；执行代码审查/修复循环，保留 Critical/Warning/Info、双轴标注和终止条件，写快照与新鲜证据 |
 | `@lyx-release` | GitFlow 四场景发版（feature/release/hotfix/dev-offline），SemVer 自动推导版本号；上线合并二选一（远端 PR 默认 / 本地直接合并）+ 主分支名检测（master/main） |
 | `@lyx-changelog` | 按 commit 前缀分组生成/更新 Keep a Changelog 格式的 CHANGELOG.md |
 | `@lyx-publish` | npm 包发布四场景（bmc 私域 Nexus / GitHub Packages / npmjs + GitHub Release / CI 自动发布），前置检查→版本号推导→构建→发布→验证 |
 | `@lyx-commit` `@lyx-rollback` `@lyx-clean-branches` `@lyx-worktree` | Git 工具（worktree 只留 `add`/`list`/`remove`/`prune`/`migrate`，`switch` 已移除——隔离切换统一由 `@lyx-propose` 触发） |
 
-审查-修复循环细节（执行者分支、subagent 路径的 `send_input` 复用与增量传递、终止条件、提交时机）内联在各 skill 模板（`@lyx-review-plan` / `@lyx-review-code`）；[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED，仅作历史参考。
+审查-修复循环细节位于各 skill 安装目录的 `references/`（执行者分支、subagent 路径的 `send_input` 复用与增量传递、终止条件、run-state 与提交时机）；主 `SKILL.md` 只保留入口与按需读取指令。[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED，仅作历史参考。
 
 ## 典型工作流
 

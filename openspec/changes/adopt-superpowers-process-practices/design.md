@@ -40,14 +40,12 @@ references:
 
 本次只拆 `propose`、`review-plan`、`review-code`。共享逻辑优先抽出：
 
-- `templates/skill-references/propose/isolation-and-commit.md`
-- `templates/skill-references/propose/review-pipeline.md`
-- `templates/skill-references/review-plan/review-loop.md`
-- `templates/skill-references/review-plan/snapshot-and-report.md`
-- `templates/skill-references/review-plan/host-protocol.md`
-- `templates/skill-references/review-code/review-loop.md`
-- `templates/skill-references/review-code/snapshot-and-report.md`
-- `templates/skill-references/review-code/host-protocol.md`
+- `templates/skill-references/propose/propose-contract.md`
+- `templates/skill-references/propose/recovery-and-evidence.md`
+- `templates/skill-references/review-plan/review-contract.md`
+- `templates/skill-references/review-plan/recovery-and-evidence.md`
+- `templates/skill-references/review-code/review-contract.md`
+- `templates/skill-references/review-code/recovery-and-evidence.md`
 
 主文件保留：何时触发、目标和前置检查、阶段入口、何时读取哪个 reference、终态输出。references 单文件不设 20 KB 上限，因为它们不随会话启动自动加载。
 

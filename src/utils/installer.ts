@@ -4,7 +4,7 @@ import fs from 'fs-extra'
 import { basename, join } from 'pathe'
 import { FALLBACK_HOSTS, getAdapter } from './host-adapters'
 import { getWorkflowById } from './installer-data'
-import { PACKAGE_ROOT, replaceHomePathsInTemplate } from './installer-template'
+import { isValidSkillReference, listMissingSkillReferences, PACKAGE_ROOT, parseSkillReferences, replaceHomePathsInTemplate } from './installer-template'
 
 // ═══════════════════════════════════════════════════════
 // Re-exports — all consumers import from './installer'
@@ -97,12 +97,51 @@ async function installCommandFiles(
 
       try {
         if (await fs.pathExists(srcFile)) {
+          const sourceContent = await fs.readFile(srcFile, 'utf-8')
+          const declaredReferences = parseSkillReferences(sourceContent)
           if (ctx.force || !(await fs.pathExists(destFile))) {
-            let content = await fs.readFile(srcFile, 'utf-8')
+            let content = sourceContent
             content = adapter.renderTemplate(content, ctx, cmd)
             content = replaceHomePathsInTemplate(content, ctx.installDir)
             await fs.ensureDir(destDir)
             await fs.writeFile(destFile, content, 'utf-8')
+
+            const referencesSourceDir = target.referencesSourceDir
+            const destReferencesDir = join(destDir, 'references')
+            if (ctx.force && referencesSourceDir)
+              await fs.remove(destReferencesDir)
+
+            for (const reference of declaredReferences) {
+              if (!isValidSkillReference(reference)) {
+                ctx.result.errors.push(`Invalid skill reference declaration for ${cmd}: ${reference}`)
+                ctx.result.success = false
+                continue
+              }
+              if (!referencesSourceDir) {
+                ctx.result.errors.push(`Skill references source dir missing for ${cmd}: ${reference}`)
+                ctx.result.success = false
+                continue
+              }
+              const relativeReference = reference.slice('references/'.length)
+              const srcReference = join(referencesSourceDir, cmd, relativeReference)
+              if (!(await fs.pathExists(srcReference))) {
+                ctx.result.errors.push(`Skill reference template missing for ${cmd}: ${srcReference}`)
+                ctx.result.success = false
+                continue
+              }
+              let referenceContent = await fs.readFile(srcReference, 'utf-8')
+              referenceContent = adapter.renderTemplate(referenceContent, ctx, cmd)
+              referenceContent = replaceHomePathsInTemplate(referenceContent, ctx.installDir)
+              const destReference = join(destDir, reference)
+              await fs.ensureDir(join(destReference, '..'))
+              await fs.writeFile(destReference, referenceContent, 'utf-8')
+            }
+
+            const missingReferences = await listMissingSkillReferences(destDir)
+            if (missingReferences.length > 0) {
+              ctx.result.errors.push(`Installed skill references missing for ${cmd}: ${missingReferences.join(', ')}`)
+              ctx.result.success = false
+            }
             ctx.result.installedCommands.push(cmd)
           }
           else {
