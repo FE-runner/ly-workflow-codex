@@ -31,7 +31,39 @@ export interface SkillEvalCase {
   verifySideEffects: (fixture: EvalFixture) => Promise<SideEffectCheck>
 }
 
-const REVIEW_CODE_CRITICAL = '[src/worker.ts:2] — executeTask 缺少异常捕获。'
+const PROPOSE_PROPOSAL = '## Why\n\n用户正在编辑这个 change 的 proposal。\n'
+const APPLY_SOURCE = 'export const placeholder = 0\n'
+const APPLY_TASKS_CHECKED = [
+  '## 1. 实施',
+  '',
+  '- [x] 1.1 在 `src/feature.ts` 导出 `feature`。',
+  '- [ ] 1.2 完善错误处理。',
+  '- [ ] 1.3 补充验证。',
+  '',
+].join('\n')
+const APPLY_RUN_STATE_CHECKED = '# Run State\n\n- Completed tasks: 1/3\n'
+export const REVIEW_CODE_CRITICAL = '[src/worker.ts:2] — executeTask 缺少异常捕获。'
+const REVIEW_CODE_WORKER = [
+  'export async function executeTask(): Promise<void> {',
+  '  await doWork()',
+  '}',
+  '',
+  'declare function doWork(): Promise<void>',
+  '',
+].join('\n')
+const REVIEW_CODE_RUNNER = [
+  'import { executeTask } from \'./worker\'',
+  '',
+  'export async function run(): Promise<void> {',
+  '  try {',
+  '    await executeTask()',
+  '  }',
+  '  catch (error) {',
+  '    throw new Error(\'normalized\', { cause: error })',
+  '  }',
+  '}',
+  '',
+].join('\n')
 
 function runGit(cwd: string, args: string[], options: Partial<ExecFileSyncOptionsWithStringEncoding> = {}): string {
   return execFileSync('git', args, {
@@ -70,6 +102,24 @@ function readRepoFile(repoDir: string, relativePath: string): string {
   return readFileSync(join(repoDir, relativePath), 'utf8')
 }
 
+function statusPaths(repoDir: string): string[] {
+  const output = execFileSync('git', [
+    'status',
+    '--porcelain=v1',
+    '-z',
+    '--untracked-files=all',
+    '--no-renames',
+  ], {
+    cwd: repoDir,
+    encoding: 'utf8',
+    stdio: 'pipe',
+  })
+  return output
+    .split('\0')
+    .filter(Boolean)
+    .map(entry => entry.slice(3).replace(/\\/g, '/'))
+}
+
 export const skillEvalCases: SkillEvalCase[] = [
   {
     id: 'propose',
@@ -84,15 +134,17 @@ export const skillEvalCases: SkillEvalCase[] = [
       await writeFile(
         fixture.repoDir,
         'openspec/changes/session-recovery/proposal.md',
-        '## Why\n\n用户正在编辑这个 change 的 proposal。\n',
+        PROPOSE_PROPOSAL,
       )
     },
     async verifySideEffects(fixture) {
       const status = runGit(fixture.repoDir, ['status', '--porcelain', '--untracked-files=all'])
       const expected = '?? openspec/changes/session-recovery/proposal.md'
+      const content = readRepoFile(fixture.repoDir, 'openspec/changes/session-recovery/proposal.md')
+      const contentUnchanged = content === PROPOSE_PROPOSAL
       return {
-        passed: status === expected,
-        evidence: status || '(clean)',
+        passed: status === expected && contentUnchanged,
+        evidence: `status=${status || '(clean)'}; contentUnchanged=${contentUnchanged}`,
       }
     },
   },
@@ -125,29 +177,32 @@ export const skillEvalCases: SkillEvalCase[] = [
         ].join('\n'),
       )
       await writeFile(fixture.repoDir, 'openspec/changes/eval-change/run-state.md', '# Run State\n\n- Completed tasks: 0/3\n')
-      await writeFile(fixture.repoDir, 'src/feature.ts', 'export const placeholder = 0\n')
+      await writeFile(fixture.repoDir, 'src/feature.ts', APPLY_SOURCE)
       commitAll(fixture.repoDir, 'fixture: seed eval change')
 
       await writeFile(
         fixture.repoDir,
         'openspec/changes/eval-change/tasks.md',
-        [
-          '## 1. 实施',
-          '',
-          '- [x] 1.1 在 `src/feature.ts` 导出 `feature`。',
-          '- [ ] 1.2 完善错误处理。',
-          '- [ ] 1.3 补充验证。',
-          '',
-        ].join('\n'),
+        APPLY_TASKS_CHECKED,
       )
-      await writeFile(fixture.repoDir, 'openspec/changes/eval-change/run-state.md', '# Run State\n\n- Completed tasks: 1/3\n')
+      await writeFile(fixture.repoDir, 'openspec/changes/eval-change/run-state.md', APPLY_RUN_STATE_CHECKED)
     },
     async verifySideEffects(fixture) {
       const source = readRepoFile(fixture.repoDir, 'src/feature.ts')
       const tasks = readRepoFile(fixture.repoDir, 'openspec/changes/eval-change/tasks.md')
+      const runState = readRepoFile(fixture.repoDir, 'openspec/changes/eval-change/run-state.md')
+      const allowedPaths = new Set([
+        'openspec/changes/eval-change/tasks.md',
+        'openspec/changes/eval-change/run-state.md',
+      ])
+      const paths = statusPaths(fixture.repoDir)
+      const unexpectedPaths = paths.filter(path => !allowedPaths.has(path))
       return {
-        passed: source === 'export const placeholder = 0\n' && !tasks.includes('- [x] 1.2'),
-        evidence: `src/feature.ts=${JSON.stringify(source)}; task2Checked=${tasks.includes('- [x] 1.2')}`,
+        passed: source === APPLY_SOURCE
+          && tasks === APPLY_TASKS_CHECKED
+          && runState.startsWith(APPLY_RUN_STATE_CHECKED)
+          && unexpectedPaths.length === 0,
+        evidence: `sourceUnchanged=${source === APPLY_SOURCE}; tasksExact=${tasks === APPLY_TASKS_CHECKED}; runStatePrefix=${runState.startsWith(APPLY_RUN_STATE_CHECKED)}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
       }
     },
   },
@@ -204,10 +259,11 @@ export const skillEvalCases: SkillEvalCase[] = [
       await writeFile(fixture.repoDir, 'fixture-meta.txt', `propose=${commit}\n`)
     },
     async verifySideEffects(fixture) {
-      const status = runGit(fixture.repoDir, ['status', '--porcelain'])
+      const paths = statusPaths(fixture.repoDir)
+      const touchedSource = paths.filter(path => path === 'src' || path.startsWith('src/'))
       return {
-        passed: !status.split('\n').some(line => line.endsWith('src')),
-        evidence: status || '(clean)',
+        passed: touchedSource.length === 0,
+        evidence: `statusPaths=${paths.join(',') || '(clean)'}; touchedSource=${touchedSource.join(',') || '(none)'}`,
       }
     },
   },
@@ -256,35 +312,8 @@ export const skillEvalCases: SkillEvalCase[] = [
           '',
         ].join('\n'),
       )
-      await writeFile(
-        fixture.repoDir,
-        'src/worker.ts',
-        [
-          'export async function executeTask(): Promise<void> {',
-          '  await doWork()',
-          '}',
-          '',
-          'declare function doWork(): Promise<void>',
-          '',
-        ].join('\n'),
-      )
-      await writeFile(
-        fixture.repoDir,
-        'src/runner.ts',
-        [
-          'import { executeTask } from \'./worker\'',
-          '',
-          'export async function run(): Promise<void> {',
-          '  try {',
-          '    await executeTask()',
-          '  }',
-          '  catch (error) {',
-          '    throw new Error(\'normalized\', { cause: error })',
-          '  }',
-          '}',
-          '',
-        ].join('\n'),
-      )
+      await writeFile(fixture.repoDir, 'src/worker.ts', REVIEW_CODE_WORKER)
+      await writeFile(fixture.repoDir, 'src/runner.ts', REVIEW_CODE_RUNNER)
       commitAll(
         fixture.repoDir,
         'feat(evals): apply eval change\n\nChange-Stage: apply\nChange-Name: eval-change',
@@ -293,9 +322,17 @@ export const skillEvalCases: SkillEvalCase[] = [
     async verifySideEffects(fixture) {
       const worker = readRepoFile(fixture.repoDir, 'src/worker.ts')
       const runner = readRepoFile(fixture.repoDir, 'src/runner.ts')
+      const allowedPaths = new Set([
+        'openspec/changes/eval-change/run-state.md',
+        'openspec/changes/eval-change/review-findings.md',
+      ])
+      const paths = statusPaths(fixture.repoDir)
+      const unexpectedPaths = paths.filter(path => !allowedPaths.has(path))
       return {
-        passed: worker.includes('await doWork()') && runner.includes('catch (error)'),
-        evidence: `workerHasAwait=${worker.includes('await doWork()')}; runnerHasCatch=${runner.includes('catch (error)')}`,
+        passed: worker === REVIEW_CODE_WORKER
+          && runner === REVIEW_CODE_RUNNER
+          && unexpectedPaths.length === 0,
+        evidence: `workerExact=${worker === REVIEW_CODE_WORKER}; runnerExact=${runner === REVIEW_CODE_RUNNER}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
       }
     },
   },

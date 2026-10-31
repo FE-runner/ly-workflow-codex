@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'smol-toml'
 import { describe, expect, it } from 'vitest'
-import { skillEvalCases } from '../../evals/cases'
+import { getSkillEvalCase, REVIEW_CODE_CRITICAL, skillEvalCases } from '../../evals/cases'
 import {
   buildCleanupPlan,
   buildFixtureHomeConfig,
   classifyEvalOutcome,
+  createResultsDirectory,
   installEvalSkillBundle,
   parseCliOptions,
   parseCodexEvents,
@@ -228,5 +229,85 @@ describe('skill eval fixtures and cleanup', () => {
       removeBaselineWorktree: true,
     })
     expect(buildCleanupPlan('/tmp/eval-root', '/tmp/eval-root/sources/base', true).removeTemporaryRoot).toBe(false)
+  })
+
+  it('rejects propose content mutation even when the untracked path is unchanged', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'lyx-eval-propose-sideeffect-'))
+    const fixture = { repoDir: join(base, 'repo'), homeDir: join(base, 'home') }
+    try {
+      const evalCase = getSkillEvalCase('propose')
+      await evalCase.setup(fixture)
+      expect((await evalCase.verifySideEffects(fixture)).passed).toBe(true)
+      writeFileSync(join(fixture.repoDir, 'openspec/changes/session-recovery/proposal.md'), 'changed\n')
+      expect((await evalCase.verifySideEffects(fixture)).passed).toBe(false)
+    }
+    finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects unexpected apply changes while allowing run-state evidence updates', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'lyx-eval-apply-sideeffect-'))
+    const fixture = { repoDir: join(base, 'repo'), homeDir: join(base, 'home') }
+    try {
+      const evalCase = getSkillEvalCase('apply')
+      await evalCase.setup(fixture)
+      const runState = join(fixture.repoDir, 'openspec/changes/eval-change/run-state.md')
+      writeFileSync(runState, `${readFileSync(runState, 'utf8')}- Ruling: partial apply\n`)
+      expect((await evalCase.verifySideEffects(fixture)).passed).toBe(true)
+      writeFileSync(join(fixture.repoDir, 'unexpected.txt'), 'changed\n')
+      expect((await evalCase.verifySideEffects(fixture)).passed).toBe(false)
+    }
+    finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects review-plan writes anywhere under src', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'lyx-eval-review-plan-sideeffect-'))
+    const fixture = { repoDir: join(base, 'repo'), homeDir: join(base, 'home') }
+    try {
+      const evalCase = getSkillEvalCase('review-plan')
+      await evalCase.setup(fixture)
+      expect((await evalCase.verifySideEffects(fixture)).passed).toBe(true)
+      mkdirSync(join(fixture.repoDir, 'src'), { recursive: true })
+      writeFileSync(join(fixture.repoDir, 'src/new file.ts'), 'export const unexpected = true\n')
+      expect((await evalCase.verifySideEffects(fixture)).passed).toBe(false)
+    }
+    finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('fixes review-code inputs, rejects source mutation, and allows only review metadata changes', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'lyx-eval-review-code-sideeffect-'))
+    const fixture = { repoDir: join(base, 'repo'), homeDir: join(base, 'home') }
+    try {
+      const evalCase = getSkillEvalCase('review-code')
+      await evalCase.setup(fixture)
+      const runStatePath = join(fixture.repoDir, 'openspec/changes/eval-change/run-state.md')
+      const reportPath = join(fixture.repoDir, 'openspec/changes/eval-change/review-round-2.md')
+      const roundOne = readFileSync(runStatePath, 'utf8').match(/^- Round 1 Critical: (.+)$/m)?.[1]
+      expect(roundOne).toBe(REVIEW_CODE_CRITICAL)
+      expect(readFileSync(reportPath, 'utf8')).toContain(`1. ${REVIEW_CODE_CRITICAL}`)
+      writeFileSync(runStatePath, `${readFileSync(runStatePath, 'utf8')}- Round 2: rejected\n`)
+      expect((await evalCase.verifySideEffects(fixture)).passed).toBe(true)
+      writeFileSync(join(fixture.repoDir, 'src/worker.ts'), `${readFileSync(join(fixture.repoDir, 'src/worker.ts'), 'utf8')}// changed\n`)
+      expect((await evalCase.verifySideEffects(fixture)).passed).toBe(false)
+    }
+    finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps default result files outside the removable fixture root', async () => {
+    const directory = await createResultsDirectory()
+    try {
+      expect(existsSync(directory)).toBe(true)
+      expect(directory).toContain('lyx-skill-eval-results-')
+    }
+    finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })

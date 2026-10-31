@@ -1,11 +1,11 @@
 # Run State
 
 - Change: execute-skill-behavior-evals
-- Stage: apply
+- Stage: review-code
 - Source branch: main
 - Development branch: codex/run-skill-evals
 - Last good commit: 1d34e84
-- Next safe action: review-code after apply commit
+- Next safe action: review-code 已清零，等待归档前完整验证
 
 ## Task Evidence
 
@@ -47,6 +47,18 @@
 - Review rounds: 3（review-plan，normal）
 - Termination type: normal
 
+## Code Review State
+
+- Apply baseline: 3ec601ffef2e26fc14e7424b845942474f99ada4
+- Round 1: 4 Critical, 4 Warning; 当前会话全部认可并在本 change 内修复
+- Round 2: 1 Critical, 1 Warning; 同一 src 路径绕过问题以 quoted path 变体复现，触发熔断；Windows kill 完成顺序 Warning 仍未解决
+- Recovery: 用户在熔断后明确确认继续；Round 3 改为 NUL 分隔 status 并等待 Windows taskkill 完成
+- Round 3: 0 Critical, 0 Warning; 上一轮 Critical/Warning 均已解决，正常清零
+- 标注覆盖: Warning 2/3 原 `可自动修复=否` 覆盖为 `是`；理由：进程树终止与持久结果目录均有确定平台策略/清晰缺陷事实，无需产品决策
+- Review rounds: 3
+- Termination type: normal
+- Review fix commit: 待统一提交归属
+
 ## Verification
 
 - `openspec validate --changes execute-skill-behavior-evals`: Round 1/2/3 均 exit 0, 1/1 change valid
@@ -62,6 +74,7 @@
 - `pnpm eval:skills -- --case propose --version current --output /tmp/lyx-skill-evals-smoke`: exit 0，1/1 passed
 - `pnpm eval:skills -- --case review-code --version current --output /tmp/lyx-skill-evals-smoke`: exit 0，1/1 passed
 - Apply 启动快照：`94c93bb` 后工作区 clean；当前改动均为本阶段产出，未发现预存 dirty 重叠
+- Review-code Round 3 复核：`git diff --check` exit 0；审查代理执行 `pnpm exec tsc --noEmit --pretty false` exit 0；按 review-code 契约未运行 Vitest/build/真实 eval
 
 ## Rulings
 

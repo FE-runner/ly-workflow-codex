@@ -310,6 +310,15 @@ export function buildFixtureHomeConfig(overrides: { reviewExecutor?: 'main' | 's
   ].join('\n')
 }
 
+export async function createResultsDirectory(outputDir?: string): Promise<string> {
+  if (outputDir) {
+    const directory = resolve(outputDir)
+    await fs.ensureDir(directory)
+    return directory
+  }
+  return fs.mkdtemp(join(tmpdir(), 'lyx-skill-eval-results-'))
+}
+
 export async function installEvalSkillBundle(
   sourceRoot: string,
   fixture: EvalFixture,
@@ -429,6 +438,7 @@ function runChild(command: string, args: string[], options: { cwd: string, env: 
         cwd: options.cwd,
         env: options.env,
         stdio: ['ignore', 'pipe', 'pipe'],
+        detached: process.platform !== 'win32',
       })
     }
     catch (error) {
@@ -456,13 +466,26 @@ function runChild(command: string, args: string[], options: { cwd: string, env: 
 
     const timer = setTimeout(() => {
       timedOut = true
-      child.kill('SIGKILL')
+      killPromise = killProcessTree(child)
     }, options.timeoutMs)
 
     child.once('close', (exitCode) => {
       clearTimeout(timer)
+      closeInfo = { exitCode }
+      void finish()
+    })
+
+    let closeInfo: { exitCode: number | null } | undefined
+    let killPromise = Promise.resolve()
+    let settled = false
+
+    async function finish(): Promise<void> {
+      if (settled || !closeInfo)
+        return
+      settled = true
+      await killPromise.catch(() => {})
       resolvePromise({
-        exitCode,
+        exitCode: closeInfo.exitCode,
         timedOut,
         spawnError,
         stdout,
@@ -470,8 +493,34 @@ function runChild(command: string, args: string[], options: { cwd: string, env: 
         finalText: '',
         durationMs: Date.now() - startedAt,
       })
-    })
+    }
   })
+}
+
+function killProcessTree(child: ChildProcess): Promise<void> {
+  const pid = child.pid
+  if (!pid)
+    return Promise.resolve()
+  if (process.platform === 'win32') {
+    return new Promise((resolvePromise) => {
+      const killer = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      })
+      killer.once('error', () => {
+        child.kill('SIGKILL')
+        resolvePromise()
+      })
+      killer.once('close', () => resolvePromise())
+    })
+  }
+  try {
+    process.kill(-pid, 'SIGKILL')
+  }
+  catch {
+    child.kill('SIGKILL')
+  }
+  return Promise.resolve()
 }
 
 async function executeCodex(
@@ -501,6 +550,7 @@ async function executeCodex(
     env: {
       ...process.env,
       HOME: fixture.homeDir,
+      USERPROFILE: fixture.homeDir,
       CODEX_HOME: codexHome,
       NO_COLOR: '1',
     },
@@ -646,12 +696,11 @@ async function removeBaselineWorktrees(roots: Map<EvalVersion, string>): Promise
 
 export async function runSkillEvalSuite(options: CliOptions): Promise<EvalSuiteResult> {
   const temporaryRoot = await fs.mkdtemp(join(tmpdir(), 'lyx-skill-evals-'))
-  const resultsDir = resolve(options.outputDir ?? join(temporaryRoot, 'results'))
+  const resultsDir = await createResultsDirectory(options.outputDir)
   const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
   const sourceRoots = new Map<EvalVersion, string>()
   const results: EvalUnitResult[] = []
   try {
-    await fs.ensureDir(resultsDir)
     const preparedRoots = await prepareSourceRoots(options, temporaryRoot)
     for (const [version, root] of preparedRoots)
       sourceRoots.set(version, root)
