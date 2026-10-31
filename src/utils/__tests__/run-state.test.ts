@@ -7,10 +7,10 @@ const read = (path: string) => readFileSync(join(ROOT, path), 'utf-8')
 
 describe('run-state lifecycle contract', () => {
   it('separates semantic context from execution state and records completed work', () => {
-    const design = read('openspec/changes/adopt-superpowers-process-practices/design.md')
+    const spec = read('openspec/specs/execution-run-state/spec.md')
     const propose = read('templates/skill-references/propose/recovery-and-evidence.md')
-    expect(design).toContain('context.md` 记录“为什么这样做”')
-    expect(design).toContain('run-state 记录“现在做到哪')
+    expect(spec).toContain('`context.md` 保存讨论语义和取舍背景')
+    expect(spec).toContain('`run-state.md` 只保存可恢复执行状态')
     expect(propose).toContain('Completed tasks: <done>/<total>')
     expect(propose).toContain('## Baseline Eval')
     expect(propose).toContain('## Modified Eval (final)')
@@ -19,7 +19,7 @@ describe('run-state lifecycle contract', () => {
   it('recovers from git/files, backfills commit SHA, and forbids secrets', () => {
     const apply = read('templates/skills/apply.md')
     const archive = read('templates/skills/archive.md')
-    const spec = read('openspec/changes/adopt-superpowers-process-practices/specs/execution-run-state/spec.md')
+    const spec = read('openspec/specs/execution-run-state/spec.md')
     expect(apply).toContain('启动恢复（SHALL）')
     expect(apply).toContain('以可核验事实为准')
     expect(archive).toContain('final testMode')
