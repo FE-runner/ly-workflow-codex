@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-31
+
 ### Added
 
 - 新增 `pnpm eval:skills` 显式开发期 runner：在独立临时 Git 仓库与 fixture HOME 中真实调用 Codex，对比 baseline/current 四个核心 skill，并区分 `passed` / `failed` / `not-executed`
