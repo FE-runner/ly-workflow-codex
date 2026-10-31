@@ -81,6 +81,10 @@ src/utils/                   共享层（不出现宿主名与宿主路径）
                              修复按宿主传 --tools；无宿主配置时只读诊断
   fs-helpers.ts platform.ts version.ts package-meta.ts
 
+src/evals/                   开发期行为评测（不进入用户命令 / 默认 CI）
+  cases.ts                   propose/apply/review-plan/review-code fixture、prompt、pattern 与副作用检查
+  run-skill-evals.ts         baseline/current 临时仓库、fixture HOME、codex exec、JSONL 判定与结果输出
+
 src/i18n/                    i18next 文案（zh-CN / en）
 src/types/                   LyConfig（host 节）/ WorkflowConfig / CLI 类型
 
@@ -192,6 +196,8 @@ testMode = "off"
 14. **change 使用 run-state.md 恢复**：每个活跃 change 由 propose 创建 `run-state.md`，记录阶段、commit、任务进度、审查轮次/终止类型、验证证据、机械裁决和下一步。它随各阶段 commit 管理，与 `context.md` 分责；恢复时以 run-state + git + tasks 相互核对，冲突以可核验事实为准。
 
 15. **流程模板按风险做行为评测**：`propose`、`apply`、`review-plan`、`review-code` 的模板变更需参考 `docs/skill-behavior-evals.md` 和 `evals/skills/` 记录基线、修改后与最终复跑证据。文本断言不能冒充 agent 行为通过；未执行必须披露原因。
+
+16. **真实 skill 行为评测是显式开发工具**：`pnpm eval:skills` 在独立临时 Git 仓库中安装 baseline 或 current bundle，以 fixture HOME 隔离配置，经真实 `codex exec --json` 执行并把 `passed` / `failed` / `not-executed` 分开记录。该 runner 不属于 15 个用户命令，不进入普通 `pnpm test` 或默认 CI；真实执行后须把结果回写到 `evals/skills/*.md` 的 `Evidence Record`。
 
 ## 改动对称清单
 

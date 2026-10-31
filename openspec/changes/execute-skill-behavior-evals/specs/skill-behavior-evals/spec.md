@@ -23,7 +23,7 @@
 
 #### Scenario: propose 在非交互调用中正确停住
 - **WHEN** propose 场景在 `codex exec` 非交互单轮调用中遇到与 change 目录重叠的用户改动
-- **THEN** 被测 agent 先询问隔离方式与自动/手动模式，未获确认前不写目标 change 目录；正确停住即通过，不要求完成后续确认或 propose commit
+- **THEN** 被测 agent 开始询问必需决策（按模板顺序通常先问隔离方式），未获确认前不写目标 change 目录；停在第一个未决问题即通过，不要求单轮问完全部问题或完成后续确认/commit
 
 ### Requirement: 评测结果形成仓库内可审计报告
 实际执行 baseline/current 评测后，仓库 SHALL 保存精简报告，列出运行命令、运行环境、每个 case/version 的 passed/failed/not-executed 状态和关键证据，并把 baseline/current 结论与报告引用回写到四个场景文件的 `Evidence Record`。原始 transcript MAY 保存在临时目录，但 SHALL NOT 提交凭据、完整环境、cookie 或无关的用户数据。实现该评测的 change SHALL 在 apply 阶段实际运行四个场景的两个版本，并在 `run-state.md` 记录命令、退出码、通过/失败数量和失败原因。

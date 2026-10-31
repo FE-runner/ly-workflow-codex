@@ -56,10 +56,10 @@ runner 从 `--output-last-message` 读取最终文本，解析 JSONL 中的事�
 
 四个 case 分别构造：
 
-- `propose`：main checkout + 与 change 目录重叠的 dirty file，要求先询问隔离方式与自动/手动模式。`codex exec` 是非交互单轮调用，正确停在“等待用户确认且未写入目标 change 目录”即视为本场景通过，不要求后续确认或 propose commit。
+- `propose`：main checkout + 与 change 目录重叠的 dirty file。skill 按隔离方式 → 自动/手动模式顺序提问；`codex exec` 是非交互单轮调用，正确停在第一个未决问题（通常是隔离方式）且未写入目标 change 目录即视为本场景通过，不要求同一段输出问完两项，也不要求后续确认或 propose commit。
 - `apply`：run-state/task/git 不一致，要求识别 partial apply 并停止。
 - `review-plan`：接口未定义、任务缺验证命令，要求 finding 提到可执行性缺口。
-- `review-code`：已提交 apply commit，上层已有统一异常捕获证据；fixture 预置第一轮 `run-state.md` 与第二轮审查报告输入，两者包含逐字相同的误报 Critical 原文，第一轮还包含主会话驳回依据。本轮要求给出可核验裁决，并在该 Critical 第二轮仍出现时触发驳回硬线，不依赖被测 agent 随机生成审查发现。
+- `review-code`：已提交 apply commit，上层已有统一异常捕获证据；fixture 使用 `reviewExecutor=subagent`（main 路径明确不适用驳回硬线），并预置第一轮 `run-state.md` 与第二轮审查报告输入，两者包含逐字相同的误报 Critical 原文，第一轮还包含主会话驳回依据。本轮要求给出可核验裁决，并在该 Critical 第二轮仍出现时触发驳回硬线，不依赖被测 agent 随机生成审查发现。
 
 fixture 文件由 case 的 `setup()` 写入临时仓库，避免维护多份重复 fixture 目录。
 

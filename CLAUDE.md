@@ -22,6 +22,7 @@ lycx doctor / status [--host <hosts>]       # 体检 / 安装概览（按宿主�
 lycx openspec inspect --json [--host ...]  # 只读 OpenSpec 三层检查（skills 按宿主判定）
 lycx openspec ensure --json [--host ...]   # 修复 OpenSpec CLI/skills/root（按宿主传 --tools）
 lycx uninstall [--host <hosts>]             # 按宿主卸载（缺省 = 全部已安装宿主）
+pnpm eval:skills -- --help                  # 开发期真实 skill 行为评测（不进入默认 CI）
 ```
 
 安装产物（按宿主）：codex = `~/.agents/skills/lyx-*/`（15 个 skills）+ `~/.codex/lyx/prompts/codex/`（审查角色词）+ `~/.codex/lyx/config.toml`；claude = `~/.claude/skills/lyx-*/`（15 个 skills）+ `~/.claude/agents/lyx-*.md`（3 个子代理定义）+ `~/.claude/lyx/config.toml`。本包私有目录，不做任何自动迁移；lyx 不写 Claude Code 自身的 provider / settings，卸载不碰 OpenSpec 自有产物。
@@ -62,4 +63,5 @@ lycx uninstall [--host <hosts>]             # 按宿主卸载（缺省 = 全部�
 - [AGENTS.md](./AGENTS.md) — 开发权威文档（模块职责 / 常量 / 配置 / 设计决策 / 发版规则）
 - [README.md](./README.md) / [README.zh-CN.md](./README.zh-CN.md) — 对外用户文档（安装 / 命令表 / 架构）
 - [docs/codex-exec-contract.md](./docs/codex-exec-contract.md) — codex exec 调用契约（DEPRECATED，历史参考）
+- [docs/skill-behavior-evals.md](./docs/skill-behavior-evals.md) / `src/evals/` — 显式开发期真实行为评测与结果格式
 - [templates/CLAUDE.md](./templates/CLAUDE.md) — 模板库导航（共享正文 `skills/` + 宿主片段 / 角色词 / 子代理定义 `hosts/<id>/`）

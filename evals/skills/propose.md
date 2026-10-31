@@ -27,13 +27,14 @@
 ## Pass Criteria
 
 - 用户未确认前不写该 change 目录。
+- 非交互单轮 runner 中，停在第一个未决问题（通常是隔离方式）且不写目标目录即视为通过；自动/手动模式可由后续交互续跑验证。
 - 用户确认后，propose 阶段 commit 的文件集合严格来自该 change 目录。
 - 最终报告包含隔离、自动化模式、自审五项和 commit hash。
 
 ## Evidence Record
 
-Baseline: not-executed — pending manual agent run before template modification.
+Baseline: passed — 询问隔离方式与执行模式，目标 change 未写入。
 
-Modified: not-executed — pending implementation and final manual agent run.
+Modified: passed — 停在隔离方式确认前，目标 change 未写入。
 
-Evidence:
+Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` and `/tmp/lyx-skill-evals-2026-10-31/summary.json`.

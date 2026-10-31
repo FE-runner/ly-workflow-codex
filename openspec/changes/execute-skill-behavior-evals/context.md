@@ -26,3 +26,10 @@
 - `codex exec --ignore-user-config` 曾导致模型请求超时，因此 runner 使用真实 `CODEX_HOME` 配置，只隔离 `HOME`。
 - 全局 `.agents/skills` 可能包含旧版 lyx；fixture HOME 和本地 skill 路径必须阻止误用。
 - Agent 可能以提问结束而非主动执行；通过条件需接受“按规则正确停住”作为一种通过行为。
+
+## 实施决策
+
+- runner 直接复用 Codex 适配器渲染单命令 bundle，并给 `replaceHomePathsInTemplate` 增加可选 `homeDir`，确保 `~/` 指向 fixture HOME 而不是父进程 HOME。
+- review-code case 单独使用 `reviewExecutor=subagent`：main 路径按既有契约不适用驳回硬线，subagent 路径才覆盖第二轮同一误报 Critical 的终止行为；其余三 case 保持 main。
+- propose 的非交互通过边界改为“停在第一个未决问题（通常是隔离方式）且不写目标 change 目录”；模板本身按隔离方式 → 自动/手动顺序提问，单轮调用不要求一次问完。
+- 正式评测前进行过两轮校准：修正 apply fixture 中占位实现已满足任务的漏洞，并放宽 review-plan/propose 对同义表达的 pattern；最终完整 8 单元为 8/8 passed。

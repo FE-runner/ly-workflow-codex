@@ -10,6 +10,8 @@
 
 模板**正文单源共享**，宿主差异收敛到 `hosts/<id>/`，安装期由各宿主适配器（`src/hosts/<id>/adapter.ts`）渲染。长 skill 的主 `SKILL.md` 通过 frontmatter `references:` 声明同目录 `references/`，安装器从 `skill-references/` 渲染并复制。模板不随 TS 宿主包迁入 `src/`：`PACKAGE_ROOT` 解析要求包根存在顶层 `templates/`，`package.json` 的 `files` 收录 `templates/hosts/`、`templates/skill-references/` 与 `templates/skills/`。
 
+模板行为评测使用 `pnpm eval:skills`，位于 `src/evals/`；它不在本目录安装，也不是用户可调用的第 16 个 `lyx-*` skill。
+
 | 目录 | 用途 | 安装目标 |
 |------|------|----------|
 | `skills/` | 15 个 SKILL.md 共享正文（`name`/`description`/`argument-hint` frontmatter）。宿主差异处以 `{{HOST_FRAGMENT:<片段>}}` 占位，另有 `{{LYX_CONFIG_FILE}}` / `{{HOST_ID}}` 两个宿主变量；正文中的 `@lyx-<command>` 是**命令标识**（codex 原样保留，claude 渲染为 `/lyx-<command>`，`@openspec-<skill>` 渲染为 `openspec-<skill>`） | codex：`~/.agents/skills/lyx-*/SKILL.md`；claude：`~/.claude/skills/lyx-*/SKILL.md` |

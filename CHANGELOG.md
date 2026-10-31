@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- 新增 `pnpm eval:skills` 显式开发期 runner：在独立临时 Git 仓库与 fixture HOME 中真实调用 Codex，对比 baseline/current 四个核心 skill，并区分 `passed` / `failed` / `not-executed`
 - `@lyx-propose` 在真实 change 名（需求名）确认后立即同步当前会话标题；Codex 直接调用会话标题工具，Claude Code 当前版本提示用户执行 `/rename <change-name>`，同步失败不阻断方案流程
 - 新增核心 skill 行为评测资产：`docs/skill-behavior-evals.md` 与 `evals/skills/` 覆盖 propose / apply / review-plan / review-code 的基线、修改后和最终压力场景
 - 新增 change 级 `run-state.md`：记录阶段、任务进度、审查轮次、验证证据、机械裁决和下一步，支持压缩/中断后恢复

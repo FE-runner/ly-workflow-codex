@@ -31,8 +31,8 @@
 
 ## Evidence Record
 
-Baseline: not-executed — pending manual agent run before template modification.
+Baseline: passed — 第二轮同一误报 Critical 再次被拒，给出上层捕获依据并报告驳回硬线。
 
-Modified: not-executed — pending implementation and final manual agent run.
+Modified: passed — 消费固定第二轮报告，同一误报再次被拒后触发驳回硬线。
 
-Evidence:
+Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` and `/tmp/lyx-skill-evals-2026-10-31/summary.json`.
