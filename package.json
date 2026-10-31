@@ -48,6 +48,7 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm build",
     "test": "vitest run",
+    "eval:skills": "tsx src/evals/run-skill-evals.ts",
     "lint": "eslint",
     "lint:fix": "eslint --fix"
   },

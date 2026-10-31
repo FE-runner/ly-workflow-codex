@@ -34,7 +34,7 @@ lyx:
 - 执行者与推理档：`[host] reviewExecutor` / `codingExecutor`（取值 `main` / `subagent`，未配置等价 `main`）决定审查与实施由谁执行；`reviewReasoningEffort` / `codingReasoningEffort` 分别对应 `reviewModel` / `codingModel`，仅在对应执行者为 `subagent` 且值非空时随 spawn 传入 `reasoning_effort`。执行者为 `main` 时模型与推理档字段不生效，`lycx doctor` 输出 WARN。取值不做枚举强校验；交互 init / 菜单可选择"不覆盖（继承默认）"或覆盖指定档位，非交互 update 保留原值
 - 初始化向导采集流程：语言 → **宿主多选**（默认按已安装宿主与 `~/.codex` / `~/.claude` 是否存在勾选）→ 逐宿主采集：**两个宿主同一采集面 = 测试模式 → 审查范围 → 执行者二连 → 模型二连 → 推理档二连**（模型候选 = **默认继承当前会话模型（留空）** + **自定义输入** + 既有值；推理档候选 = **不覆盖（继承默认）** + 该宿主建议档位 + 自定义输入 + 既有值，codex = minimal/low/medium/high/max、Claude Code = low/medium/high/xhigh/max；不以 provider `/models` 或任何内置/维护清单为候选来源）→ 配置摘要；**Codex 额外前置**：API 提供方（`~/.codex/config.toml` 现有 `[model_providers.*]` / OpenAI 官方 / 自定义）→ **Codex 现状检测（只读**：主会话模型 `~/.codex/config.toml` 顶层 `model` / provider 条目 / `~/.codex/models.json` 注册规模）。Claude Code 侧仍不采集、不写入其自身的 provider / settings 配置
 - 菜单"配置模式、执行者与模型"：按宿主选择后走与 `lycx init` 相同的采集面（测试模式 → 审查范围 → 执行者二连 → 模型二连 → 推理档二连）；未触碰字段保留既有值，写回后按当前配置重渲染产物（Claude Code 同时重渲子代理定义）
-- 流程可靠性：`propose` / `review-plan` / `review-code` 使用主 `SKILL.md` + 按需 `references/`，最终主文件低于 20,000 字节；每个 change 使用 `run-state.md` 记录阶段、任务、审查轮次、验证证据、机械裁决和下一步；核心 skill 行为评测见 [docs/skill-behavior-evals.md](./docs/skill-behavior-evals.md)
+- 流程可靠性：`propose` / `review-plan` / `review-code` 使用主 `SKILL.md` + 按需 `references/`，最终主文件低于 20,000 字节；每个 change 使用 `run-state.md` 记录阶段、任务、审查轮次、验证证据、机械裁决和下一步；核心 skill 行为评测见 [docs/skill-behavior-evals.md](./docs/skill-behavior-evals.md)，可用 `pnpm eval:skills -- --version both --baseline-ref dce2466` 显式运行真实 baseline/current 对照——它是开发工具，不是用户命令，也不进入默认 `pnpm test` 或 CI
 
 ## 宿主
 

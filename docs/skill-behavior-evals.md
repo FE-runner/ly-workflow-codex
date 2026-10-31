@@ -44,3 +44,32 @@ Evidence: <paths, commands, transcript refs>
 4. 失败或未执行的结论写入 change 的 `run-state.md`，不能写成“测试通过”。
 
 当前 `evals/skills/` 是人工可复跑资产，不进入用户安装命令面。
+
+## 可执行 runner
+
+仓库提供显式调用的内部 runner，不进入普通 `pnpm test` 或默认 CI：
+
+```bash
+pnpm eval:skills -- --help
+pnpm eval:skills -- --case propose --version current
+pnpm eval:skills -- --version both --baseline-ref dce2466
+```
+
+可选参数：
+
+- `--case propose|apply|review-plan|review-code`：只运行指定 case，可重复或逗号分隔。
+- `--version baseline|current|both`：比较 `dce2466` 与当前工作树，默认 `both`。
+- `--baseline-ref <git-ref>`：覆盖 baseline。
+- `--output <dir>`：把每个单元和 `summary.json` 写入指定目录。
+- `--keep-temp`：保留 fixture、临时 HOME 与 transcript 路径供排查。
+- `--setup-only`：只构建 baseline source、fixture 和本地 skill，不调用模型。
+
+每个 case/version 使用独立的临时 Git 仓库，被测 skill 安装在项目本地 `.agents/skills/lyx-<command>/`。child `HOME` 指向 fixture，`CODEX_HOME` 只用于复用当前认证；runner 不复制或提交 `auth.json`，报告不写完整环境。
+
+状态语义：
+
+- `passed`：最终 agent 文本满足该 case 的通过条件，且 fixture 副作用符合预期。
+- `failed`：调用完成并产生最终文本，但通过条件、禁止条件或 fixture 副作用不满足。
+- `not-executed`：命令缺失、认证/网络失败、超时、非零退出、最终文本为空或 JSONL 缺少完成事件；不得写成行为通过。
+
+真实执行后，把 baseline/current 状态、关键摘要和结果文件引用回写到四个 `evals/skills/*.md` 的 `Evidence Record`。

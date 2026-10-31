@@ -75,14 +75,14 @@ export function injectHostFragments(content: string, fragmentsDir: string, comma
  * Windows Git Bash requires forward slashes in heredoc (backslashes get escaped).
  * PowerShell and CMD also support forward slashes for most commands.
  */
-export function replaceHomePathsInTemplate(content: string, _installDir: string): string {
+export function replaceHomePathsInTemplate(content: string, _installDir: string, homeDir = homedir()): string {
   // IMPORTANT: Always use forward slashes for cross-platform compatibility
   // Git Bash on Windows requires forward slashes in heredoc (backslashes get escaped)
   // PowerShell and CMD also support forward slashes for most commands
   const toForwardSlash = (path: string) => path.replace(/\\/g, '/')
 
   // 模板中的 ~/ 展开为用户 home（如角色词绝对路径）
-  return content.replace(/~\//g, `${toForwardSlash(homedir())}/`)
+  return content.replace(/~\//g, `${toForwardSlash(homeDir)}/`)
 }
 
 /**

@@ -31,8 +31,8 @@
 
 ## Evidence Record
 
-Baseline: not-executed — pending manual agent run before template modification.
+Baseline: passed — 指出接口契约和可执行验收缺失，在不可自动修复处停止。
 
-Modified: not-executed — pending implementation and final manual agent run.
+Modified: passed — 指出任务缺少接口路径、验证命令和验收口径，按不可自动修影响项停止。
 
-Evidence:
+Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` and `/tmp/lyx-skill-evals-2026-10-31/summary.json`.
