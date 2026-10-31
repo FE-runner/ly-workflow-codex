@@ -1,11 +1,12 @@
 # Run State
 
 - Change: adopt-superpowers-process-practices
-- Stage: review-code-cleared
+- Stage: archived
 - Source branch: main
 - Development branch: codex/superpowers-alignment
-- Last good commit: 5d51e24
-- Next safe action: user-triggered archive
+- Last good commit: 406363c
+- Archive path: openspec/changes/archive/2026-10-31-adopt-superpowers-process-practices
+- Next safe action: branch cleanup confirmation
 
 ## Task Evidence
 
@@ -47,17 +48,22 @@
 
 ## Verification
 
+- final testMode: normal
+- final testMode source: project config
 - `openspec validate --changes adopt-superpowers-process-practices`: exit 0, 1/1 change valid
 - `git diff --check`: exit 0, no whitespace errors
 - `pnpm lint`: exit 0
 - `pnpm typecheck`: exit 0
-- `pnpm test`: exit 0, 25 files / 435 tests passed
-- `pnpm build`: exit 0
+- archive `pnpm test`: exit 0, 25 files / 435 tests passed
+- archive `pnpm typecheck`: exit 0
+- archive `pnpm build`: exit 0
 - `pnpm test -- src/utils/__tests__/host-adapters.test.ts src/utils/__tests__/installer.test.ts`: exit 0; compact main size and references install assertions passed
 - `openspec validate --all --json`: exit 0, 24/24 items valid
 - review-plan unified commit: 02cbd59
 - apply unified commit: 5d51e24
-- review-code unified commit: pending
+- review-code unified commit: 406363c
+- archive unified commit: self (Change-Stage: archive)
+- branch cleanup: pending user confirmation
 
 ## Rulings
 
