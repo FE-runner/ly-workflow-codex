@@ -5,6 +5,7 @@ import { join } from 'pathe'
 import { i18n } from '../../i18n'
 import { sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, sanitizeSpawnableModels, sanitizeTestMode } from '../../utils/config'
 import { listPrefixedDirs } from '../../utils/fs-helpers'
+import { listMissingSkillReferences } from '../../utils/installer-template'
 import { readCodexCurrentModel } from './provider'
 
 // ═══════════════════════════════════════════════════════
@@ -220,6 +221,18 @@ export async function codexDoctorChecks(ctx: HostInspectContext): Promise<HostDo
     label: 'Commands',
     status: cmdCount > 0 ? 'ok' : 'fail',
     detail: `${cmdCount} installed (${ctx.paths.skillsDir}/lyx-*/)`,
+  })
+
+  const skillDirs = await listPrefixedDirs(ctx.paths.skillsDir, 'lyx-')
+  const missingReferences: string[] = []
+  for (const skillDir of skillDirs) {
+    for (const missing of await listMissingSkillReferences(skillDir))
+      missingReferences.push(`${skillDir.split('/').pop()}/${missing}`)
+  }
+  checks.push({
+    label: 'References',
+    status: missingReferences.length === 0 ? 'ok' : 'fail',
+    detail: missingReferences.length === 0 ? 'all required references readable' : missingReferences.join(', '),
   })
 
   const roleDir = join(ctx.paths.promptsDir, 'codex')

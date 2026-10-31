@@ -1,13 +1,22 @@
+import { Buffer } from 'node:buffer'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import fs from 'fs-extra'
 import { afterAll, describe, expect, it } from 'vitest'
 import { renderCodexTemplate } from '../../hosts/codex/adapter'
-import { renderHostCommand } from '../../test-utils/render'
+import { renderHostCommand, renderHostCommandMain, renderHostSkillBundle } from '../../test-utils/render'
 import { ADAPTERS, getAdapter, listRegisteredHosts } from '../host-adapters'
 import { getAllCommandIds, getWorkflowById, installWorkflows, uninstallWorkflows } from '../installer'
+import { parseSkillReferences } from '../installer-template'
+
+function readInstalledSkillBundle(skillDir: string): string {
+  const main = readFileSync(join(skillDir, 'SKILL.md'), 'utf-8')
+  const references = parseSkillReferences(main)
+    .map(reference => readFileSync(join(skillDir, reference), 'utf-8'))
+  return [main, ...references].join('\n\n')
+}
 
 /** 在指定目录初始化一个最小 git 仓库（uninstall worktree 存活检测测试用） */
 function initMainRepo(dir: string): void {
@@ -49,7 +58,8 @@ const SKILLS_TEMPLATES_DIR = join(PACKAGE_ROOT, 'templates', 'skills')
 // ─────────────────────────────────────────────────────────────
 describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
   /** 按该宿主渲染后的命令产物（与安装期同一渲染链） */
-  const read = (file: string) => renderHostCommand(host, file.replace('.md', ''))
+  const readMain = (file: string) => renderHostCommandMain(host, file.replace('.md', ''))
+  const read = (file: string) => renderHostSkillBundle(host, file.replace('.md', ''))
   /** 断言文本中的命令标识按宿主前缀改写（@lyx-<cmd> 是命令标识，见 multi-host-install） */
   const t = (text: string) => text.replace(/@lyx-/g, `${getAdapter(host).commandPrefix}lyx-`)
 
@@ -67,6 +77,29 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       expect(content.startsWith('---\n'), file).toBe(true)
       expect(content, file).toMatch(/^argument-hint: '/m)
       expect(content, file).toMatch(/^description: '/m)
+    }
+  })
+
+  it('long core skills keep a compact main file and declare readable references', () => {
+    for (const command of ['propose', 'review-plan', 'review-code']) {
+      const main = readMain(`${command}.md`)
+      expect(Buffer.byteLength(main, 'utf-8'), command).toBeLessThan(20_000)
+      const refs = parseSkillReferences(main)
+      expect(refs.length, command).toBeGreaterThanOrEqual(2)
+      for (const reference of refs) {
+        expect(reference, command).toMatch(/^references\/.+\.md$/)
+        expect(fs.existsSync(join(PACKAGE_ROOT, 'templates', 'skill-references', command, reference.replace(/^references\//, ''))), `${command}/${reference}`).toBe(true)
+      }
+    }
+  })
+
+  it('core descriptions only describe triggers', () => {
+    const forbidden = ['审查-修复循环', '终止条件', '提交顺序', '自动流水线', 'reviewExecutor', 'spawn']
+    for (const command of ['propose', 'review-plan', 'review-code']) {
+      const description = readMain(`${command}.md`).match(/^description: '(.*)'$/m)?.[1] ?? ''
+      expect(description, command).not.toBe('')
+      for (const fragment of forbidden)
+        expect(description, `${command} contains ${fragment}`).not.toContain(fragment)
     }
   })
 
@@ -421,6 +454,34 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(propose).toContain('用户取消或环境无法交互时停止')
   })
 
+  it('workflow bundles carry run-state, implementer-readiness, debugging and evidence contracts', () => {
+    const propose = read('propose.md')
+    const apply = read('apply.md')
+    const fix = read('fix.md')
+    const archive = read('archive.md')
+    const reviewPlan = read('review-plan.md')
+    const reviewCode = read('review-code.md')
+
+    expect(propose).toContain('Completed tasks: <done>/<total>')
+    expect(propose).toContain('实施就绪')
+    expect(propose).toContain('文件路径或可检索定位锚点')
+
+    expect(apply).toContain('启动恢复（SHALL）')
+    expect(apply).toContain('Ruling: <选择>')
+    expect(apply).toContain('命令 + 退出码 + 结果摘要')
+    expect(apply).toContain('run-state.md')
+
+    expect(reviewPlan).toContain('实施可执行性检查（SHALL）')
+    expect(reviewPlan).toContain('命令 + 退出码 + 结果摘要')
+    expect(reviewCode).toContain('命令 + 退出码 + 结果摘要')
+
+    expect(fix).toContain('连续 3 次修复仍未通过验证')
+    expect(fix).toContain('架构、接口或原方案需要调整')
+    expect(archive).toContain('final testMode')
+    expect(archive).toContain('archive-ready')
+    expect(archive).toContain('命令 + 退出码 + 结果摘要')
+  })
+
   it('apply and archive templates honor no-test mode', () => {
     const apply = read('apply.md')
     expect(apply).toContain('testMode = "off"')
@@ -604,7 +665,7 @@ describe('host-specific role prompt source', () => {
   it.each(RUBRIC_SOURCES)('%s 判级标准在两宿主角色词与共享模板间逐字一致', (_label, codexPath, claudePath, sharedPath) => {
     const codexRubric = rubricSection(readFileSync(join(PACKAGE_ROOT, codexPath), 'utf-8'))
     const claudeRubric = rubricSection(readFileSync(join(PACKAGE_ROOT, claudePath), 'utf-8'))
-    const sharedRubric = rubricSection(readFileSync(join(PACKAGE_ROOT, sharedPath), 'utf-8'))
+    const sharedRubric = rubricSection(renderHostCommand('codex', basename(sharedPath, '.md')))
     expect(claudeRubric).toBe(codexRubric)
     // main 路径不读角色词，判级标准必须同样出现在共享模板里
     expect(sharedRubric).toBe(codexRubric)
@@ -713,7 +774,7 @@ describe('installWorkflows — codex host', () => {
     expect(fs.existsSync(join(codexSkillsDir, 'lyx-apply', 'SKILL.md'))).toBe(true)
 
     // 渲染产物：单审查 subagent（非 fork）编排指示；REVIEW_MODEL 未配置也无 -m/exec 残留；无 wrapper 残留
-    const reviewPlan = readFileSync(join(codexSkillsDir, 'lyx-review-plan', 'SKILL.md'), 'utf-8')
+    const reviewPlan = readInstalledSkillBundle(join(codexSkillsDir, 'lyx-review-plan'))
     expect(reviewPlan).toContain('单审查 subagent')
     expect(reviewPlan).not.toContain('reviewModelB')
     expect(reviewPlan).toContain('/.codex/lyx/prompts/codex/plan-reviewer.md')
@@ -737,7 +798,7 @@ describe('installWorkflows — codex host', () => {
       { hostPaths: { codex: { promptsDir: lyPromptsDir, skillsDir: codexSkillsDir } }, hostConfig: { codex: { reviewModel: 'gpt-5.1-codex' } } },
     )
     expect(result.success).toBe(true)
-    const reviewPlan = readFileSync(join(codexSkillsDir, 'lyx-review-plan', 'SKILL.md'), 'utf-8')
+    const reviewPlan = readInstalledSkillBundle(join(codexSkillsDir, 'lyx-review-plan'))
     // 模型经模板指示 + 宿主 spawn 能力落实：配置的 reviewModel 值以指示文字形式存在于模板，
     // 不出现 codex exec -m 调用形态
     expect(reviewPlan).toContain('reviewModel')

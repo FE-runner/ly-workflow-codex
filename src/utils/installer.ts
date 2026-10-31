@@ -1,10 +1,10 @@
 import type { InstallResult } from '../types'
 import type { HostAdapter, HostAdapterConfig, HostAdapterContext, HostId, HostPaths, HostUninstallReport } from './host-adapters'
 import fs from 'fs-extra'
-import { basename, join } from 'pathe'
+import { basename, join, resolve } from 'pathe'
 import { FALLBACK_HOSTS, getAdapter } from './host-adapters'
 import { getWorkflowById } from './installer-data'
-import { PACKAGE_ROOT, replaceHomePathsInTemplate } from './installer-template'
+import { isPathInside, isSafeSkillReference, listMissingSkillReferences, PACKAGE_ROOT, parseSkillReferences, replaceHomePathsInTemplate } from './installer-template'
 
 // ═══════════════════════════════════════════════════════
 // Re-exports — all consumers import from './installer'
@@ -97,12 +97,72 @@ async function installCommandFiles(
 
       try {
         if (await fs.pathExists(srcFile)) {
+          const sourceContent = await fs.readFile(srcFile, 'utf-8')
+          const declaredReferences = parseSkillReferences(sourceContent)
           if (ctx.force || !(await fs.pathExists(destFile))) {
-            let content = await fs.readFile(srcFile, 'utf-8')
-            content = adapter.renderTemplate(content, ctx, cmd)
+            let content = adapter.renderTemplate(sourceContent, ctx, cmd)
             content = replaceHomePathsInTemplate(content, ctx.installDir)
-            await fs.ensureDir(destDir)
-            await fs.writeFile(destFile, content, 'utf-8')
+            const renderedReferences: Array<{ reference: string, content: string }> = []
+            const referencesSourceDir = target.referencesSourceDir
+            for (const reference of declaredReferences) {
+              if (!isSafeSkillReference(destDir, reference))
+                throw new Error(`Invalid skill reference declaration for ${cmd}: ${reference}`)
+              if (!referencesSourceDir)
+                throw new Error(`Skill references source dir missing for ${cmd}: ${reference}`)
+
+              const sourceRoot = resolve(referencesSourceDir, cmd)
+              const relativeReference = reference.slice('references/'.length)
+              const srcReference = resolve(sourceRoot, relativeReference)
+              if (!isPathInside(sourceRoot, srcReference))
+                throw new Error(`Skill reference escapes source root for ${cmd}: ${reference}`)
+              try {
+                if (!(await fs.stat(srcReference)).isFile())
+                  throw new Error(`Skill reference template is not a file for ${cmd}: ${srcReference}`)
+              }
+              catch (error) {
+                if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+                  throw new Error(`Skill reference template missing for ${cmd}: ${srcReference}`)
+                throw error
+              }
+              let referenceContent = await fs.readFile(srcReference, 'utf-8')
+              referenceContent = adapter.renderTemplate(referenceContent, ctx, cmd)
+              referenceContent = replaceHomePathsInTemplate(referenceContent, ctx.installDir)
+              renderedReferences.push({ reference, content: referenceContent })
+            }
+
+            const tempDir = await fs.mkdtemp(join(target.targetDir, `.${filePrefix}${cmd}-`))
+            try {
+              await fs.writeFile(join(tempDir, 'SKILL.md'), content, 'utf-8')
+              for (const rendered of renderedReferences) {
+                const destReference = join(tempDir, rendered.reference)
+                await fs.ensureDir(join(destReference, '..'))
+                await fs.writeFile(destReference, rendered.content, 'utf-8')
+              }
+              const missingReferences = await listMissingSkillReferences(tempDir)
+              if (missingReferences.length > 0)
+                throw new Error(`Installed skill references missing for ${cmd}: ${missingReferences.join(', ')}`)
+
+              const backupDir = `${destDir}.backup-${process.pid}-${Date.now()}`
+              const hadDestination = await fs.pathExists(destDir)
+              if (hadDestination)
+                await fs.move(destDir, backupDir)
+              try {
+                await fs.move(tempDir, destDir)
+                if (hadDestination)
+                  await fs.remove(backupDir)
+              }
+              catch (error) {
+                await fs.remove(destDir)
+                if (hadDestination)
+                  await fs.move(backupDir, destDir)
+                throw error
+              }
+            }
+            catch (error) {
+              await fs.remove(tempDir)
+              throw error
+            }
+
             ctx.result.installedCommands.push(cmd)
           }
           else {

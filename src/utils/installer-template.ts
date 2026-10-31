@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import fs from 'fs-extra'
-import { dirname, join } from 'pathe'
+import { dirname, isAbsolute, join, relative, resolve } from 'pathe'
 import { ISSUES_URL } from './package-meta'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -83,4 +83,86 @@ export function replaceHomePathsInTemplate(content: string, _installDir: string)
 
   // 模板中的 ~/ 展开为用户 home（如角色词绝对路径）
   return content.replace(/~\//g, `${toForwardSlash(homedir())}/`)
+}
+
+/**
+ * 从 SKILL.md frontmatter 中解析 `references:` 字符串列表。
+ * 仅接受简单 YAML block list；路径必须位于 `references/` 下，阻止目录穿越。
+ */
+export function parseSkillReferences(content: string): string[] {
+  const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!frontmatter)
+    return []
+
+  const lines = frontmatter[1].split(/\r?\n/)
+  const refs: string[] = []
+  let inReferences = false
+  for (const line of lines) {
+    if (/^references\s*:\s*$/.test(line)) {
+      inReferences = true
+      continue
+    }
+    if (!inReferences)
+      continue
+    const trimmedStart = line.trimStart()
+    if (trimmedStart !== line && trimmedStart.startsWith('- ')) {
+      refs.push(trimmedStart.slice(2).trim().replace(/^['"]|['"]$/g, ''))
+      continue
+    }
+    if (!/^\s/.test(line))
+      break
+  }
+  return refs
+}
+
+export function isValidSkillReference(reference: string): boolean {
+  return reference.startsWith('references/')
+    && reference.endsWith('.md')
+    && !reference.includes('\\')
+    && !reference.includes('\0')
+    && !reference.split('/').includes('..')
+    && reference.length > 'references/'.length
+}
+
+/** 解析后目标必须仍位于指定根目录内。 */
+export function isPathInside(root: string, target: string): boolean {
+  const rel = relative(resolve(root), resolve(target))
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+export function isSafeSkillReference(skillDir: string, reference: string): boolean {
+  return isValidSkillReference(reference) && isPathInside(skillDir, resolve(skillDir, reference))
+}
+
+/** 返回安装目录中无效或缺失的 frontmatter references；主 SKILL.md 缺失时一并报告。 */
+export async function listMissingSkillReferences(skillDir: string): Promise<string[]> {
+  const skillFile = join(skillDir, 'SKILL.md')
+  try {
+    if (!(await fs.stat(skillFile)).isFile())
+      return ['SKILL.md']
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      return ['SKILL.md']
+    throw error
+  }
+  const refs = parseSkillReferences(await fs.readFile(skillFile, 'utf-8'))
+  const missing: string[] = []
+  for (const reference of refs) {
+    if (!isSafeSkillReference(skillDir, reference)) {
+      missing.push(reference)
+      continue
+    }
+    try {
+      if (!(await fs.stat(join(skillDir, reference))).isFile())
+        missing.push(reference)
+    }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+        missing.push(reference)
+      else
+        throw error
+    }
+  }
+  return missing
 }
