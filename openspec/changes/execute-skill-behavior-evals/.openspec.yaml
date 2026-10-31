@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-10-31
+lyx:
+  isolation: branch
+  sourceBranch: main
+  developmentBranch: codex/run-skill-evals
+  worktreePath: null
