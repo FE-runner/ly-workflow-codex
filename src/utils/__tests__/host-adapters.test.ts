@@ -218,6 +218,21 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(init).toContain('root.path')
   })
 
+  it('propose syncs the current session title immediately after the change name is confirmed', () => {
+    const propose = read('propose.md')
+    expect(propose).toContain('真实 change 名（需求名）一经确认')
+    expect(propose).toContain('标题文本使用 `<change-name>` 原值')
+    expect(propose).toContain('标题同步是附属动作')
+    expect(propose).toContain('SHALL NOT 伪造成功')
+    expect(propose).toContain('SHALL NOT 因标题同步失败中断 propose')
+    expect(propose.indexOf('确定真实 change 名')).toBeLessThan(propose.indexOf('标题同步是附属动作'))
+    expect(propose.indexOf('标题同步是附属动作')).toBeLessThan(propose.indexOf('### 5. 方案自审'))
+    if (host === 'codex')
+      expect(propose).toContain('`set_thread_title`')
+    else
+      expect(propose).toContain('`/rename <change-name>`')
+  })
+
   it('only the propose template gates review gates by reviewMode (review/apply/archive stay config-independent)', () => {
     const propose = read('propose.md')
     expect(propose).toContain('reviewMode')

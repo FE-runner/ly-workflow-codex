@@ -30,6 +30,24 @@
 - **WHEN** 委托完成后快照比对发现新增条目不唯一（或没有新增条目）
 - **THEN** 命令 SHALL NOT 继续猜测，直接询问用户本次生成的 change 名，待用户确认后再继续后续步骤
 
+### Requirement: change 名确认后同步当前会话标题
+
+`/ly:propose` SHALL 在真实 change 名（需求名）一经确定后、进入方案自审之前，立即把当前会话标题同步为 `<change-name>` 原值。宿主提供可由当前模型调用的会话标题工具时，SHALL 直接调用该工具（Codex desktop 为 `set_thread_title`）；Claude Code 当前版本仅提供用户侧 `/rename <name>` 命令时，SHALL 在同一轮立即向用户展示精确的重命名命令并明确其尚未执行，SHALL NOT 声称已自动改名。
+
+标题同步是附属动作。工具不可用、调用失败或宿主只提供用户侧命令时，SHALL 如实报告实际状态并继续 propose；SHALL NOT 伪造成功，也 SHALL NOT 因标题同步失败中断方案生成、自审或 commit。
+
+#### Scenario: Codex 直接重命名当前会话
+- **WHEN** `/ly:propose` 确定真实 change 名为 `add-session-title-sync`，当前 Codex 会话提供 `set_thread_title` 工具
+- **THEN** 在方案自审之前调用该工具把标题设为 `add-session-title-sync`，并继续后续流程
+
+#### Scenario: Claude Code 当前版本需要用户执行重命名
+- **WHEN** `/ly:propose` 确定真实 change 名为 `add-session-title-sync`，当前 Claude Code 会话没有可由模型调用的会话标题工具
+- **THEN** 在同一轮立即提示用户执行 `/rename add-session-title-sync`，不得声称已改名，并继续方案流程
+
+#### Scenario: 标题同步失败不阻断 propose
+- **WHEN** 会话标题工具不可用或调用返回错误
+- **THEN** 如实报告失败和原始原因，继续方案自审与后续 commit，不得伪造标题已更新
+
 ### Requirement: 产物生成后、commit 前执行方案自审（四项检查 + 两类发现处理）
 `/ly:propose` SHALL 在确定真实 change 名之后、执行 `propose: <change-name>` commit 之前，由方案提出者（当前会话，即 Codex 本人）对该 change 的全部 artifacts（proposal.md/design.md/tasks.md/全部 delta spec）执行一次**方案自审**。自审 SHALL 包含四项检查：
 

@@ -56,7 +56,7 @@ lyx:
 |------|------|
 | `@lyx-init` | 生成项目 AGENTS.md + 初始化 OpenSpec 目录结构 + 自动 commit |
 | `@lyx-explore` | 想清楚再动手（委托 `@openspec-explore skill`）；委托前扫描 `review-findings.md` 审查未修项快照，有命中则**先询问**再列出；收敛到方案时按规模提示转 `@lyx-fix`（小改动）或 `@lyx-propose` |
-| `@lyx-propose` | 创建方案前问一次隔离方式（三选一：隔离 worktree【从当前分支 HEAD 切出、同会话 cd 续跑，续接命令为异常兜底】/ 本项目切新分支【仅分支隔离，脏改动三选处置】/ 留在当前分支）+ 问"全自动/手动" → 委托 `@openspec-propose skill` → 记录 sourceBranch/developmentBranch/worktreePath metadata → 按风险测试策略生成 spec/tasks 并方案自审（四项检查 + 逐项结论清单；核心断链直接修、业务判断类问用户）→ commit `propose: <change>`；全自动 = review-plan → apply → review-code 流水线，手动 = 逐步确认 |
+| `@lyx-propose` | 创建方案前问一次隔离方式（三选一：隔离 worktree【从当前分支 HEAD 切出、同会话 cd 续跑，续接命令为异常兜底】/ 本项目切新分支【仅分支隔离，脏改动三选处置】/ 留在当前分支）+ 问"全自动/手动" → 委托 `@openspec-propose skill` → 记录 sourceBranch/developmentBranch/worktreePath metadata → 真实 change 名确认后同步当前会话标题（Codex 直接调用标题工具；Claude Code 提示 `/rename <change-name>`）→ 按风险测试策略生成 spec/tasks 并方案自审（四项检查 + 逐项结论清单；核心断链直接修、业务判断类问用户）→ commit `propose: <change>`；全自动 = review-plan → apply → review-code 流水线，手动 = 逐步确认 |
 | `@lyx-apply` | **按 `codingExecutor` 实施**：`main`（默认）= 主 agent 直接读 tasks.md 逐任务实施 + 验证 + 勾 checkbox；`subagent` = spawn coding subagent（非 fork，经 context.md 获取软上下文 + 只实施 change 范围，模型按 `codingModel`）。两条路径均由主会话确认后回写 context.md 并统一 commit `apply: <change>`；subagent 路径环境级不可用回退主 agent，业务失败转人工 |
 | `@lyx-fix` | 小需求 / bug 轻量路径：不建 change；spec 分流（A 代码对齐 spec / B 同一 commit 就地改主 spec / C 转 `@lyx-propose`）→ 按风险测试策略实施与验证（逻辑 bug 先红后绿，纯展示可免新增测试）→ 主 agent 一轮五项自审 → 最终验证门禁 → B 类提交前确认 → 单个 commit（无 Change trailer） |
 | `@lyx-archive` | 归档完成的 change（委托 `@openspec-archive-change skill`）+ 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |

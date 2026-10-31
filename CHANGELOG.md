@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- `@lyx-propose` 在真实 change 名（需求名）确认后立即同步当前会话标题；Codex 直接调用会话标题工具，Claude Code 当前版本提示用户执行 `/rename <change-name>`，同步失败不阻断方案流程
+
 ## [0.13.0] - 2026-10-22
 
 测试模式从宿主级开关扩展为支持项目覆盖与 change 级运行时询问，并打通 fix / propose / apply / review / archive 全流程。

@@ -97,6 +97,12 @@ argument-hint: '<需求描述>'
 
 调用前记录一次 `openspec list --json` 的候选 change 名集合（快照 A，若步骤 3 之前尚未记录则在生成前先记录）；生成完成后再查询一次（快照 B）。取快照 B 相对快照 A 新增的那一条作为本次实际生成的 change 名。**不依赖 `参数`、不单纯依赖全局 `lastModified` 最新一条**——opsx:propose 会把用户输入的原始描述转成 kebab-case slug，两者不保证一致。若新增条目不唯一，或没有新增条目，**不猜测**，直接询问用户本次生成的 change 名，待确认后再继续。
 
+真实 change 名（需求名）一经确认，SHALL 在进入步骤 5 前立即同步当前会话标题，标题文本使用 `<change-name>` 原值：
+
+{{HOST_FRAGMENT:session-title}}
+
+标题同步是附属动作：失败或宿主不提供自动调用能力时，SHALL 如实报告实际状态并继续方案流程，SHALL NOT 伪造成功，也 SHALL NOT 因标题同步失败中断 propose。
+
 ### 5. 方案自审（commit 前，由方案提出者执行）
 
 在确定真实 change 名（步骤 4）之后、暂存并 commit（步骤 6）之前，由当前会话（方案提出者）对该 change 的全部 artifacts（`proposal.md`/`design.md`/`tasks.md`/全部 delta spec）执行一次**方案自审**。提出者刚完成方案生成、上下文最全，负责查"逻辑闭环"与"业务全面性"这两类依赖上下文的问题；独立视角的"一致性 + 风险"仍归 `@lyx-review-plan` 的外部审查（职责分工，不重复）。

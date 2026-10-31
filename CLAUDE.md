@@ -32,7 +32,7 @@ lycx uninstall [--host <hosts>]             # 按宿主卸载（缺省 = 全部�
 |------|-----------|
 | `@lyx-init` | 生成项目 AGENTS.md（Claude Code 下额外产出导入它的 `CLAUDE.md`）+ `lycx openspec ensure --host <当前宿主>`（共享 CLI/skills/root 修复）+ 自动 commit |
 | `@lyx-explore` | 委托 `@openspec-explore skill`；委托前扫描 `review-findings.md` 审查未修项快照，有命中则先询问是否列出（纯薄壳 + 一次快照询问）；收敛时按规模提示 `@lyx-fix` / `@lyx-propose` |
-| `@lyx-propose` | 编排入口：隔离三选一 → 全自动/手动 → `@openspec-propose skill` → 记录 isolation metadata → 按风险测试策略生成 spec/tasks 与方案自审 → context.md 产出 → commit `propose:`；全自动 = review-plan → apply → review-code 流水线 |
+| `@lyx-propose` | 编排入口：隔离三选一 → 全自动/手动 → `@openspec-propose skill` → 记录 isolation metadata → change 名确认后同步会话标题 → 按风险测试策略生成 spec/tasks 与方案自审 → context.md 产出 → commit `propose:`；全自动 = review-plan → apply → review-code 流水线 |
 | `@lyx-apply` | 按 `codingExecutor` 实施（`main` = 主 agent 直接实施；`subagent` = spawn coding subagent，非 fork，经 context.md 获取软上下文）读 tasks.md 逐任务实施 + 验证 + 勾 checkbox，主会话确认后回写 context.md 并 commit `apply:` |
 | `@lyx-fix` | 小需求 / bug 轻量路径：不建 change，spec 分流（A 对齐 / B 就地改主 spec / C 转 propose）→ 按风险测试策略实施与验证（逻辑 bug 先红后绿，纯展示可免新增测试）→ 主 agent 五项自审 → 验证门禁 → B 类确认 → 单 commit（无 Change trailer） |
 | `@lyx-archive` | 委托 `@openspec-archive-change skill` + 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
