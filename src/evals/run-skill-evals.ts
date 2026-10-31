@@ -432,6 +432,9 @@ function runChild(command: string, args: string[], options: { cwd: string, env: 
     let timedOut = false
     let spawnError: string | undefined
     let child: ChildProcess
+    let closeInfo: { exitCode: number | null } | undefined
+    let killPromise = Promise.resolve()
+    let settled = false
 
     try {
       child = spawn(command, args, {
@@ -474,10 +477,6 @@ function runChild(command: string, args: string[], options: { cwd: string, env: 
       closeInfo = { exitCode }
       void finish()
     })
-
-    let closeInfo: { exitCode: number | null } | undefined
-    let killPromise = Promise.resolve()
-    let settled = false
 
     async function finish(): Promise<void> {
       if (settled || !closeInfo)

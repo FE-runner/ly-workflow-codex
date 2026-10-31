@@ -5,7 +5,7 @@
 - Source branch: main
 - Development branch: codex/run-skill-evals
 - Last good commit: 1d34e84
-- Next safe action: review-code 已清零，等待归档前完整验证
+- Next safe action: 等待用户决定是否归档
 
 ## Task Evidence
 
@@ -57,7 +57,7 @@
 - 标注覆盖: Warning 2/3 原 `可自动修复=否` 覆盖为 `是`；理由：进程树终止与持久结果目录均有确定平台策略/清晰缺陷事实，无需产品决策
 - Review rounds: 3
 - Termination type: normal
-- Review fix commit: 待统一提交归属
+- Review fix commit: `b839fe8`
 
 ## Verification
 
@@ -75,6 +75,7 @@
 - `pnpm eval:skills -- --case review-code --version current --output /tmp/lyx-skill-evals-smoke`: exit 0，1/1 passed
 - Apply 启动快照：`94c93bb` 后工作区 clean；当前改动均为本阶段产出，未发现预存 dirty 重叠
 - Review-code Round 3 复核：`git diff --check` exit 0；审查代理执行 `pnpm exec tsc --noEmit --pretty false` exit 0；按 review-code 契约未运行 Vitest/build/真实 eval
+- Post-review verification: `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm build` 全部 exit 0；452 tests passed；`openspec validate --all` 27/27 valid；随后修复 lint 声明顺序并再次全门禁通过
 
 ## Rulings
 
