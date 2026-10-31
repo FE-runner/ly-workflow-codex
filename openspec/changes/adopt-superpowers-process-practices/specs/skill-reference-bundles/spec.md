@@ -16,14 +16,18 @@
 - **THEN** 命令停止并报告缺失路径，不得在缺少规则的情况下继续执行关键关卡
 
 ### Requirement: skill description 只描述触发条件
-核心 skill 的 frontmatter `description` SHALL 描述何时使用该 skill、覆盖哪些用户触发条件和不适用边界，SHALL NOT 概括完整执行流程、审查轮次、提交顺序或宿主实现细节。完整流程 SHALL 只在主 `SKILL.md` 正文和 references 中定义。
+核心 skill 的 frontmatter `description` SHALL 描述何时使用该 skill、覆盖哪些用户触发条件和不适用边界，SHALL NOT 概括完整执行流程、审查轮次、提交顺序或宿主实现细节。完整流程 SHALL 只在主 `SKILL.md` 正文和 references 中定义。三个超限 skill 的渲染后 description SHALL NOT 包含固定禁止片段：`审查-修复循环`、`终止条件`、`提交顺序`、`自动流水线`、`reviewExecutor`、`spawn`。
 
 #### Scenario: 用户触发 propose
 - **WHEN** agent 只读 skill description 决定是否加载
 - **THEN** 它能判断“需要创建完整 OpenSpec change”时使用 propose，但不会从 description 获得可替代正文的简化流程
 
 ### Requirement: 安装器复制并渲染 sidecar references
-安装器 SHALL 在安装带 references 的 skill 时，把该 skill 的全部 reference 文件复制到目标 skill 目录内，并以与主 `SKILL.md` 相同的宿主变量和片段渲染规则处理。安装后校验 SHALL 检查主文件声明的必需 reference 是否存在且可读；缺失 SHALL 报告安装错误，SHALL NOT 静默安装部分 skill。无 references 的既有 skill SHALL 继续按单 `SKILL.md` 方式安装。
+主 `SKILL.md` frontmatter SHALL 使用 `references:` 字符串列表声明 required references，路径相对 skill 根目录。安装器 SHALL 以该列表为唯一 required-reference 契约，把列出文件从对应源目录渲染并复制到目标 skill 目录内，以与主 `SKILL.md` 相同的宿主变量和片段规则处理。未在列表中声明的 source 文件 SHALL NOT 被安装。安装后校验 SHALL 检查列表中的每个 reference 是否存在且可读；缺失 SHALL 报告安装错误，SHALL NOT 静默安装部分 skill。无 `references:` 列表的既有 skill SHALL 继续按单 `SKILL.md` 方式安装。force 更新 SHALL 以当前 `references:` 列表为唯一基准清理目标 `references/` 中不再声明的旧文件。
+
+#### Scenario: frontmatter 声明 required reference
+- **WHEN** review-code 主文件声明 `references/review-loop.md`
+- **THEN** installer、verify、doctor 和 host-adapters 测试都按同一路径检查，不从正文散落的路径文本推断
 
 #### Scenario: 双宿主安装 review-code
 - **WHEN** codex 与 claude 宿主分别安装 `review-code`

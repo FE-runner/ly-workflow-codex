@@ -12,7 +12,7 @@
 - **THEN** run-state 记录阶段为 propose commit 已完成，并给出下一步审查或 apply 入口
 
 ### Requirement: run-state 在阶段转换和验证后更新
-propose、apply、review-plan、review-code 和 archive SHALL 在阶段开始或结束时更新 `run-state.md`。每完成一个任务或一轮审查，SHALL 记录实际 commit、命令、退出码、关键结果和涉及的未决项；更新 SHALL 是增量或幂等的，SHALL NOT 删除既有证据。无状态变化的阶段 MAY 保持文件不变，SHALL NOT 为凑更新制造空内容。
+propose、apply、review-plan、review-code 和 archive SHALL 在阶段开始或结束时更新 `run-state.md`。每完成一个任务或一轮审查，SHALL 记录最近可用基线 commit、检查命令、退出码、关键结果和未决项；当工作尚未进入阶段统一 commit 时 SHALL 标记“待本次阶段提交归属”，统一 commit 成功后 SHALL 在同一生命周期的下一次允许更新中回填 SHA。该规则 SHALL NOT 要求每个任务或每轮审查新增独立 commit。更新 SHALL 是增量或幂等的，SHALL NOT 删除既有证据。无状态变化的阶段 MAY 保持文件不变，SHALL NOT 为凑更新制造空内容。
 
 #### Scenario: review-plan 正常清零
 - **WHEN** 某轮 review-plan 以 Critical 为 0 且所有影响落地 Warning 已解决结束

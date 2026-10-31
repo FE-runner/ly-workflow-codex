@@ -22,7 +22,17 @@
 
 ### D1：references 使用独立共享源目录
 
-新增 `templates/skill-references/<command>/` 作为 sidecar 源。安装器根据命令把其中所有 Markdown 文件渲染后复制到 `<skillsDir>/lyx-<command>/references/`。主 `SKILL.md` 使用相对路径引用，例如“执行审查循环前读取 `references/review-loop.md`”。
+新增 `templates/skill-references/<command>/` 作为 sidecar 源，安装目标为 `<skillsDir>/lyx-<command>/references/<file>.md`。主 `SKILL.md` frontmatter 增加机器可判定的 `references:` 字符串列表，路径相对 skill 根目录，例如：
+
+```yaml
+references:
+  - references/review-loop.md
+  - references/snapshot-and-report.md
+```
+
+安装器以该列表为唯一 required-reference 契约：解析 frontmatter 后逐项渲染并复制；不在列表中的源文件 SHALL NOT 被安装。安装后校验逐项存在，`doctor` 以同一列表报告缺失。force 更新时先按当前源目录同步目标 `references/`，删除目标中不再由当前列表声明的旧文件。主 `SKILL.md` 正文在对应步骤用相对路径要求读取这些文件。
+
+`HostTemplateTarget` SHALL 增加可选字段 `referencesSourceDir?: string`，值为 `templates/skill-references` 根目录。声明 `references/review-loop.md` 时，installer 按 `<referencesSourceDir>/<command>/review-loop.md` 查找源，按 `<targetDir>/<filePrefix><command>/references/review-loop.md` 写入目标。codex 与 claude adapter 使用同一映射，不各自推断。
 
 选择原因：不改动 `templates/skills/` 的“一命令一 Markdown 文件”注册假设，不增加新命令，也避免把 references 当作可安装 skill。替代方案是把 `templates/skills/<command>/SKILL.md` 改成目录结构，但会迫使安装器、打包测试和模板断言全面迁移，收益不足。
 
@@ -30,11 +40,14 @@
 
 本次只拆 `propose`、`review-plan`、`review-code`。共享逻辑优先抽出：
 
-- `propose/references/isolation-and-commit.md`
-- `propose/references/review-pipeline.md`
-- `review-*/references/review-loop.md`
-- `review-*/references/snapshot-and-report.md`
-- `review-*/references/host-protocol.md`
+- `templates/skill-references/propose/isolation-and-commit.md`
+- `templates/skill-references/propose/review-pipeline.md`
+- `templates/skill-references/review-plan/review-loop.md`
+- `templates/skill-references/review-plan/snapshot-and-report.md`
+- `templates/skill-references/review-plan/host-protocol.md`
+- `templates/skill-references/review-code/review-loop.md`
+- `templates/skill-references/review-code/snapshot-and-report.md`
+- `templates/skill-references/review-code/host-protocol.md`
 
 主文件保留：何时触发、目标和前置检查、阶段入口、何时读取哪个 reference、终态输出。references 单文件不设 20 KB 上限，因为它们不随会话启动自动加载。
 
@@ -44,7 +57,7 @@
 
 ### D4：行为评测先采用 Markdown 场景与证据记录
 
-新增 `evals/skills/README.md` 和四个核心 skill 的场景文件。每个场景包含：
+新增 `evals/skills/README.md`、`evals/skills/propose.md`、`evals/skills/apply.md`、`evals/skills/review-plan.md`、`evals/skills/review-code.md`。每个场景包含：
 
 - 前置仓库与配置
 - 用户请求
@@ -54,7 +67,7 @@
 - 通过/失败判定
 - 基线行为与修改后证据
 
-本次不新增 agent API runner：真实模型调用成本高、输出非确定，且会引入新的外部依赖。先让维护者能在 Codex / Claude Code 中手工复跑，并要求高风险模板变更提交证据。未来可在此格式之上增加脚本化 runner。
+本次不新增 agent API runner：真实模型调用成本高、输出非确定，且会引入新的外部依赖。先让维护者能在 Codex / Claude Code 中手工复跑，并要求高风险模板变更提交证据。未执行场景必须在 run-state 写“未执行 + 原因”，不得以文本断言冒充通过。未来可在此格式之上增加脚本化 runner。
 
 ### D5：run-state 作为受版本控制的 change artifact
 
@@ -73,6 +86,20 @@
 - Next safe action:
 
 ## Task Evidence
+
+- Completed tasks: <done>/<total>
+
+## Baseline Eval
+
+- <skill>: passed|failed|not-executed — <summary>
+
+## Modified Eval (intermediate)
+
+- <skill>: passed|failed|not-executed — <summary>
+
+## Modified Eval (final)
+
+- <skill>: passed|failed|not-executed — <summary>
 
 ## Review State
 
