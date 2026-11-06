@@ -8,11 +8,11 @@ run-state 是恢复与证据输入，不是实现代码；不得对它提出源�
 
 ## Review State
 
-每轮结束更新 run-state：
+每轮结束更新 run-state，续写时沿用 `run-state.md` 现有语言：
 
 ```text
-Round <n>: <Critical count> Critical, <Warning count> Warning; <accepted/rejected summary>
-Termination type: normal | circuit-breaker | rejection-hardline | unsafe | failed | round-limit | in-progress
+第 <n> 轮：<Critical 数> 个 Critical，<Warning 数> 个 Warning；<认可/驳回摘要>
+终止类型：normal | circuit-breaker | rejection-hardline | unsafe | failed | round-limit | in-progress
 ```
 
 统一 commit 尚未形成时写“待统一提交归属”，成功后在下一次允许更新中回填 SHA。

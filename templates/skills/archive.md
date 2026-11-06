@@ -22,7 +22,7 @@ argument-hint: '[<change-name>]'
 
 配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失视为决策缺失；`lyx` 非 mapping，或 `testModeDecision` 存在且既不是 string 也不是 null 时结构非法并停止；`null`、空白或非法字符串视为缺失；合法 `normal` / `off` 直接沿用。决策缺失时询问一次并写入 `lyx.testModeDecision`，保留其他字段；用户取消或环境无法交互时停止，不执行验证或归档。
 
-确定最终模式后，SHALL 把 `final testMode` 及来源（项目配置 / 宿主默认 / change 元数据）写入 `run-state.md`，并把阶段更新为 `verifying`。
+确定最终模式后，SHALL 把 `final testMode` 及来源（项目配置 / 宿主默认 / change 元数据）写入 `run-state.md`，并把阶段更新为 `verifying`。写入时沿用 `run-state.md` 现有语言，不得无理由切换为英文。
 
 - 最终模式为 `normal`：对当前工作区执行一次项目完整验证，覆盖测试 / 类型检查 / 构建三类。
 - 最终模式为 `testMode = "off"`：跳过测试类别，仍执行类型检查 / 构建，并在报告中明确注明“testMode=off，测试已跳过”；来源为配置时注明宿主默认或项目配置来源，来源为 `ask` 决策时注明“最终决策来自 change 元数据”。

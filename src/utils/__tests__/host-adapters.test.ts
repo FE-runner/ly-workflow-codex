@@ -462,12 +462,12 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     const reviewPlan = read('review-plan.md')
     const reviewCode = read('review-code.md')
 
-    expect(propose).toContain('Completed tasks: <done>/<total>')
+    expect(propose).toContain('已完成任务: <done>/<total>')
     expect(propose).toContain('实施就绪')
     expect(propose).toContain('文件路径或可检索定位锚点')
 
     expect(apply).toContain('启动恢复（SHALL）')
-    expect(apply).toContain('Ruling: <选择>')
+    expect(apply).toContain('裁决：<选择>')
     expect(apply).toContain('命令 + 退出码 + 结果摘要')
     expect(apply).toContain('run-state.md')
 

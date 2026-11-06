@@ -7,11 +7,15 @@
 ## Requirements
 
 ### Requirement: 每个活跃 change 维护 run-state.md
-`@lyx-propose` SHALL 在 change 目录下创建 `run-state.md`，并随 propose 阶段 commit 提交。文件 SHALL 至少记录 change 名、当前阶段、基线或最后成功 commit、已完成任务比例、最近审查轮次与终止类型、验证证据、机械裁决和下一步安全动作。`run-state.md` SHALL 与 `context.md` 分离：`context.md` 保存讨论语义和取舍背景，`run-state.md` 只保存可恢复执行状态。
+`@lyx-propose` SHALL 在 change 目录下创建 `run-state.md`，并随 propose 阶段 commit 提交。文件 SHALL 至少记录 change 名、当前阶段、基线或最后成功 commit、已完成任务比例、最近审查轮次与终止类型、验证证据、机械裁决和下一步安全动作。run-state.md 的标题、字段名、状态说明和证据摘要 SHALL 使用当前宿主配置中 `[general].language` 对应的自然语言（缺失、空白或非法时按 `zh-CN`）；`@lyx-apply`、review-plan、review-code 与 archive 续写时 SHALL 沿用该文件现有语言。`run-state.md` SHALL 与 `context.md` 分离：`context.md` 保存讨论语义和取舍背景，`run-state.md` 只保存可恢复执行状态。
 
 #### Scenario: propose 完成
 - **WHEN** change artifacts、context.md 与方案自审完成
 - **THEN** run-state 记录阶段为 propose commit 已完成，并给出下一步审查或 apply 入口
+
+#### Scenario: zh-CN 宿主生成中文运行账本
+- **WHEN** 当前宿主配置的 `[general].language` 为 `zh-CN`
+- **THEN** run-state 使用中文标题、字段名和状态说明，代码标识符、命令和必要的技术状态值可保留英文
 
 ### Requirement: run-state 在阶段转换和验证后更新
 propose、apply、review-plan、review-code 和 archive SHALL 在阶段开始或结束时更新 `run-state.md`。每完成一个任务或一轮审查，SHALL 记录最近可用基线 commit、检查命令、退出码、关键结果和未决项；当工作尚未进入阶段统一 commit 时 SHALL 标记“待本次阶段提交归属”，统一 commit 成功后 SHALL 在同一生命周期的下一次允许更新中回填 SHA。该规则 SHALL NOT 要求每个任务或每轮审查新增独立 commit。更新 SHALL 是增量或幂等的，SHALL NOT 删除既有证据。无状态变化的阶段 MAY 保持文件不变，SHALL NOT 为凑更新制造空内容。

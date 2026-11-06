@@ -48,6 +48,13 @@
 - **WHEN** 会话标题工具不可用或调用返回错误
 - **THEN** 如实报告失败和原始原因，继续方案自审与后续 commit，不得伪造标题已更新
 
+### Requirement: change artifacts 的自然语言跟随宿主配置语言
+`@lyx-propose` 在生成 change artifacts 前 SHALL 读取当前宿主 `[general].language`（缺失、空白或非法时按 `zh-CN`），并让 proposal.md、design.md、tasks.md、delta spec、context.md 与 run-state.md 的标题、说明、决策、任务、场景和验收描述使用对应自然语言。OpenSpec schema 要求的栏目结构 SHALL 保留，但栏目标题和自然语言内容 SHALL 按配置语言表达；代码标识符、命令、路径、错误原文和必要技术术语 MAY 保留英文。该规则 SHALL NOT 因 OpenSpec 默认模板为英文而生成全英文正文。
+
+#### Scenario: zh-CN 宿主生成中文方案
+- **WHEN** 当前宿主 `[general].language` 为 `zh-CN`，用户运行 `@lyx-propose`
+- **THEN** proposal/design/tasks/delta spec/context/run-state 的标题与自然语言正文均为中文，技术标识符和命令可保留英文
+
 ### Requirement: 产物生成后、commit 前执行方案自审（四项检查 + 两类发现处理）
 `/ly:propose` SHALL 在确定真实 change 名之后、执行 `propose: <change-name>` commit 之前，由方案提出者（当前会话，即 Codex 本人）对该 change 的全部 artifacts（proposal.md/design.md/tasks.md/全部 delta spec）执行一次**方案自审**。自审 SHALL 包含四项检查：
 

@@ -73,6 +73,8 @@
 
 读取 `@openspec-propose skill`（opsx propose 编排 prompt）并按其定义的完整流程，围绕 `参数`（需求描述）生成 proposal/design/tasks 全部 artifacts。生成过程中遵循该编排 prompt 的全部步骤与约束（本命令的步骤 4-9 在其后继续编排）。
 
+**产物语言（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 的 `[general].language`（缺失、空白或非法时按 `zh-CN`）。proposal.md、design.md、tasks.md、delta spec、context.md 与 run-state.md 的标题、说明、决策、任务、场景和验收描述 SHALL 使用该语言；`zh-CN` 用中文，`en` 用英文。OpenSpec 提供的模板栏目结构必须保留，但栏目标题和自然语言内容要按配置语言表达；代码标识符、命令、路径、错误原文和必要技术术语 MAY 保留英文。该规则同样约束方案自审对 artifacts 的修改与后续各阶段对 run-state.md 的续写，SHALL NOT 因 OpenSpec 默认模板是英文而生成英文正文。
+
 **测试模式与风险策略适配（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时停止并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
 
 配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时，新 change 尚无 `.openspec.yaml`，SHALL 在生成 artifacts 前询问一次：`normal` 表示写测试、跑测试；`off` 表示不写测试、不跑测试。用户取消或环境无法交互时停止，不生成 artifacts。选择 SHALL 在步骤 4 确定真实 change 名后写入 `openspec/changes/<change-name>/.openspec.yaml` 的 `lyx.testModeDecision`，随 propose commit 落库。
