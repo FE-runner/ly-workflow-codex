@@ -484,7 +484,7 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 - 主 agent SHALL 直接读取审查对象（review-plan 为 change 产物与全部 delta spec；review-code 为审查范围对应的 git diff 与未跟踪清单），产出 Critical / Warning / Info 分级发现。
 - SHALL NOT 存在"审查发现 vs 主会话裁决"两个主体：主 agent 的发现即最终裁决，SHALL NOT 适用逐条裁决、驳回硬线、熔断、审查对象类型持续系统性误判这些为双主体仲裁设计的条件。
 - 发现 Critical 时主 agent SHALL 直接修复，修复后 SHALL 再自查一轮确认清零；自审循环 SHALL 最多 2 轮，达到上限仍非清零时 SHALL 停止并转人工。
-- review-plan 场景每轮修复后 SHALL 运行 `openspec validate --changes <change-name>`；SHALL NOT 运行测试 / 类型检查 / 构建——慢验证统一由 `archive-verification-gate` 在归档前执行一次。
+- review-plan 场景每轮修复后 SHALL 运行 `openspec validate --changes <change-name>`；SHALL NOT 运行测试 / 类型检查 / 构建——慢验证中的测试与类型检查统一由 `archive-verification-gate` 在归档前执行一次，生产构建不在归档门禁范围。
 - 清零后 SHALL 按既有「循环结束后统一提交」规则提交一次；`--no-commit` 时跳过。
 
 **subagent 路径**：
@@ -492,7 +492,7 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 - 主会话 SHALL spawn 1 个审查 subagent（非 fork，只携带 TASK），模型按当前宿主的 `reviewModel`、非空推理档按 `reviewReasoningEffort` 落实；TASK SHALL 指示读取该 change 目录下 `context.md`。
 - 首轮之后 SHALL 优先复用同一子代理（宿主支持时会话保持能力等价于 `send_input`）；复用失败（会话丢失、复用调用报错）SHALL 回退为重新 spawn 全新子代理，并按增量语义携带上一轮全部 Critical 逐字原文与路径清单。
 - 逐条裁决、驳回硬线、熔断、审查对象类型持续系统性误判、全局轮数上限（5 轮）等既有规则 SHALL 保持适用。
-- review-plan 场景每轮修复后 SHALL 运行 `openspec validate`；SHALL NOT 运行测试 / 类型检查 / 构建——慢验证统一由 `archive-verification-gate` 在归档前执行一次。
+- review-plan 场景每轮修复后 SHALL 运行 `openspec validate`；SHALL NOT 运行测试 / 类型检查 / 构建——慢验证中的测试与类型检查统一由 `archive-verification-gate` 在归档前执行一次，生产构建不在归档门禁范围。
 
 **回退**：`reviewExecutor = "subagent"` 但宿主不支持 spawn 或首次 spawn 失败时，SHALL 按 `subagent-agent-config` 的回退口径回退 main 路径并输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为流程失败。
 
@@ -508,7 +508,7 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 
 #### Scenario: 主 agent 路径不做慢验证
 - **WHEN** 主 agent 在 review-code 场景修复了 Critical
-- **THEN** 命令 SHALL NOT 运行测试 / 类型检查 / 构建，仅在报告中说明慢验证已由归档前关卡负责
+- **THEN** 命令 SHALL NOT 运行测试 / 类型检查 / 构建，仅在报告中说明测试与类型检查已由归档前关卡负责，生产构建由上线或发布流程负责
 
 #### Scenario: subagent 路径复用同一子代理
 - **WHEN** 配置 `reviewExecutor = "subagent"`，首轮审查报告 Critical，主会话修复后进入第 2 轮

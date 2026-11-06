@@ -148,7 +148,7 @@ OUTPUT 约定（写入审查 subagent 的任务）：审查发现按严重度分
 
 **3.3 本轮验证**
 
-review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证统一由 `@lyx-archive` 的归档前完整验证关卡执行一次（见 `archive-verification-gate`）。本轮修复后仅需确认改动已落盘（文件存在、内容符合预期），无需运行测试套件。
+review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证中的测试与类型检查统一由 `@lyx-archive` 的归档前验证关卡执行一次（见 `archive-verification-gate`）；生产构建不在归档门禁范围。本轮修复后仅需确认改动已落盘（文件存在、内容符合预期），无需运行测试套件。
 
 **3.4 记录本轮改动文件清单（不提交）**
 

@@ -31,8 +31,8 @@
 | `explore.md` | 薄壳委托 | 直接调用 `@openspec-explore skill`，收敛到方案时按规模提示转 `@lyx-fix` / `@lyx-propose` |
 | `propose.md` | 主文件 + references | 主文件只保留入口；`propose-contract.md` 承载隔离、提交、流水线与方案自审，`recovery-and-evidence.md` 承载 run-state、机械裁决和证据规则 |
 | `apply.md` | 真逻辑 | 启动先读 run-state 并核对 git/tasks；按 `codingExecutor` 实施、逐任务记录证据与机械裁决，主会话确认后回写 context/run-state 并统一提交 apply 阶段 commit |
-| `fix.md` | 真逻辑 | 小需求 / bug 轻量路径：不建 change；bug 分支执行根因调查、单假设验证、3 次失败后质疑架构；最终输出命令、退出码和结果摘要 |
-| `archive.md` | 真逻辑 | 启动恢复核对 + archive 前完整验证 + final testMode/证据写入 run-state + 归档 commit + 分支收尾 |
+| `fix.md` | 真逻辑 | 小需求 / bug 轻量路径：不建 change；bug 分支执行根因调查、单假设验证、3 次失败后质疑架构；最终输出测试 / 类型检查证据，不执行生产构建 |
+| `archive.md` | 真逻辑 | 启动恢复核对 + archive 前测试 / 类型检查（不含生产构建）+ final testMode/证据写入 run-state + 归档 commit + 分支收尾 |
 | `review-plan.md` | 主文件 + references | 主文件只保留入口；完整审查契约与恢复/证据规则在 references，含实施可执行性检查 |
 | `review-code.md` | 主文件 + references | 主文件只保留入口；完整审查契约与恢复/证据规则在 references，含 run-state 与新鲜证据要求 |
 | `commit.md` `rollback.md` `clean-branches.md` | Git 工具 | 不变 |

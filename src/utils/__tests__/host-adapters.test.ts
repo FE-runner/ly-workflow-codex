@@ -419,6 +419,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(fix).toContain('配置缺失、不可读或解析失败时 SHALL 停止')
     expect(fix).toContain('字段缺失、空白或非法时按 `normal` 处理')
     expect(fix).toContain('配置为 `ask` 时，fix SHALL 在实施前每次调用询问一次')
+    expect(fix).toContain('SHALL NOT 执行 `build` / 生产构建')
     // 五项自审 + 对称清单
     for (const item of ['① 修对了吗', '② spec 一致吗', '③ 漏改了吗', '④ 改多了吗', '⑤ 验证充分吗'])
       expect(fix, item).toContain(item)
@@ -497,7 +498,8 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(archive).toContain('testMode = "off"')
     expect(archive).toContain('跳过测试类别')
     expect(archive).toContain('testMode=off，测试已跳过')
-    expect(archive).toContain('仍执行类型检查 / 构建')
+    expect(archive).toContain('仍执行类型检查')
+    expect(archive).toContain('SHALL NOT 执行 `build` / 生产构建')
     expect(archive).toContain('字段缺失、空白或非法时按 `normal` 处理')
     expect(archive).toContain('配置为 `ask` 时读取目标 change')
     expect(archive).toContain('实际消费的继承 dirty `.openspec.yaml` 决策')

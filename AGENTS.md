@@ -181,11 +181,11 @@ testMode = "off"
 6. **OpenSpec 依赖检查统一为共享三层模型，按宿主判定与修复**：`lycx init` / `@lyx-init` / `lycx doctor` 共用 CLI、skills、root 三层检查；skills 按 OpenSpec profile 推导，每个宿主只在自己的技能根里判定（codex：项目/全局 `.agents`、`.codex`；claude：项目/全局 `.claude/skills`），整体取最差；项目级修复按缺失技能的宿主执行 `openspec init --tools <宿主>`，不重建另一宿主产物；无任何宿主配置文件时只读诊断，写入型修复延后到宿主确认之后；`global-only` WARN 并继续，不自动固化。
 7. **Claude 侧以 main 为基线，子代理为可选增强**：子代理定义始终安装（执行者只决定是否使用），不启用 worktree 隔离（实施改动须留在主检出由主会话统一提交），审查子代理工具含 Bash 但正文限定只读 git / openspec；`@lyx-init` 在 Claude 宿主下额外产出导入 `AGENTS.md` 的 `CLAUDE.md`。
 
-8. **小改动走 `@lyx-fix` 轻量路径，spec 同步是它的强制职责**：不创建 OpenSpec change、不询问隔离与自动化档位、只解析当前项目有效 `testMode`（执行主体仍固定主 agent），一次完成定位 → spec 分流（A 对齐既有 spec / B 同一 commit 就地改主 spec，不走 delta / C 超出范围转 `@lyx-propose`）→ 按测试风险实施与验证 → 五项自审（修对 / spec 一致 / 漏改 / 改多 / 验证充分）→ 最终验证门禁 → B 类提交前确认 → 单个非 change 生命周期 commit（正文追加 `- spec：` / `- 自审：` / `- 验证：`，无 Change trailer）。理由：流程越重越容易被绕开，绕开的改动才是 spec 漂移的主要来源；`git log -- openspec/specs/` 即可追溯轻流程的 spec 改动。
+8. **小改动走 `@lyx-fix` 轻量路径，spec 同步是它的强制职责**：不创建 OpenSpec change、不询问隔离与自动化档位、只解析当前项目有效 `testMode`（执行主体仍固定主 agent），一次完成定位 → spec 分流（A 对齐既有 spec / B 同一 commit 就地改主 spec，不走 delta / C 超出范围转 `@lyx-propose`）→ 按测试风险实施与验证 → 五项自审（修对 / spec 一致 / 漏改 / 改多 / 验证充分）→ 测试与类型检查门禁（不含生产构建）→ B 类提交前确认 → 单个非 change 生命周期 commit（正文追加 `- spec：` / `- 自审：` / `- 验证：`，无 Change trailer）。理由：流程越重越容易被绕开，绕开的改动才是 spec 漂移的主要来源；`git log -- openspec/specs/` 即可追溯轻流程的 spec 改动。
 
 9. **测试义务由风险决定，跨 fix / propose / review 共用**：`risk-based-testing-policy` 定义行为或契约改动、逻辑缺陷修复、纯展示改动与补充边界覆盖的统一口径。纯 UI、文案、样式在不改变状态、事件、分支、数据流、业务计算或契约时可免新增测试，但必须运行项目已有的相称验证；补充边界覆盖只记录为 `否+否` Warning，不自动扩为 tasks/tests。`@lyx-propose` 按该策略生成 spec/tasks；`@lyx-review-plan` / `@lyx-review-code` 按该策略判级。逻辑缺陷复现、核心行为覆盖、契约一致性及 `@lyx-archive` 完整验证均不放宽。
 
-10. **测试模式支持正常、关闭与 change 级询问**：配置和最终决策均支持 `normal` / `off`，effective 配置另可 `ask`。`off` 时不新增/修改测试文件、不生成测试任务、不执行测试命令；fix 仍实施，propose 仍生成必要 spec，review 不产生测试缺失类发现，archive 跳过测试但仍执行 typecheck/build。`ask` 在每个 change 首次需要测试决策时询问并持久化；未回答或结构非法时停止，不得猜测 normal/off。
+10. **测试模式支持正常、关闭与 change 级询问**：配置和最终决策均支持 `normal` / `off`，effective 配置另可 `ask`。`off` 时不新增/修改测试文件、不生成测试任务、不执行测试命令；fix 仍实施，propose 仍生成必要 spec，review 不产生测试缺失类发现，archive 跳过测试但仍执行 typecheck（不执行 build）。`ask` 在每个 change 首次需要测试决策时询问并持久化；未回答或结构非法时停止，不得猜测 normal/off。
 
 11. **项目测试模式按主仓库根而非 checkout 路径区分**：项目覆盖存于每宿主 `lyx/config.toml` 的 `[projects."<path>"]`；linked worktree 能确定主树时与主工作区共享同一键，无法反推时使用当前 worktree 根。`lycx project test-mode` 只修改当前路径键，设置遇规范化别名冲突时失败且不写，`--unset` 删除全部规范化等价键中的 `testMode`。该字段不进入项目仓库，继续由宿主本地配置承载。
 

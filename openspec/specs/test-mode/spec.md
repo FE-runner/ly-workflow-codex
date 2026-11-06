@@ -182,7 +182,7 @@ lyx SHALL 提供 `lycx project test-mode normal|off|ask` 与 `lycx project test-
 
 #### Scenario: fix 使用项目覆盖
 - **WHEN** 宿主默认为 `normal`，当前项目覆盖为 `testMode = "off"`，用户运行 `@lyx-fix`
-- **THEN** fix 不新增或修改测试文件、不运行测试命令，并继续执行 typecheck / build 等非测试验证
+- **THEN** fix 不新增或修改测试文件、不运行测试命令，并继续执行 typecheck 等非测试验证；不执行 build
 
 #### Scenario: propose 使用项目覆盖生成任务
 - **WHEN** 当前项目覆盖为 `testMode = "off"`
@@ -190,7 +190,7 @@ lyx SHALL 提供 `lycx project test-mode normal|off|ask` 与 `lycx project test-
 
 #### Scenario: archive 使用项目覆盖
 - **WHEN** 宿主默认为 `normal`，当前项目覆盖为 `testMode = "off"`，用户运行 `@lyx-archive`
-- **THEN** 归档前验证跳过测试类别，仍执行项目提供的类型检查与构建，并报告项目覆盖来源
+- **THEN** 归档前验证跳过测试类别，仍执行项目提供的类型检查，不执行 build，并报告项目覆盖来源
 
 #### Scenario: 项目 normal 覆盖宿主 off
 - **WHEN** 宿主默认为 `testMode = "off"`，当前项目覆盖为 `testMode = "normal"`，用户运行测试相关流程
@@ -210,7 +210,7 @@ lyx SHALL 提供 `lycx project test-mode normal|off|ask` 与 `lycx project test-
 
 #### Scenario: fix 在无测试模式不写测试
 - **WHEN** `testMode = "off"` 且用户运行 `@lyx-fix`
-- **THEN** 命令不新增或修改测试文件、不运行测试命令，改用类型检查或构建验证实现改动
+- **THEN** 命令不新增或修改测试文件、不运行测试命令，改用类型检查验证实现改动
 
 #### Scenario: propose 在无测试模式不生成测试任务
 - **WHEN** `testMode = "off"` 且 `@lyx-propose` 生成方案
@@ -230,15 +230,15 @@ lyx SHALL 提供 `lycx project test-mode normal|off|ask` 与 `lycx project test-
 
 ### Requirement: 无测试模式不关闭非测试质量门禁
 
-`testMode = "off"` SHALL NOT 关闭核心行为覆盖、接口或配置契约一致性、错误路径、安全、数据完整性、类型检查或构建检查。`@lyx-archive` 在无测试模式下 SHALL 跳过测试类别，但仍 SHALL 执行项目提供的类型检查与构建，并在归档报告中明确说明测试因 `testMode=off` 被跳过。
+`testMode = "off"` SHALL NOT 关闭核心行为覆盖、接口或配置契约一致性、错误路径、安全、数据完整性、类型检查或构建检查。`@lyx-archive` 在无测试模式下 SHALL 跳过测试类别，但仍 SHALL 执行项目提供的类型检查，并在归档报告中明确说明测试因 `testMode=off` 被跳过；生产构建不属于归档门禁。
 
 #### Scenario: 核心行为缺口仍在审查中暴露
 - **WHEN** `testMode = "off"` 且 proposal 声明的新行为在 delta spec 中完全未覆盖
 - **THEN** review-plan 仍报告核心行为缺口，不因无测试模式忽略
 
-#### Scenario: archive 跳过测试但保留 typecheck/build
+#### Scenario: archive 跳过测试但保留 typecheck
 - **WHEN** 项目提供 test / typecheck / build 脚本且 `testMode = "off"`
-- **THEN** `@lyx-archive` 跳过 test，执行 typecheck 与 build，并在报告注明测试跳过原因
+- **THEN** `@lyx-archive` 跳过 test 与 build，执行 typecheck，并在报告注明测试跳过与构建不在归档门禁
 
 ### Requirement: change 级 ask 决策持久化
 

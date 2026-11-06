@@ -1,6 +1,6 @@
 ---
 name: lyx-archive
-description: '归档前按 testMode 执行完整验证（normal：测试/类型检查/构建；off：跳过测试），通过后按 opsx:archive 编排流程归档完成的 change，完成后 commit'
+description: '归档前按 testMode 执行验证（normal：测试/类型检查；off：跳过测试），不执行生产构建；通过后按 opsx:archive 编排流程归档完成的 change，完成后 commit'
 argument-hint: '[<change-name>]'
 ---
 
@@ -16,7 +16,7 @@ argument-hint: '[<change-name>]'
 
 归档前先读取目标 change 的 `run-state.md`，获取当前阶段、最后成功 commit、审查终止类型和未决项；再以 `git status --porcelain`、`git log`、`tasks.md` 与实际文件核对。账本与 git/files 冲突时以可核验事实为准，并把冲突记录为新的恢复事件；`run-state.md` 缺失时容错继续并注明。
 
-## 归档前完整验证（SHALL，先于任何归档动作）
+## 归档前验证（SHALL，先于任何归档动作）
 
 在委托 OpenSpec 归档流程**之前**，读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时 SHALL 停止归档并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
 
@@ -24,21 +24,22 @@ argument-hint: '[<change-name>]'
 
 确定最终模式后，SHALL 把 `final testMode` 及来源（项目配置 / 宿主默认 / change 元数据）写入 `run-state.md`，并把阶段更新为 `verifying`。写入时沿用 `run-state.md` 现有语言，不得无理由切换为英文。
 
-- 最终模式为 `normal`：对当前工作区执行一次项目完整验证，覆盖测试 / 类型检查 / 构建三类。
-- 最终模式为 `testMode = "off"`：跳过测试类别，仍执行类型检查 / 构建，并在报告中明确注明“testMode=off，测试已跳过”；来源为配置时注明宿主默认或项目配置来源，来源为 `ask` 决策时注明“最终决策来自 change 元数据”。
+- 最终模式为 `normal`：对当前工作区执行一次项目验证，覆盖测试 / 类型检查两类。
+- 最终模式为 `testMode = "off"`：跳过测试类别，仍执行类型检查，并在报告中明确注明“testMode=off，测试已跳过”；来源为配置时注明宿主默认或项目配置来源，来源为 `ask` 决策时注明“最终决策来自 change 元数据”。
+- SHALL NOT 执行 `build` / 生产构建；项目提供 `scripts.build` 时也跳过并在报告中注明生产构建不在归档门禁范围。
 
 因 `ask` 新写入，或本轮实际消费的继承 dirty `.openspec.yaml` 决策，SHALL 随既有 `git add -- openspec/` 进入归档 commit；若门禁失败，决策可保留为 dirty 并如实报告。
 
-- 按项目实际提供的脚本选择（例如 `package.json` 的 `scripts.test` / `scripts.typecheck` / `scripts.build`，或项目 README/AGENTS.md 声明的等价命令）。
+- 按项目实际提供的脚本选择（例如 `package.json` 的 `scripts.test` / `scripts.typecheck`，或项目 README/AGENTS.md 声明的等价命令）。
 - 项目未提供的类别 SHALL 跳过并在报告中注明（例如"未提供 typecheck 脚本"），SHALL NOT 因缺失判定失败。
 - 全部通过才继续；任一类别失败 SHALL 停止归档，**不移动** `openspec/changes/<change-name>/`，并在 run-state 记录失败命令、退出码、关键错误摘要和 `archive-blocked` 阶段，如实报告原始错误输出。
 - 全部通过后 SHALL 在 run-state 逐类记录“命令 + 退出码 + 结果摘要”，并把阶段更新为 `archive-ready`。
 
-该验证是慢验证的**唯一执行点**：审查关卡（`@lyx-review-plan` / `@lyx-review-code`）SHALL NOT 重复执行测试 / 类型检查 / 构建（`openspec validate` 仍由 review-plan 每轮执行，不属于本步范围）。
+该验证是慢验证的**唯一执行点**：审查关卡（`@lyx-review-plan` / `@lyx-review-code`）SHALL NOT 重复执行测试 / 类型检查（`openspec validate` 仍由 review-plan 每轮执行，不属于本步范围）。生产构建不属于归档门禁，由上线或发布流程负责。
 
-## 归档前核对本 change 未标注 Warning（SHALL，完整验证通过后、委托 OpenSpec 归档之前）
+## 归档前核对本 change 未标注 Warning（SHALL，归档前验证通过后、委托 OpenSpec 归档之前）
 
-完整验证通过后、委托 OpenSpec 归档流程**之前**（此时快照仍位于 active 路径 `openspec/changes/<change-name>/review-findings.md`），核对当前 change 快照中在本 change 内已修复但尚未标注的 Warning（见 `review-findings-snapshot` 的「本 change 内修复标注」）：
+归档前验证通过后、委托 OpenSpec 归档流程**之前**（此时快照仍位于 active 路径 `openspec/changes/<change-name>/review-findings.md`），核对当前 change 快照中在本 change 内已修复但尚未标注的 Warning（见 `review-findings-snapshot` 的「本 change 内修复标注」）：
 
 - **先确定目标 change**：未指定参数时，先按 opsx:archive 流程的默认规则确定目标 change；不能唯一确定时询问用户，确定后再做核对。SHALL NOT 猜测 change 名，SHALL NOT 因目标未确定而把"快照不存在"当作跳过核对的理由。此处确定的 `<change-name>` SHALL 在随后委托 `@openspec-archive-change skill` 时作为参数传入，SHALL NOT 让其再次推断或询问目标 change。
 - **统计**：统计快照中**没有任何解决子项**的 Warning 条数（按 Warning 顶层条目计）。快照不存在或计数为 0 时 SHALL NOT 询问，直接继续。

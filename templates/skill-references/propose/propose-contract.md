@@ -182,7 +182,7 @@ lyx:
 
 **全程无隔离方式询问、不自动 archive。**
 
-**执行者语义（自 switchable-executor-flow 起）**：流水线每一步的主体按配置决定，不由本模板写死——review-plan / review-code 按 `[host] reviewExecutor`（`main` = 主 agent 直接审查，默认；`subagent` = spawn 审查 subagent），apply 按 `[host] codingExecutor`（`main` = 主 agent 直接实施，默认；`subagent` = spawn coding subagent）。**慢验证（测试 / 类型检查 / 构建）SHALL NOT 在流水线内的审查循环执行**——统一由 `@lyx-archive` 的归档前完整验证关卡执行一次。
+**执行者语义（自 switchable-executor-flow 起）**：流水线每一步的主体按配置决定，不由本模板写死——review-plan / review-code 按 `[host] reviewExecutor`（`main` = 主 agent 直接审查，默认；`subagent` = spawn 审查 subagent），apply 按 `[host] codingExecutor`（`main` = 主 agent 直接实施，默认；`subagent` = spawn coding subagent）。**慢验证中的测试 / 类型检查 SHALL NOT 在流水线内的审查循环执行**——统一由 `@lyx-archive` 的归档前验证关卡执行一次；生产构建不在归档门禁范围。
 
 **审查范围门控（自 add-review-mode 起）**：流水线执行哪些审查关卡 SHALL 由当前宿主 `[host]` 的 `reviewMode` 决定（未配置 / 空白 / 非法取值等价 `full`）：`full` = 两级都跑；`plan-only` = 跑 review-plan、跳过 review-code；`code-only` = 跳过 review-plan、跑 review-code；`off` = 两级都跳过。apply 在任何取值下都执行。被跳过的审查关卡 SHALL 打印显式状态行（形如 `[跳过] review-plan（reviewMode=code-only）`），SHALL NOT 静默跳过；被跳过关卡对应的节点前置校验一并跳过。
 
