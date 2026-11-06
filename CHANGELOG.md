@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-06
+
+### Fixed
+
+- `@lyx-propose` 按宿主 `[general].language` 生成 proposal、design、tasks、delta spec、context 与 run-state，避免 `zh-CN` 宿主因 OpenSpec 默认英文模板而生成全英文正文
+- run-state 在 `zh-CN` 下使用中文标题与字段，apply、review-plan、review-code、archive 续写时沿用文件现有语言
+
 ## [0.14.0] - 2026-10-31
 
 ### Added
