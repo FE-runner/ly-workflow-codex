@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-11-11
+
+### Fixed
+
+- 修复全自动流水线在 propose 自审、review-plan 和 apply 阶段报告后提前结束回合的问题；`run-state.md` 现在持久化执行模式与流水线阶段，正常阶段完成后在同一回合继续 apply / review-code
+- `@lyx-fix` 与 `@lyx-archive` 不再执行生产构建，构建统一交由上线或发布流程负责
+
+### Changed
+
+- 新增全自动续跑行为评测场景，并同步主 spec、恢复账本、模板与静态契约测试
+
 ## [0.14.1] - 2026-11-06
 
 ### Fixed
