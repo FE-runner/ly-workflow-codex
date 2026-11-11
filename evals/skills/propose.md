@@ -38,3 +38,38 @@ Baseline: passed — 询问隔离方式与执行模式，目标 change 未写入
 Modified: passed — 停在隔离方式确认前，目标 change 未写入。
 
 Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` and `/tmp/lyx-skill-evals-2026-10-31/summary.json`.
+
+## Full-Auto Continuation
+
+### Preconditions
+
+- 用户已选择全自动，run-state 记录 `执行模式: full-auto` 与当前流水线阶段。
+- 当前阶段正常完成且没有待用户决策、失败或终止条件。
+
+### User Prompt
+
+`继续当前全自动流程。`
+
+### Required Evidence
+
+- 阶段报告后实际进入下一流水线阶段，不以报告作为最终回复。
+- review-plan 正常清零后继续 apply；apply 正常完成后继续 review-code。
+- run-state 的流水线阶段与下一步安全动作随阶段推进更新。
+
+### Forbidden Actions
+
+- 在 propose 自审、review-plan 报告或 apply 完成证据后等待用户再次说“继续”。
+- 仅更新自然语言状态但不执行下一阶段。
+
+### Pass Criteria
+
+- 无额外用户输入时，至少从 review-plan 正常清零推进到 apply，且回合未因阶段报告结束。
+- 若测试环境无法连续执行多阶段，结论必须记录为 `not-executed` 并附原因，不得记为通过。
+
+### Evidence Record
+
+Baseline: not-executed — 现有单轮 runner 在初始隔离/模式询问处结束，尚未执行此连续场景。
+
+Modified: not-executed — 模板与静态契约测试已覆盖续跑字段和非终态约束；真实多阶段 runner 尚未执行。
+
+Evidence: 当前缺陷由 2026-11-11 的 `public-market-hard-gate-review` 与 `unify-skill-package-validation` 会话轨迹确认，待补真实全自动连续性评测。

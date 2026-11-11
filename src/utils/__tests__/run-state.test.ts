@@ -27,6 +27,27 @@ describe('run-state lifecycle contract', () => {
     expect(spec).toContain('SHALL NOT 写入凭据、token')
   })
 
+  it('persists full-auto mode and keeps intermediate stage reports non-terminal', () => {
+    const propose = read('templates/skill-references/propose/propose-contract.md')
+    const apply = read('templates/skills/apply.md')
+    const reviewPlan = read('templates/skill-references/review-plan/review-contract.md')
+    const recovery = read('templates/skill-references/propose/recovery-and-evidence.md')
+    const runStateSpec = read('openspec/specs/execution-run-state/spec.md')
+    const proposeSpec = read('openspec/specs/ly-propose-flow/spec.md')
+
+    expect(recovery).toContain('- 执行模式: full-auto | manual')
+    expect(recovery).toContain('- 流水线阶段:')
+    expect(propose).toContain('`EXECUTION_MODE=full-auto`')
+    expect(propose).toContain('阶段报告非终态')
+    expect(propose).toContain('SHALL NOT 在此结束回合')
+    expect(reviewPlan).toContain('阶段报告非终态')
+    expect(reviewPlan).toContain('SHALL NOT 等待用户再次触发')
+    expect(apply).toContain('阶段报告非终态')
+    expect(runStateSpec).toContain('执行模式（`full-auto` / `manual`）')
+    expect(runStateSpec).toContain('阶段报告非终态')
+    expect(proposeSpec).toContain('阶段报告非终态')
+  })
+
   it('requires fresh command evidence before completion claims', () => {
     for (const path of [
       'templates/skills/apply.md',

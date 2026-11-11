@@ -21,7 +21,7 @@ argument-hint: '[<change-name>]'
 
 主会话确认后回写 `context.md`（实施决策）并按共用 index 隔离协议统一提交 apply 阶段 commit（message 为 CC 前缀 + `Change-Stage: apply` + `Change-Name: <change-name>` trailer），作为 `@lyx-review-code` 的审查对象。本轮新写入，或继承并实际消费的 dirty `.openspec.yaml` 决策，SHALL 纳入待提交清单。失败区分两阶段：**环境级不可用**（仅 `subagent` 路径可能发生——宿主无 subagent 能力、初始 spawn 失败）按回退口径回退主 agent 直接实施，输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为业务失败；**实施中/验证失败** SHALL 原样呈报转人工，不自动重试、不自动兜底；若决策已写入或消费，允许保留为 dirty 并如实报告。隔离 worktree 的询问/新建统一收敛到 `@lyx-propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
 
-**启动恢复（SHALL）**：进入实施前先读取该 change 的 `run-state.md`，获取阶段、基线/最后成功 commit、任务进度、审查终止类型和下一步，再以 `git status --porcelain`、`git log`、`tasks.md` 与实际目标文件核对。账本与 git/files 冲突时以可核验事实为准，并把冲突写成新的恢复记录；SHALL NOT 因账本存在而跳过核对。`run-state.md` 缺失时按历史 change 容错继续，并在报告中注明。
+**启动恢复（SHALL）**：进入实施前先读取该 change 的 `run-state.md`，获取阶段、执行模式、流水线阶段、基线/最后成功 commit、任务进度、审查终止类型和下一步，再以 `git status --porcelain`、`git log`、`tasks.md` 与实际目标文件核对。账本与 git/files 冲突时以可核验事实为准，并把冲突写成新的恢复记录；SHALL NOT 因账本存在而跳过核对。`run-state.md` 缺失时按历史 change 容错继续，并在报告中注明。
 
 ## 步骤
 
@@ -80,6 +80,8 @@ argument-hint: '[<change-name>]'
 6. 若 `git commit` 失败，如实报告 Git 返回的原始错误，不重试不兜底。
 
 **完成证据（SHALL）**：最终报告列出实际文件清单、任务完成数，以及每条验证的“命令 + 退出码 + 结果摘要”。subagent 回传的“成功”只作为待核验输入，主会话仍须核对 diff/文件清单；没有新鲜证据时不得声明实施完成。
+
+**阶段报告非终态（SHALL）**：本完成证据是 apply 阶段报告。若 `run-state.md` 的 `执行模式` 为 `full-auto`，且实施、验证、提交（或确认无可提交内容）均正常完成、无未决业务决策或失败，则报告后 SHALL 在同一回合继续 review-code 前置校验并进入 review-code；SHALL NOT 等待用户再次触发，也 SHALL NOT 把 apply 完成报告当作全自动最终回复。
 
 ### 失败处理（未全部完成时执行）
 

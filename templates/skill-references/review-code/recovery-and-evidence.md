@@ -2,7 +2,7 @@
 
 ## Recovery
 
-开始审查和每轮循环前读取 `openspec/changes/<change-name>/run-state.md`，获取当前阶段、apply commit、审查轮次和未决项；再用 `git status`、`git log` 和固定基线核对真实 diff。冲突时以 git 和文件内容为准，并在报告中记录。
+开始审查和每轮循环前读取 `openspec/changes/<change-name>/run-state.md`，获取当前阶段、执行模式、流水线阶段、apply commit、审查轮次和未决项；再用 `git status`、`git log` 和固定基线核对真实 diff。冲突时以 git 和文件内容为准，并在报告中记录。
 
 run-state 是恢复与证据输入，不是实现代码；不得对它提出源码审查发现或要求业务修复。
 

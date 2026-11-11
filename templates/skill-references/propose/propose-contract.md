@@ -69,6 +69,8 @@
 
 这是唯一决定"自动/手动"路径的开关询问。自动化程度与隔离正交：选全自动不隐含必须切 worktree，切了 worktree 也不隐含必须全自动。后续步骤不再重复问"要不要继续自动"。本轮若已在 worktree 内（跳过步骤 1 的询问），此询问照常进行。
 
+用户回答后 SHALL 捕获 `EXECUTION_MODE=full-auto` 或 `EXECUTION_MODE=manual`，并在 change 确定后写入 `run-state.md`。后续阶段恢复时 SHALL 读取该字段，SHALL NOT 仅依赖会话记忆。
+
 ### 3. 按 opsx:propose 编排流程生成方案
 
 读取 `@openspec-propose skill`（opsx propose 编排 prompt）并按其定义的完整流程，围绕 `参数`（需求描述）生成 proposal/design/tasks 全部 artifacts。生成过程中遵循该编排 prompt 的全部步骤与约束（本命令的步骤 4-9 在其后继续编排）。
@@ -122,6 +124,8 @@
 
 **自审修改后验证**：自审产生任何 artifact 修改（尤其 delta spec）后，SHALL 运行 `openspec validate --changes <change-name>` 确认结构合法，再进入步骤 5.5。
 
+**阶段报告非终态（SHALL）**：本清单是 propose 阶段的中间状态输出。只要不存在"待用户决策"项、失败或终止条件，输出清单后 SHALL 立即继续进入步骤 5.5；SHALL NOT 在此结束回合或等待用户再次确认。
+
 ### 5.5 产出 context.md 软上下文 artifact（commit 前）
 
 在方案自审完成之后、步骤 6 commit 之前，由当前会话产出 `openspec/changes/<change-name>/context.md`（软上下文 artifact，详见 spec 能力 `review-context-artifact`）：
@@ -146,6 +150,19 @@ lyx:
 `isolation: none` 时 `sourceBranch` 仍记录当前分支，`developmentBranch` / `worktreePath` 为 `null`。`sourceBranch` 缺失时写 `null`，不得猜测。`ask` 选择只写入 `testModeDecision`，保留 `.openspec.yaml` 其他字段。该 metadata 属于 propose 提交单元，随步骤 6 的 `git add -- openspec/changes/<change-name>/` 一起提交。若 propose commit 在决策写入后、提交前中断，允许决策保留为 dirty 并如实报告，后续恢复可复用。
 
 写入 metadata 后 SHALL 再运行一次 `openspec validate --changes <change-name>`；若验证失败，停止在 commit 前并报告原始错误。
+
+### 5.7 创建或更新 run-state.md（commit 前）
+
+在 change 确定后、步骤 6 commit 前，SHALL 按 `references/recovery-and-evidence.md` 的骨架创建 `run-state.md`（已存在则增量更新），至少写入：
+
+- `阶段: propose`
+- `执行模式: <EXECUTION_MODE>`
+- `流水线阶段: review-plan | apply | review-code | none`（按 `reviewMode` 与执行模式确定）
+- propose 基线或最后成功 commit
+- 方案自审结论摘要
+- `下一步安全动作`：全自动时写明同一回合要进入的下一阶段；手动时写明等待用户选择是否审查
+
+`run-state.md` 不存在、不可读或无法写入时 SHALL 停止在 commit 前并如实报告，SHALL NOT 跳过后继续 commit。该文件 SHALL 随步骤 6 的 propose 阶段 commit 一并提交。
 
 ### 6. 暂存并立即 commit（每步 commit）
 
@@ -182,6 +199,14 @@ lyx:
 
 **全程无隔离方式询问、不自动 archive。**
 
+**阶段报告非终态（SHALL）**：本流水线中的所有阶段报告、节点校验结论和“完成证据”都是中间状态，SHALL NOT 被当作最终回复。只要当前阶段正常完成且不存在未决业务决策、失败或终止条件，当前回合 SHALL 立即继续下一阶段：
+
+- review-plan 正常清零并输出报告后，立即执行步骤 2 的节点校验，再执行步骤 3 apply。
+- apply 完成、提交并输出完成证据后，立即执行步骤 4 的节点校验，再执行步骤 5 review-code。
+- 只有 review-code 正常清零并输出最终报告后，才允许结束全自动回合。
+
+各阶段命令 SHALL 从 `run-state.md` 读取 `执行模式`、`流水线阶段` 与 `下一步安全动作`，并在阶段结束时更新；SHALL NOT 只依赖会话记忆判断是否自动续跑。阶段报告不是人工确认点，SHALL NOT 等待用户再次触发下一阶段。
+
 **执行者语义（自 switchable-executor-flow 起）**：流水线每一步的主体按配置决定，不由本模板写死——review-plan / review-code 按 `[host] reviewExecutor`（`main` = 主 agent 直接审查，默认；`subagent` = spawn 审查 subagent），apply 按 `[host] codingExecutor`（`main` = 主 agent 直接实施，默认；`subagent` = spawn coding subagent）。**慢验证中的测试 / 类型检查 SHALL NOT 在流水线内的审查循环执行**——统一由 `@lyx-archive` 的归档前验证关卡执行一次；生产构建不在归档门禁范围。
 
 **审查范围门控（自 add-review-mode 起）**：流水线执行哪些审查关卡 SHALL 由当前宿主 `[host]` 的 `reviewMode` 决定（未配置 / 空白 / 非法取值等价 `full`）：`full` = 两级都跑；`plan-only` = 跑 review-plan、跳过 review-code；`code-only` = 跳过 review-plan、跑 review-code；`off` = 两级都跳过。apply 在任何取值下都执行。被跳过的审查关卡 SHALL 打印显式状态行（形如 `[跳过] review-plan（reviewMode=code-only）`），SHALL NOT 静默跳过；被跳过关卡对应的节点前置校验一并跳过。
@@ -189,8 +214,8 @@ lyx:
 1. **review-plan 关卡（仅 `full` / `plan-only`）**：自动执行 `@lyx-review-plan <change-name>` 编排流程（完整指示见 `@lyx-review-plan skill 的指示`，按其指示逐轮执行审查-修复循环；审查对象为 propose 阶段 commit（带 `Change-Stage: propose` trailer），清零时由循环统一提交修复）。`code-only` / `off` 时跳过本步（连同第 2 步一并跳过），并打印 `[跳过] review-plan（reviewMode=<取值>）` 状态行。
    - 正常清零（Critical 为 0 且所有 `影响落地=是` 的 Warning 都已解决）→ 进入下一步。
    - 其余任一种终止（熔断、驳回硬线、无法安全修复、验证失败、审查调用失败、达到轮数上限）→ **停止流水线**，复用该循环已产出的终止报告（不重新生成或重复一份）报告终止原因，结束，不执行后续步骤。
-2. **节点前置校验（进入 apply 前，仅 `full` / `plan-only`）**：进入 apply 之前 SHALL 校验 review-plan 是否以"正常清零"收尾——判据为**本会话记录的 review-plan 循环终止类型 == 正常清零**且无未决人工介入项（不依赖清零报告文件等会话外 artifact）。校验 SHALL 在该节点显式打印一行校验结论（含依据：终止类型、是否无未决项）；校验不过（终止类型为熔断/驳回硬线/无法安全修复/验证失败/审查调用失败/轮数上限，或存在未决项）SHALL 停在该节点，复用 review-plan 已产出的终止报告说明阻断原因，SHALL NOT 硬闯 apply。第 1 步跳过 review-plan 时本节一并跳过。
-3. 自动执行 `@lyx-apply <change-name>` 编排流程（完整指示见 `@lyx-apply skill 的指示`；实施主体按 `codingExecutor` 决定，实施完成后由主会话确认、回写 `context.md`（实施决策）并统一提交 apply 阶段 commit——message 为 CC 前缀（type 由主会话按实际改动判断）+ `Change-Stage: apply` + `Change-Name: <change-name>` trailer）。
+2. **节点前置校验（进入 apply 前，仅 `full` / `plan-only`）**：进入 apply 之前 SHALL 校验 review-plan 是否以"正常清零"收尾——判据为 **`run-state.md` 记录的 review-plan 循环终止类型 == 正常清零**且无未决人工介入项；会话记忆与该记录冲突时以可核验的 run-state、git 和审查报告事实为准。校验 SHALL 在该节点显式打印一行校验结论（含依据：终止类型、是否无未决项）；校验不过（终止类型为熔断/驳回硬线/无法安全修复/验证失败/审查调用失败/轮数上限，或存在未决项）SHALL 停在该节点，复用 review-plan 已产出的终止报告说明阻断原因，SHALL NOT 硬闯 apply。校验通过后 SHALL 在同一回合立即进入第 3 步。第 1 步跳过 review-plan 时本节一并跳过。
+3. 自动执行 `@lyx-apply <change-name>` 编排流程（完整指示见 `@lyx-apply skill 的指示`；实施主体按 `codingExecutor` 决定，实施完成后由主会话确认、回写 `context.md`（实施决策）并统一提交 apply 阶段 commit——message 为 CC 前缀（type 由主会话按实际改动判断）+ `Change-Stage: apply` + `Change-Name: <change-name>` trailer）。apply 完成报告输出后 SHALL 在同一回合继续第 4 步，SHALL NOT 把实施完成报告当作全自动终点。
 4. **节点前置校验（进入 review-code 前，仅 `full` / `code-only`）**：apply 实施完成并提交时 SHALL 以 `git rev-parse HEAD` 记录本次 apply 提交后的 HEAD SHA；进入 review-code 之前 SHALL 按 trailer 优先定位最近一期 apply 阶段 commit 的 SHA（`git log --grep="^Change-Stage: apply$" --grep="^Change-Name: <change-name>$" --all-match -1 --format=%H`；未命中时回退旧前缀 `git log --grep="^apply: <change-name>" -1 --format=%H` 并打印 DEPRECATED 兼容通道提示），并校验其等于本次记录（**历史存在旧 apply commit 不得绕过本次校验**）。校验 SHALL 在该节点显式打印一行校验结论（含依据：本次记录的 SHA、最近一期 apply 阶段 commit SHA、是否相等）。校验不过（SHA 不等、commit 缺失或实施阶段未正常收尾）SHALL 停在该节点如实报告实施收尾失败详情，SHALL NOT 以旧 commit 作为本次审查对象进入 review-code。第 5 步跳过 review-code 时本节一并跳过。
 5. **review-code 关卡（仅 `full` / `code-only`）**：自动执行 `@lyx-review-code <change-name>` 编排流程（完整指示见 `@lyx-review-code skill 的指示`；审查主体按 `reviewExecutor` 决定；审查对象为 apply 阶段 commit（带 `Change-Stage: apply` trailer），清零时由循环统一提交修复）。`plan-only` / `off` 时跳过本步（连同第 4 步一并跳过），并打印 `[跳过] review-code（reviewMode=<取值>）` 状态行。
    - 正常清零（Critical 为 0 且所有 `影响落地=是` 的 Warning 都已解决）→ 流水线结束，提示可手动 `@lyx-archive` 归档。

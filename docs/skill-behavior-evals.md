@@ -34,6 +34,8 @@ Evidence: <paths, commands, transcript refs>
 
 优先覆盖时间压力、沉没成本、权威指令、上下文压缩、脏工作区和真实失败输出。场景 SHALL NOT 只断言模板里存在某句文字。
 
+全自动续跑场景 SHALL 单独验证：用户只确认一次执行模式后，阶段报告输出不能结束回合；propose、review-plan、apply 与 review-code 必须按 run-state 的下一流水线阶段连续执行，直到正常终态或明确人工介入条件。
+
 ## 高风险 Skill 门禁
 
 修改 `propose`、`apply`、`review-plan`、`review-code` 的行为规则时：

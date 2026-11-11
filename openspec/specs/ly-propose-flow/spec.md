@@ -323,6 +323,8 @@
 
 节点前置校验（review-plan 必须正常清零才进 apply；最近一期 apply 阶段 commit（带 `Change-Stage: apply` trailer，定位见 `commit-conventions`）的 SHA 必须等于本次记录才进 review-code）SHALL 在被执行到对应关卡时适用，与执行者选择无关；对应关卡因 `reviewMode` 被跳过时其前置校验一并跳过。
 
+用户选择全自动或手动后，`/ly:propose` SHALL 把 `executionMode`（`full-auto` / `manual`）写入 `run-state.md`。全自动模式下，review-plan、apply 与节点校验输出的阶段报告 SHALL 被视为“阶段报告非终态”：只要当前阶段正常完成、无未决业务决策或终止条件，当前回合 SHALL 立即继续下一流水线阶段，SHALL NOT 等待用户再次触发；只有 review-code 正常清零并输出最终报告，或出现需要人工决策/介入的停止条件时，才允许结束全自动回合。
+
 #### Scenario: 全自动路径默认主 agent 执行
 - **WHEN** 用户执行 `/ly:propose` 选择"全自动"，未配置执行者字段（等价 `main`），`reviewMode` 为 `full`
 - **THEN** 流水线按序自动执行 review-plan（主 agent 直接审查）→ apply（主 agent 直接实施）→ review-code（主 agent 直接审查），节点前置校验照常适用，全程不出现 spawn 与回退标记
@@ -334,6 +336,10 @@
 #### Scenario: 主 agent 实施时快照规则照常适用
 - **WHEN** `codingExecutor = "main"`，全自动流水线进入 apply，主 agent 直接实施
 - **THEN** 主会话仍记录实施前 `git status --porcelain` 快照，以自记录改动清单充当回传清单，partial apply 检测与提交校验照常执行
+
+#### Scenario: 阶段报告后不等待用户继续
+- **WHEN** 全自动路径完成 review-plan 或 apply 阶段并输出阶段报告，且无未决业务决策或终止条件
+- **THEN** 当前回合继续下一阶段（review-plan 后进入 apply，apply 后进入 review-code），阶段报告不作为最终回复
 
 #### Scenario: reviewMode=off 时编排顺序退化为仅 apply
 - **WHEN** 用户配置 `reviewMode = "off"` 并选择"全自动"

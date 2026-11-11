@@ -34,6 +34,8 @@ describe('skill behavior eval assets', () => {
     expect(guide).toContain('基线')
     expect(guide).toContain('pnpm eval:skills')
     expect(guide).toContain('not-executed')
+    expect(guide).toContain('全自动续跑场景')
+    expect(readFileSync(join(EVALS_DIR, 'propose.md'), 'utf-8')).toContain('## Full-Auto Continuation')
     expect(readFileSync(join(EVALS_DIR, 'README.md'), 'utf-8')).toContain('review-code.md')
   })
 
