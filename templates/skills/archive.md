@@ -84,7 +84,7 @@ git add -- openspec/
 git commit -F "$MSG_FILE"
 ```
 
-change 目录下若存在审查阶段写入的未跟踪 `review-findings.md`（审查未修项快照，见 `review-findings-snapshot`），随既有 `git add -- openspec/` 一并落库并随 change 目录搬入 `archive/`，无需额外步骤——SHALL NOT 为它新增任何专门的归档命令。归档前核对追加的就地标注只追加解决子项，不属于对当前 change 快照的重新生成或重建；向更早 change 已归档快照追加的解决说明同理，只是追加子项，不属于重建当前 change 快照。
+change 目录下的 `review-findings.md`（审查未修项快照，见 `review-findings-snapshot`）可能已由 review-plan / review-code 审查关卡单独提交，也可能仍有归档前追加的未提交解决子项。两种状态都随既有 `git add -- openspec/` 落库并随 change 目录搬入 `archive/`，无需额外步骤——SHALL NOT 为它新增任何专门的归档命令。归档前核对追加的就地标注只追加解决子项，不属于对当前 change 快照的重新生成或重建；向更早 change 已归档快照追加的解决说明同理，只是追加子项，不属于重建当前 change 快照。
 
 已跟踪的 `run-state.md` 同样随 `git add -- openspec/` 进入归档 commit；归档完成后 SHALL 在报告中引用其中的最终验证证据，并确认文件已位于归档目录。
 

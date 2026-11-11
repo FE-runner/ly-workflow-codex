@@ -156,7 +156,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
       // 写入失败不改变审查结论
       expect(content, name).toContain('写入失败容错')
       // 排除规则：不被当审查对象、不进统一 commit，且两条执行者路径一致
-      expect(content, name).toContain('未跟踪清单排除')
+      expect(content, name).toContain('审查范围与提交排除')
       expect(content, name).toContain('统一 commit 纳入')
       expect(content, name).toContain('两条执行者路径')
       // 该轮发现原文按执行者取值（main 路径无 subagent 也要记录）
@@ -360,6 +360,22 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(archive).toContain('作为参数传入，SHALL NOT 让其再次推断或询问目标 change')
   })
 
+  it('commits review-findings snapshots after every review gate, including non-clear termination', () => {
+    for (const name of ['review-plan.md', 'review-code.md']) {
+      const content = read(name)
+      expect(content, name).toContain('快照提交（SHALL）')
+      expect(content, name).toContain('无论正常清零还是任一非正常终止')
+      expect(content, name).toContain('git add -- openspec/changes/<change-name>/review-findings.md')
+      expect(content, name).toContain('git show --name-only --format=')
+      expect(content, name).toContain('`--no-commit`')
+      expect(content, name).toContain('docs(openspec): 记录 <change-name>')
+    }
+
+    const archive = read('archive.md')
+    expect(archive).toContain('可能已由 review-plan / review-code 审查关卡单独提交')
+    expect(archive).toContain('也可能仍有归档前追加的未提交解决子项')
+  })
+
   it('full-tree staging excludes in-progress review-findings snapshots', () => {
     const pathspec = '\':(top,exclude,glob)openspec/changes/*/review-findings.md\''
     for (const name of ['commit.md', 'propose.md']) {
@@ -371,7 +387,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     }
     // 仅有进行中快照改动时：propose 视为干净并跳过空 WIP，commit --all 不硬失败
     const propose = read('propose.md')
-    expect(propose).toContain('?? openspec/changes/<change-name>/review-findings.md')
+    expect(propose).toContain('`??` / ` M` 形式的 `openspec/changes/<change-name>/review-findings.md`')
     expect(propose).toContain('已跳过 WIP 提交')
     expect(read('commit.md')).toContain('没有可提交的改动（进行中快照已按规则排除）')
   })

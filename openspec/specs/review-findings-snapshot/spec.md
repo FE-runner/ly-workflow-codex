@@ -2,7 +2,7 @@
 
 ## Purpose
 
-定义 change 目录下 `review-findings.md` 审查未修项快照的完整生命周期：审查关卡循环结束时按节写入、随归档 commit 落库、后续 change 可在已归档快照上追加解决说明、同一 change 内的修复可在 active 快照上追加就地标注（审查后同会话修复或归档前核对）、`@lyx-explore` 先询问后只列出未解决条目。它是快照式留痕（供事后回看某次审查提出过哪些未处理的 Warning 及其后续解决情况），允许追加式解决说明，但不承担状态跟踪或自动关闭职责。
+定义 change 目录下 `review-findings.md` 审查未修项快照的完整生命周期：审查关卡循环结束时按节写入并由该审查关卡单独提交，随后随归档 commit 搬入 archive、后续 change 可在已归档快照上追加解决说明、同一 change 内的修复可在 active 快照上追加就地标注并单独提交快照更新、`@lyx-explore` 先询问后只列出未解决条目。它是快照式留痕（供事后回看某次审查提出过哪些未处理的 Warning 及其后续解决情况），允许追加式解决说明，但不承担状态跟踪或自动关闭职责。
 
 ## Requirements
 
@@ -62,17 +62,17 @@
 
 ### Requirement: 审查关卡在循环结束时按节写入快照
 
-`@lyx-review-plan` 与 `@lyx-review-code` SHALL 在审查-修复循环结束时按节 upsert 写入快照——替换本类型旧节、保留另一节。重跑同类审查后该类型**无可收录条目**（即未被自动修复的 Warning 数为 0）时 SHALL 移除该类型旧节（SHALL NOT 保留过期内容）：移除后若另一节仍存在则文件保留，若两节均不存在则删除该文件。写入时机 SHALL 为循环结束后：正常清零场景 SHALL 在统一 commit **之后**写入（快照保持未跟踪状态，SHALL NOT 进入该 commit）；非正常终止场景（熔断 / 驳回硬线 / 无法安全修复 / 修复无法落盘 / 审查调用失败 / 达到轮数上限 / 审查对象类型持续系统性误判）SHALL 照写。`--no-commit`、统一 commit 失败、本轮无实际改动不建 commit 等场景下 SHALL 照写快照，并在元信息中如实记录基线状态，SHALL NOT 为快照补建 commit。SHALL NOT 在循环进行中逐轮写入——快照只承载最后一轮结论。快照文件缺失容错：写入前不存在该文件时 SHALL 创建，存在时 SHALL 只替换本类型节。非正常终止时未修的 Critical SHALL NOT 写入快照。
+`@lyx-review-plan` 与 `@lyx-review-code` SHALL 在审查-修复循环结束时按节 upsert 写入快照——替换本类型旧节、保留另一节。重跑同类审查后该类型**无可收录条目**（即未被自动修复的 Warning 数为 0）时 SHALL 移除该类型旧节（SHALL NOT 保留过期内容）：移除后若另一节仍存在则文件保留，若两节均不存在则删除该文件。写入时机 SHALL 为循环结束后：正常清零场景 SHALL 在审查修复统一 commit **之后**写入；非正常终止场景（熔断 / 驳回硬线 / 无法安全修复 / 修复无法落盘 / 审查调用失败 / 达到轮数上限 / 审查对象类型持续系统性误判）SHALL 在终止结论确定后写入。无论正常清零还是任一非正常终止，只要快照相对 `HEAD` 有新增、修改或删除，且未传入 `--no-commit`，审查关卡 SHALL 再执行一次只含该快照的独立 commit：首行分别为 `docs(openspec): 记录 <change-name> 方案审查未修项` 或 `docs(openspec): 记录 <change-name> 代码审查未修项`，正文按 `commit-conventions` 写动机 / 改动 / 影响；提交后用 `git show --name-only --format=` 核对文件集合只含该快照。统一 commit 失败不阻止快照独立提交，但两个结果须分别报告；`--no-commit` 时跳过统一 commit 与快照提交，快照保留 dirty。SHALL NOT 在循环进行中逐轮写入——快照只承载最后一轮结论。快照文件缺失容错：写入前不存在该文件时 SHALL 创建，存在时 SHALL 只替换本类型节。非正常终止时未修的 Critical SHALL NOT 写入快照。
 
-#### Scenario: 正常清零后在统一 commit 之后写入
+#### Scenario: 正常清零后独立提交快照
 
 - **WHEN** review-code 循环以正常清零结束并执行了统一 commit
-- **THEN** 快照在 commit 之后写入，保持未跟踪状态，该 commit 的文件集合不含 `review-findings.md`
+- **THEN** 快照在统一 commit 之后写入并生成只含 `review-findings.md` 的独立 commit；该审查修复 commit 的文件集合不含快照
 
 #### Scenario: 非正常终止时照写 Warning 快照
 
 - **WHEN** review-code 循环以熔断终止，最后一轮存在 2 条未被自动修复的 Warning、若干个未修 Critical
-- **THEN** 快照写入这 2 条 Warning，SHALL NOT 写入未修的 Critical
+- **THEN** 快照写入这 2 条 Warning，SHALL NOT 写入未修的 Critical，并生成只含该快照的独立 commit；未修的代码改动仍留在工作区
 
 #### Scenario: 按节 upsert 保留另一节
 
@@ -101,25 +101,32 @@
 
 ### Requirement: 快照写入失败不改变审查结论
 
-`@lyx-review-plan` / `@lyx-review-code` 在循环结束后写入快照失败时（change 目录不可写、磁盘错误、路径被占用等），SHALL 如实报告写入失败与原始错误，SHALL NOT 因此改变本轮审查结论——Critical 是否清零、是否执行统一提交均不受快照写入结果影响；SHALL NOT 为写入快照而重试、回滚已完成的提交或改变终止判定。快照缺失只是留痕丢失，SHALL NOT 被当作审查失败。
+`@lyx-review-plan` / `@lyx-review-code` 在循环结束后写入或提交快照失败时（change 目录不可写、磁盘错误、路径被占用、Git hook 拒绝等），SHALL 如实报告失败与原始错误，SHALL NOT 因此改变本轮审查结论——Critical 是否清零、是否执行审查修复统一提交均不受快照结果影响；SHALL NOT 为快照重试、回滚已完成的提交或改变终止判定。快照写入失败时不存在可提交内容；快照提交失败时保留 dirty 状态。快照缺失或未提交只是留痕丢失，SHALL NOT 被当作审查失败。
 
 #### Scenario: 写快照失败如实报告且不影响审查结论
 
 - **WHEN** review-code 正常清零并已执行统一 commit，随后写 `review-findings.md` 时因目录不可写失败
 - **THEN** 命令如实报告写入失败与原始错误，已完成的统一 commit 不回滚，本轮审查结论仍为"正常清零"
 
+#### Scenario: 快照提交失败不影响非清零终止
+
+- **WHEN** review-code 以熔断终止并成功写入快照，但独立快照 commit 因 Git hook 拒绝失败
+- **THEN** 命令如实报告原始错误，代码改动与快照均保留在工作区，审查终止类型仍为熔断
+
 ### Requirement: 快照随归档落库
 
-`@lyx-archive` 现有的 `git add -- openspec/` SHALL 覆盖 change 目录下的快照，使其随归档 commit 落库，并随 change 目录搬入 `openspec/changes/archive/<日期>-<change-name>/`——SHALL NOT 依赖任何额外的归档专门步骤。审查阶段已写快照（未跟踪），archive 阶段 SHALL NOT 重新生成或重建**当前 change 的快照内容**；归档前核对按「本 change 内修复标注」Requirement 追加的就地标注只追加解决子项、不改动原 Warning 条目，SHALL NOT 被视为重新生成或重建。此外，`@lyx-archive` MAY 按「追加式解决说明」Requirement 向**更早 change 的已归档快照**追加解决说明——该追加不是对当前 change 快照的重新生成或重建，且 SHALL 复用同一次归档提交。未归档的 change 其快照 SHALL 保持未跟踪状态：除 review-plan / apply / review-code 的提交外，lyx 模板中的**全量暂存路径**（`@lyx-commit --all` 在暂存区为空时的全量暂存、`@lyx-propose` 切分支 / 留在当前分支前的 WIP commit）SHALL 排除进行中 change 目录下的 `review-findings.md`（仅匹配 `openspec/changes/<change-name>/review-findings.md` 一层，SHALL NOT 波及 `archive/` 下已跟踪的快照），SHALL NOT 将其提前纳入提交。脏改动检测（如 propose 的 `git status --porcelain` 处置询问）SHALL 同样忽略这类未跟踪快照；排除后暂存区为空时 SHALL 跳过提交并如实说明，SHALL NOT 以"nothing to commit"报错中断编排。排除后该路径保持未跟踪；若快照已被意外跟踪，命令 SHALL 如实报告，SHALL NOT 自动 `git rm --cached` 或改写历史。
+`@lyx-archive` 现有的 `git add -- openspec/` SHALL 覆盖 change 目录下的快照。快照可能已经由 review-plan / review-code 在审查收尾时单独提交，也可能在归档前因追加就地标注而处于 dirty 状态；两种状态都 SHALL 随归档 commit 落库，并随 change 目录搬入 `openspec/changes/archive/<日期>-<change-name>/`——SHALL NOT 依赖任何额外的归档专门步骤。archive 阶段 SHALL NOT 重新生成或重建**当前 change 的快照内容**；归档前核对按「本 change 内修复标注」Requirement 追加的就地标注只追加解决子项、不改动原 Warning 条目，SHALL NOT 被视为重新生成或重建。此外，`@lyx-archive` MAY 按「追加式解决说明」Requirement 向**更早 change 的已归档快照**追加解决说明——该追加不是对当前 change 快照的重新生成或重建，且 SHALL 复用同一次归档提交。
+
+为避免“先合并、后归档”丢失快照，审查关卡负责在快照写入后立即独立提交，而不是依赖 archive 阶段首次落库。lyx 模板中的**全量暂存路径**（`@lyx-commit --all` 在暂存区为空时的全量暂存、`@lyx-propose` 切分支 / 留在当前分支前的 WIP commit）SHALL 继续排除进行中 change 目录下的 `review-findings.md`（仅匹配 `openspec/changes/<change-name>/review-findings.md` 一层，SHALL NOT 波及 `archive/` 下已跟踪的快照），避免快照被混入无关的全量提交。分离式精确路径提交（审查关卡的快照提交、`@lyx-archive` 的 `git add -- openspec/`）不受该排除影响。脏改动检测（如 propose 的 `git status --porcelain` 处置询问）SHALL 忽略“仅由快照新增/修改形成”的待处置脏改动；排除后暂存区为空时 SHALL 跳过提交并如实说明，SHALL NOT 以"nothing to commit"报错中断编排。
 
 #### Scenario: 归档后快照进入 archive 目录
 
-- **WHEN** 某 change 存在未跟踪的 `review-findings.md`，用户运行 `@lyx-archive` 成功归档
+- **WHEN** 某 change 的 `review-findings.md` 已由审查关卡单独提交（或带有归档前追加的未提交解决子项），用户运行 `@lyx-archive` 成功归档
 - **THEN** 该文件随归档 commit 落库，并出现在 `openspec/changes/archive/<日期>-<change-name>/review-findings.md`
 
 #### Scenario: 追加解决说明不重建当前快照
 
-- **WHEN** `@lyx-archive` 为历史快照追加解决说明，同时当前 change 带有自己的未跟踪快照
+- **WHEN** `@lyx-archive` 为历史快照追加解决说明，同时当前 change 带有自己的已提交快照或未提交解决子项
 - **THEN** 当前 change 的快照原样搬入 archive、不被重新生成；历史快照的追加与当前快照的落库在同一次归档 commit 内完成
 
 #### Scenario: 归档前就地标注不视为重建
@@ -127,15 +134,15 @@
 - **WHEN** `@lyx-archive` 归档前核对为当前 change 快照中的 1 条 Warning 追加就地标注
 - **THEN** 该快照除新增的解决子项外逐字不变，随归档 commit 一并落库
 
-#### Scenario: 未归档的 change 快照保持未跟踪
+#### Scenario: 先合并后归档仍保留快照
 
-- **WHEN** 某 change 已写入快照但尚未归档
-- **THEN** 快照保持未跟踪状态，不因 review-plan / apply / review-code 的提交而被提前纳入
+- **WHEN** 审查关卡已写入并单独提交快照，用户先把开发分支合并回主分支，稍后再归档该 change
+- **THEN** 快照已随开发分支提交进入主分支，后续归档能把该文件搬入 archive，不依赖原开发 worktree 中的未跟踪文件
 
 #### Scenario: lyx-commit --all 排除进行中快照
 
 - **WHEN** 某 change 留有未跟踪的 `review-findings.md`，用户在暂存区为空时运行 `@lyx-commit --all`
-- **THEN** 命令全量暂存其余改动，但该快照 SHALL NOT 被暂存，提交后仍保持未跟踪
+- **THEN** 命令全量暂存其余改动，但该快照 SHALL NOT 被暂存；正常审查流程会由独立快照 commit 落库，只有 `--no-commit` 或提交失败时它才继续留在工作区
 
 #### Scenario: propose WIP commit 排除其他进行中 change 的快照
 
@@ -219,20 +226,20 @@
 - **只记修复来源**：就地标注 SHALL 只记录修复 commit 与一句说明，SHALL NOT 附加"未复审"等审查状态字样。
 - **幂等**：同一 Warning 下已存在引用同一 commit 的就地标注时 SHALL 跳过，SHALL NOT 重复追加；同一 Warning 被多次修复时按提交先后追加多行。
 - **原文不变**：原 Warning 的位置 / 问题 / 建议原文与编号 SHALL 逐字保持不变，SHALL NOT 改写、删除或重排；就地标注 SHALL NOT 计入 Warning 计数、SHALL NOT 触发编号重排。
-- **不新增提交**：就地标注只改工作区中未跟踪的快照文件，SHALL NOT 为其单独 commit；快照随 `@lyx-archive` 既有的 `git add -- openspec/` 落库。
+- **单独快照提交**：审查后同会话追加就地标注时，标注完成后 SHALL 只暂存该快照并生成独立 `docs(openspec): 更新 <change-name> ...审查解决标注` commit；归档前核对追加的就地标注则 SHALL NOT 单独提交，随 `@lyx-archive` 既有的 `git add -- openspec/` 进入归档 commit。
 - **与 upsert 的交互**：之后重跑同类审查时该节按既有 upsert 规则被最后一轮结果整体替换，已有就地标注随旧节一并消失，SHALL NOT 为保留就地标注而合并新旧节。
 - **无状态**：SHALL NOT 引入 open/closed 状态字段、查询接口或自动关闭流程。
 - **失败容错**：写入失败（目录不可写、文件被占用等）或目标条目无法唯一定位时 SHALL 逐条跳过并如实报告原因，SHALL NOT 猜测性匹配，SHALL NOT 改变审查结论或阻断归档。
 
 就地标注的触发点 SHALL 只有以下两个，SHALL NOT 在其他命令（如 `@lyx-commit`）中自动推断：
 
-1. **审查后同会话修复**：`@lyx-review-plan` / `@lyx-review-code` 写完快照后，同一会话内用户要求修复快照中的 Warning，修复提交完成之后，SHALL 先列出拟标注的条目编号与对应 commit 由用户确认一次，再为被该提交修复的条目追加就地标注，并在报告中列出已标注的条目编号。该修复提交 SHALL 只按路径暂存修复文件，SHALL NOT 把未跟踪的 `review-findings.md` 纳入；快照已被意外跟踪时 SHALL 如实报告，就地标注照常追加并随后续提交落库。
+1. **审查后同会话修复**：`@lyx-review-plan` / `@lyx-review-code` 写完快照后，同一会话内用户要求修复快照中的 Warning，修复提交完成之后，SHALL 先列出拟标注的条目编号与对应 commit 由用户确认一次，再为被该提交修复的条目追加就地标注，并在报告中列出已标注的条目编号。该修复提交 SHALL 只按路径暂存修复文件，SHALL NOT 把 `review-findings.md` 纳入；标注完成后 SHALL 单独提交只含该快照的更新 commit。
 2. **归档前核对**：`@lyx-archive` 在归档前完整验证通过之后、委托 OpenSpec 归档流程之前，SHALL 统计当前 change 快照中**没有任何解决子项**的 Warning 条数；为 0 或快照不存在时 SHALL NOT 询问；大于 0 时 SHALL 询问一次是否逐条核对（默认不核对）。用户同意后 SHALL 逐条以快照基线到 `HEAD` 之间涉及该条目位置文件的提交作为候选修复 commit 呈现判断，由用户逐条确认后才标注；候选取该条目**所在节**的基线；位置涉及多个文件时取并集，无可解析文件时视为无候选。节基线缺失或不是可解析的 commit（元信息仅记录基线状态）时，SHALL 只展示条目、由用户直接提供修复 commit hash，并按"必须引用已存在的修复 commit"校验。找不到候选 commit、用户否认或未提供可解析 hash 的条目 SHALL 跳过并如实说明。用户拒绝核对时 SHALL 直接继续归档。
 
 #### Scenario: 审查后同会话修复并提交后就地标注
 
 - **WHEN** review-code 结束并写入含 3 条 Warning 的 `## 代码审查` 节，同一会话内用户要求修复这 3 条，修复以 commit `0a33558` 提交
-- **THEN** active 快照中这 3 条 Warning 下各追加 `- 解决：本 change 内修复（commit 0a33558）— <说明>`，原文与编号不变，不产生额外提交
+- **THEN** active 快照中这 3 条 Warning 下各追加 `- 解决：本 change 内修复（commit 0a33558）— <说明>`，原文与编号不变；标注完成后生成只含该快照的独立提交，修复 commit 不包含快照
 
 #### Scenario: 修复未提交时不标注
 
@@ -257,7 +264,7 @@
 #### Scenario: 审查后修复提交不纳入快照
 
 - **WHEN** 审查后同会话修复 Warning 并提交
-- **THEN** 该修复提交只包含修复文件，未跟踪的 `review-findings.md` 不被纳入
+- **THEN** 该修复提交只包含修复文件，`review-findings.md` 不被纳入；解决标注随后由独立快照提交落库
 
 #### Scenario: 归档前核对无未标注项时不打扰
 

@@ -14,7 +14,7 @@
 
 审查由 **1 个审查 subagent** 执行（subagent 多 Agent 模式）：子会话**非 fork spawn**、只携带本模板构造的 TASK（软上下文经该 change 目录下的 `context.md` 到达），任务中点名"只审该 change 的产物范围"；模型按 `[host] reviewModel` 指定，未配置或空白时继承当前会话模型。SHALL NOT spawn 第二个审查 agent、SHALL NOT 实现"并行双审、交换结论、共识归并"环节——单 agent 的分级结论即本轮唯一审查发现来源，质量把关由当前会话逐条裁决与"驳回硬线"终止条件承担。Critical 修复由当前会话执行。
 
-循环执行期间默认不提交；仅当循环以"正常清零"结束时，才对审查目标全部文件（该 change 的 artifact、delta spec 与 `run-state.md`，含编排方已暂存的产物与循环修复）统一提交一次（见步骤 5）。传入 `--no-commit` 时，连这次最终的统一提交也不做。
+循环执行期间不提交审查修复；仅当循环以"正常清零"结束时，才对审查目标全部文件（该 change 的 artifact、delta spec 与 `run-state.md`，含编排方已暂存的产物与循环修复）统一提交一次（见步骤 5）。`review-findings.md` 快照独立于该统一提交：审查收尾后无论正常清零还是任一非正常终止，均按本文件「快照提交」规则单独提交；传入 `--no-commit` 时，统一提交与快照提交都不执行。
 
 **测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失或无合法 `lyx.testModeDecision` 时询问一次 `normal` / `off` 并写回，保留其他字段；`lyx` 非 mapping，或 decision 存在且既不是 string 也不是 null、文件不可读/解析失败时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `.openspec.yaml`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
 
@@ -97,7 +97,7 @@ ls -d openspec/changes/*/ 2>/dev/null | grep -v '/archive/'
 
 审查对象是目标 change 的 propose 阶段 commit（编排方 `@lyx-propose` 在生成方案后立即提交，message 带 `Change-Stage: propose` 与 `Change-Name: <change-name>` trailer）。审查基线 SHALL 按 trailer 优先定位：`git log --grep="^Change-Stage: propose$" --grep="^Change-Name: <change-name>$" --all-match -1 --format=%H` 取 HEAD 侧最近一期匹配 commit；未命中时回退旧前缀 `git log --grep="^propose: <change-name>"` 并在报告中打印 DEPRECATED 兼容通道提示。审查范围 = 该 commit 差异（`git show <commit>`）+ 当前 `git diff HEAD` + 未跟踪文件清单（`??`）——修复在审查-修复循环内未提交时不丢失。两条通道都找不到 propose 阶段 commit（零 commit 仓库、或尚未生成方案提交）时，退化为 `git diff HEAD` + 未跟踪清单组合。审查期间新产生的修复改动（循环内每轮修复未提交）始终计入审查范围，不在中途产生新 commit（提交只发生在正常清零后的统一提交，见步骤 5）。
 
-**未跟踪清单排除 `review-findings.md`**：采集未跟踪（`??`）清单时 SHALL 排除该 change 目录下的 `review-findings.md`（审查未修项快照，见 `review-findings-snapshot`）——它既 SHALL NOT 被当作可挑错的审查对象或修复对象，也 SHALL NOT 被循环结束时的统一 commit 纳入；它保持未跟踪直到 `@lyx-archive`。该排除与 `context.md` 同待遇，且在 `main` 与 `subagent` 两条执行者路径下同样生效（`main` 路径不 spawn subagent，但排除照旧）。
+**审查范围与提交排除 `review-findings.md`**：采集未跟踪清单和 `git diff` 审查范围时 SHALL 排除该 change 目录下的 `review-findings.md`（审查未修项快照，见 `review-findings-snapshot`）——它既 SHALL NOT 被当作可挑错的审查对象或修复对象，也 SHALL NOT 被循环结束时的统一 commit 纳入。快照由审查收尾后的独立提交落库。该排除与 `context.md` 同待遇，且在 `main` 与 `subagent` 两条执行者路径下同样生效（`main` 路径不 spawn subagent，但排除照旧）。
 
 **基线锚定**：首轮确定审查基线 commit 后 SHALL 固定该 SHA 作为本次命令执行的基线锚点，后续轮次的审查范围一律以 `git show <固定SHA>` + `git diff <固定SHA>` + 未跟踪清单计算，SHALL NOT 在循环期间重新执行 `git log --grep` 或重算 HEAD 作基线（除非基线 commit 因异常被回滚/丢失，此时才重新定位并如实报告）。循环期间发生任何中途提交（无论手滑或外部因素）SHALL 如实报告，并仍以固定基线重新计算 `git diff <固定SHA>` 说明该中途 commit 是否落在审查范围内（核对不等于替换基线），但不以此自动进入终止条件。
 
@@ -198,9 +198,9 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 9. **第 3 轮起新增影响项**：第 3 轮及以后出现判同键不在前两轮集合中的 `影响落地=是` 条目 → 停止转人工
 10. **达到全局轮数上限**（5 轮，独立于上面 1-9 的判定，见上段"清零优先于轮数上限"）
 
-触发条件 2-9（或达到全局轮数上限）时，立即停止循环，不执行任何提交（改动留在工作区），报告中必须明确指出触发的具体条件、涉及的问题（文件/类别/章节/判定依据），并说明需要人工介入。"驳回硬线"要求并列展示审查 subagent 每一轮的原始发现与当前会话每一轮的可核验依据；"审查对象类型持续系统性误判"同样要求并列展示，但展示连续 3 轮（而不是 2 轮）的原始发现与可核验依据。循环期间的 Warning/Info 不参与终止判定（首轮标注为「是」的 Warning 例外，只参与条件 1 的正常清零判定），只在最终报告列出**最后一轮**结果。
+触发条件 2-9（或达到全局轮数上限）时，立即停止循环，不执行审查修复统一提交（改动留在工作区），但 `review-findings.md` 快照仍按「快照提交」独立提交；报告中必须明确指出触发的具体条件、涉及的问题（文件/类别/章节/判定依据），并说明需要人工介入。"驳回硬线"要求并列展示审查 subagent 每一轮的原始发现与当前会话每一轮的可核验依据；"审查对象类型持续系统性误判"同样要求并列展示，但展示连续 3 轮（而不是 2 轮）的原始发现与可核验依据。循环期间的 Warning/Info 不参与终止判定（首轮标注为「是」的 Warning 例外，只参与条件 1 的正常清零判定），只在最终报告列出**最后一轮**结果。
 
-**循环期间不提交**：每一轮修复完成、验证通过后，SHALL NOT 立即执行 git commit——改动保持在当前状态，统一提交仅发生在正常清零后（见步骤 5）；`--no-commit` 传入时连清零后的统一提交也不执行。
+**循环期间不提交审查修复**：每一轮修复完成、验证通过后，SHALL NOT 立即执行审查修复 git commit——改动保持在当前状态，审查修复统一提交仅发生在正常清零后（见步骤 5）；`review-findings.md` 的快照提交是独立例外，按「快照提交」执行；`--no-commit` 传入时统一提交与快照提交都不执行。
 
 **终止报告末尾附下一步可用命令指引**：以终止条件 2-6 或轮数上限结束时，终止报告的末尾 SHALL 附"下一步可用命令指引"段落，供用户在"断在明确节点、人工自行触发下一步"口径下续接，例如：
 
@@ -223,8 +223,17 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 - **条目最小结构**：节内先写元信息（轮次 / 记录时间 / 基线），再写顶层编号条目 `1. [<位置>] — <问题>`，问题细节与 `建议:` 为与该条目正文对齐的 3 空格缩进行；后续 `- 解决：...` 为缩进子项，不计入 Warning 计数、不触发编号重排。该结构是 `<归档路径>#方案审查#<序号>` 锚点唯一可解析的形式。
 - **"该轮发现原文"按执行者取值**：`subagent` 路径 = 审查 subagent 返回的原文；`main`（默认）路径 = 主 agent 本轮审查报告中产出的原文。SHALL NOT 因 `main` 路径不存在审查 subagent 而跳过记录或虚构 subagent 原文。
 - **节级 upsert**：替换 `## 方案审查` 旧节、保留 `## 代码审查` 节（由 `@lyx-review-code` 维护）。重跑本命令后该类 Warning 为零时 SHALL 移除 `## 方案审查` 节：移除后若 `## 代码审查` 节仍存在则保留文件，若两节均不存在则删除该文件，SHALL NOT 保留过期节内容。重跑后整节替换时，该节已有的「本 change 内修复」就地标注随旧节一并消失，SHALL NOT 为保留就地标注而合并新旧节。该节零 Warning 时 SHALL NOT 写空节；文件不存在且两节都空时 SHALL NOT 创建文件。
-- **写入时机**：正常清零场景 SHALL 在步骤 5 的统一 commit **之后**写入（快照保持未跟踪状态，SHALL NOT 进入该 commit）；非正常终止、`--no-commit`、统一 commit 失败、本轮无实际改动不建 commit 等场景 SHALL 照写，并在元信息中如实记录基线状态，SHALL NOT 为快照补建 commit。
+- **写入时机**：正常清零场景 SHALL 在步骤 5 的统一 commit **之后**写入；非正常终止场景 SHALL 在终止结论确定后写入。两种场景都 SHALL 在写完后执行下面的「快照提交」。`--no-commit`、统一 commit 失败或本轮无审查修复 commit 时仍 SHALL 写快照；除 `--no-commit` 外，仍需单独提交快照。统一 commit 失败不阻止快照独立落库，但应在报告中分别说明两个结果。
 - **写入失败容错**：写入失败（change 目录不可写、路径被占用等）SHALL 如实报告失败与原始错误，SHALL NOT 因此改变本轮审查结论（Critical 是否清零、是否提交均不受影响），SHALL NOT 重试写入或回滚已完成的提交；快照缺失只是留痕丢失，不视为审查失败。
+
+**快照提交（SHALL）**：快照写入后，无论正常清零还是任一非正常终止，只要 `review-findings.md` 存在且相对 `HEAD` 有新增、修改或删除，且未传入 `--no-commit`，SHALL 执行一次只含该文件的独立 commit：
+
+1. `git add -- openspec/changes/<change-name>/review-findings.md`
+2. 用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取 message 路径，首行使用 `docs(openspec): 记录 <change-name> 方案审查未修项`，正文按 `@lyx-commit` 写动机 / 改动 / 影响。
+3. `git commit -F "$MSG_FILE"`。
+4. `git show --name-only --format=` 核对文件集合只含该快照；若删除后文件不存在，同样核对删除已进入 commit。
+
+该提交 SHALL NOT 包含 artifact 修复、run-state 或 delta spec。快照提交失败时如实报告原始错误，保留 dirty 状态，SHALL NOT 重试、回滚已有 commit 或改变审查终止结论。
 
 ### 审查后同会话修复的就地标注（快照写入之后）
 
@@ -232,11 +241,11 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 
 - **格式**：缩进子项 `- 解决：本 change 内修复（commit <短 hash>）— <一句说明>`。
 - **先提交后标注**：修复尚未提交（仅存在于工作区）时 SHALL NOT 标注，并提示需先提交修复；`<短 hash>` SHALL 指向可解析的 commit。
-- **修复提交排除快照**：该修复提交 SHALL 由主会话只按路径暂存修复文件（`git add -- <修复文件>`），message 参照 `@lyx-commit` 格式；SHALL NOT 委托 `@lyx-commit --all`，SHALL NOT 使用 `git add -A` 等会把未跟踪 `review-findings.md` 纳入的方式；快照若已被意外跟踪，SHALL 如实报告，就地标注照常追加、随后续提交落库。
+- **修复提交排除快照**：该修复提交 SHALL 由主会话只按路径暂存修复文件（`git add -- <修复文件>`），message 参照 `@lyx-commit` 格式；SHALL NOT 委托 `@lyx-commit --all`，SHALL NOT 使用 `git add -A` 等会把 `review-findings.md` 纳入修复提交的方式。
 - **标注前确认**：标注前 SHALL 列出拟标注的条目编号与对应 commit，由用户确认一次后再写入，避免把只修了部分的条目误标。
 - **幂等**：同一 Warning 下已存在引用同一 commit 的就地标注时跳过；同一 Warning 被多次修复时按提交先后追加多行。
 - **原文不变**：原 Warning 的位置 / 问题 / 建议原文与编号逐字不变；就地标注不计入 Warning 计数、不触发编号重排。
-- **不新增提交**：就地标注只改工作区中的快照文件，SHALL NOT 为其单独 commit；快照随 `@lyx-archive` 既有的 `git add -- openspec/` 落库。
+- **单独快照提交**：就地标注完成后，SHALL 只暂存该快照并单独提交 `docs(openspec): 更新 <change-name> 方案审查解决标注`，提交后核对文件集合只含该快照；SHALL NOT 把标注混入修复 commit。`--no-commit` 场景可跳过该提交并如实报告。
 - **失败容错**：写入失败或目标条目无法唯一定位时逐条跳过并如实报告原因，SHALL NOT 猜测性匹配，SHALL NOT 改变本轮审查结论。
 - **报告**：完成后列出已标注与已跳过的条目编号。
 
@@ -270,11 +279,12 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 总轮次: [轮数]
 总计（最后一轮）: [N] Critical, [M] Warning, [K] Info
 提交: [已提交 <commit信息> / 未提交（--no-commit） / 无可提交内容 / 提交失败：<原始错误>]
+快照提交: [已提交 <commit信息> / 未提交（--no-commit） / 无可提交内容 / 提交失败：<原始错误>]
 ```
 
 **熔断/驳回硬线/无法安全修复/验证失败/审查调用失败/达到轮数上限/审查对象类型持续系统性误判结束：**
 
-不执行任何提交，改动留在工作区。
+审查修复改动不提交，留在工作区；`review-findings.md` 快照仍按「快照提交」单独提交，`--no-commit` 时除外。
 
 ```
 📋 方案审查：<change-name> — 循环终止：<触发条件>
@@ -311,7 +321,8 @@ OUTPUT 约束（写入审查 subagent 的任务）：审查发现按严重度分
 
 ---
 总轮次: [轮数]
-本次未提交任何改动
+本次未提交审查修复改动
+快照提交: [已提交 <commit信息> / 未提交（--no-commit）/ 无可提交内容 / 提交失败：<原始错误>]
 ```
 
 如从未出现任何 Critical/Warning/Info，明确说明"方案审查未发现问题"，不要保持沉默。

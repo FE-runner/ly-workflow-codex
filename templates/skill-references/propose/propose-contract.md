@@ -47,7 +47,7 @@
        5. worktree 目录/分支锁定为 `<开发分支名>`，后续不因 change 名不同而对 worktree/分支重命名。
   - **本项目切新分支**：
     1. 捕获 `ISOLATION=branch`、`ISOLATION_SOURCE_BRANCH="$SOURCE_BRANCH"`；询问/确认开发分支名 `<开发分支名>`（规则与 worktree 路径一致：可含 `/`，如 `feature/xxx`），捕获 `DEVELOPMENT_BRANCH=<开发分支名>`。
-    2. 检查当前工作区未提交改动（`git status --porcelain`）（SHALL 忽略进行中 change 目录下未跟踪的审查未修项快照，即 `?? openspec/changes/<change-name>/review-findings.md` 行——它须保持未跟踪、不属于待处置的脏改动；过滤后为空视为干净，不发出询问）：非空时用一次三选一询问处置方式，各选项文案如实说明后果：
+    2. 检查当前工作区未提交改动（`git status --porcelain`）（SHALL 忽略进行中 change 目录下审查未修项快照的新增或修改状态，即 `??` / ` M` 形式的 `openspec/changes/<change-name>/review-findings.md` 行——该文件由审查关卡的独立快照 commit 或 archive 负责，不属于待处置的脏改动；过滤后为空视为干净，不发出询问）：非空时用一次三选一询问处置方式，各选项文案如实说明后果：
        - **提交（WIP commit）**：用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取 message 文件路径并写入完整 message（首行 `chore(wip): 切分支前暂存工作区改动`，正文按 `@lyx-commit` 规范写动机/改动/影响），执行 `git add -A -- ':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md' && git commit -F "$MSG_FILE"` 后再切分支（全量暂存但排除进行中 change 的未跟踪快照 `review-findings.md`，顶层锚定，见 `review-findings-snapshot`；暂存后暂存区仍为空时 SHALL 跳过 `git commit`，如实说明"仅有进行中快照改动，已跳过 WIP 提交"并继续，SHALL NOT 视为处置失败）——新分支从含 WIP commit 的 HEAD 切出，改动固化为新分支上的提交，review-code 审查对象不受污染；
        - **Stash**：`git stash push -u` → 切分支 → `git stash pop`——如实说明"pop 回来后改动仍在工作区，stash 仅提供日志留底"；
        - **原样保留**：不做任何处理——明示"改动会进入 review-code 审查范围（`git diff HEAD`），可能污染审查对象"；且若这些改动与后续 apply 的实施目标文件重叠，apply 会直接停止转人工（停止报告会回指此处处置选择）。
