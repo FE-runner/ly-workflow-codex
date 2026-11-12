@@ -68,7 +68,7 @@ lyx:
 | `@lyx-publish` | npm 包发布四场景（bmc 私域 Nexus / GitHub Packages / npmjs + GitHub Release / CI 自动发布），前置检查→版本号推导→构建→发布→验证 |
 | `@lyx-commit` `@lyx-rollback` `@lyx-clean-branches` `@lyx-worktree` | Git 工具（worktree 只留 `add`/`list`/`remove`/`prune`/`migrate`，`switch` 已移除——隔离切换统一由 `@lyx-propose` 触发） |
 
-审查-修复循环细节位于各 skill 安装目录的 `references/`（执行者分支、subagent 路径的 `send_input` 复用与增量传递、终止条件、run-state 与提交时机）；主 `SKILL.md` 只保留入口与按需读取指令。[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED，仅作历史参考。
+审查-修复循环细节位于各 skill 安装目录的 `references/`（执行者分支、subagent 路径的 `send_input` 复用与增量传递、终止条件、run-state 与提交时机）；主 `SKILL.md` 保留入口、按需读取指令和简短的“全自动执行不变量”，避免关键续跑规则只存在于工具读取的 reference 输出中。[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED，仅作历史参考。
 
 ## 典型工作流
 

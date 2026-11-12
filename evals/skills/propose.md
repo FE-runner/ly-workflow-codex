@@ -45,6 +45,7 @@ Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` an
 
 - 用户已选择全自动，run-state 记录 `执行模式: full-auto` 与当前流水线阶段。
 - 当前阶段正常完成且没有待用户决策、失败或终止条件。
+- propose 与 review-plan 的主 `SKILL.md` 已包含“全自动执行不变量”，且 run-state 在方案自审前已经创建。
 
 ### User Prompt
 
@@ -55,6 +56,7 @@ Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` an
 - 阶段报告后实际进入下一流水线阶段，不以报告作为最终回复。
 - review-plan 正常清零后继续 apply；apply 正常完成后继续 review-code。
 - run-state 的流水线阶段与下一步安全动作随阶段推进更新。
+- 自审前已存在 `run-state.md`；主 `SKILL.md` 注入内容自身包含阶段非终态和同回合续跑要求。
 
 ### Forbidden Actions
 

@@ -191,7 +191,7 @@ testMode = "off"
 
 12. **ask 回答存于 change 元数据**：change 的 `.openspec.yaml` 可选 `lyx.testModeDecision: normal | off`。propose 在生成前询问并在 change 创建后写入；apply/review/archive 优先消费已有决策，缺失时补问并随对应阶段 commit 提交。配置 normal/off 优先于历史决策；决策写入后允许在阶段失败/`--no-commit`/非清零终止时保持 dirty，供恢复复用。
 
-13. **长 skill 使用 references 分层**：`propose`、`review-plan`、`review-code` 的主 `SKILL.md` 保持低于 20,000 字节，frontmatter `references:` 声明必需 sidecar；安装器按声明渲染并复制到安装目录 `references/`，缺失时安装与 doctor 报错。主文件只保留入口与按需读取指令。
+13. **长 skill 使用 references 分层**：`propose`、`review-plan`、`review-code` 的主 `SKILL.md` 保持低于 20,000 字节，frontmatter `references:` 声明必需 sidecar；安装器按声明渲染并复制到安装目录 `references/`，缺失时安装与 doctor 报错。主文件保留入口、按需读取指令，以及简短的“全自动执行不变量”；完整判据和详细流程仍在 references。
 
 14. **change 使用 run-state.md 恢复**：每个活跃 change 由 propose 创建 `run-state.md`，记录阶段、commit、任务进度、审查轮次/终止类型、验证证据、机械裁决和下一步。它随各阶段 commit 管理，与 `context.md` 分责；恢复时以 run-state + git + tasks 相互核对，冲突以可核验事实为准。
 

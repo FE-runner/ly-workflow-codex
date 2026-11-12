@@ -7,7 +7,11 @@
 ## Requirements
 
 ### Requirement: 每个活跃 change 维护 run-state.md
-`@lyx-propose` SHALL 在 change 目录下创建 `run-state.md`，并随 propose 阶段 commit 提交。文件 SHALL 至少记录 change 名、执行模式（`full-auto` / `manual`）、当前阶段与流水线阶段、基线或最后成功 commit、已完成任务比例、最近审查轮次与终止类型、验证证据、机械裁决和下一步安全动作。run-state.md 的标题、字段名、状态说明和证据摘要 SHALL 使用当前宿主配置中 `[general].language` 对应的自然语言（缺失、空白或非法时按 `zh-CN`）；`@lyx-apply`、review-plan、review-code 与 archive 续写时 SHALL 沿用该文件现有语言。`run-state.md` SHALL 与 `context.md` 分离：`context.md` 保存讨论语义和取舍背景，`run-state.md` 只保存可恢复执行状态。
+`@lyx-propose` SHALL 在真实 change 名确认后、方案自审开始前立即在 change 目录下创建 `run-state.md`，不得等到自审完成、`context.md` 产出或 propose 阶段 commit 时才首次创建。文件 SHALL 至少记录 change 名、执行模式（`full-auto` / `manual`）、当前阶段与流水线阶段、基线或最后成功 commit、已完成任务比例、最近审查轮次与终止类型、验证证据、机械裁决和下一步安全动作。run-state.md 的标题、字段名、状态说明和证据摘要 SHALL 使用当前宿主配置中 `[general].language` 对应的自然语言（缺失、空白或非法时按 `zh-CN`）；`@lyx-apply`、review-plan、review-code 与 archive 续写时 SHALL 沿用该文件现有语言。`run-state.md` SHALL 与 `context.md` 分离：`context.md` 保存讨论语义和取舍背景，`run-state.md` 只保存可恢复执行状态。
+
+#### Scenario: 方案自审前初始化
+- **WHEN** 真实 change 名确认，propose 即将进入方案自审
+- **THEN** `run-state.md` 已存在，记录执行模式、`阶段: propose-self-review`、流水线阶段和下一步安全动作
 
 #### Scenario: propose 完成
 - **WHEN** change artifacts、context.md 与方案自审完成

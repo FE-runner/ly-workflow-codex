@@ -432,7 +432,11 @@ apply 在最终模式为 `normal` 时 SHALL 校验 artifacts 与该模式一致�
 - **THEN** propose 自审把该问题列为待用户决策，不自行补默认行为
 
 ### Requirement: propose 初始化 change 运行账本
-`@lyx-propose` SHALL 在 change 确定后创建 `run-state.md`，记录 isolation metadata、propose 基线、当前阶段、自审结论摘要和下一步。该文件 SHALL 作为 change artifact 与 context.md 一同纳入 propose 阶段提交，但不得替代 proposal/design/tasks。
+`@lyx-propose` SHALL 在真实 change 名确认后、方案自审开始前创建 `run-state.md`，初始记录 isolation metadata、执行模式、`阶段: propose-self-review`、流水线阶段、propose 基线和下一步安全动作；自审、context.md 与 metadata 完成后再增量写入自审结论摘要。该文件 SHALL 作为 change artifact 与 context.md 一同纳入 propose 阶段提交，但不得替代 proposal/design/tasks。
+
+#### Scenario: 全自动自审前已有恢复账本
+- **WHEN** 用户选择全自动，真实 change 名确认且方案自审即将开始
+- **THEN** `run-state.md` 已记录 `执行模式: full-auto`、当前阶段和下一流水线阶段；即使自审报告后会话意外结束，也能据此恢复
 
 #### Scenario: 全自动 propose 结束
 - **WHEN** propose commit 成功

@@ -101,6 +101,18 @@
 
 标题同步是附属动作：失败或宿主不提供自动调用能力时，SHALL 如实报告实际状态并继续方案流程，SHALL NOT 伪造成功，也 SHALL NOT 因标题同步失败中断 propose。
 
+### 4.5 初始化 run-state.md（方案自审前）
+
+真实 change 名确认后、进入步骤 5 之前，SHALL 按 `references/recovery-and-evidence.md` 的骨架立即创建 `run-state.md`，不得等到自审或 context.md 完成后再创建。初始状态至少写入：
+
+- `阶段: propose-self-review`
+- `执行模式: <EXECUTION_MODE>`
+- `流水线阶段: review-plan | apply | review-code | none`（按 `reviewMode` 与执行模式确定）
+- `最后成功 commit: propose 基线或待本次阶段提交归属`
+- `下一步安全动作`：全自动时写明“完成方案自审、context 与阶段 commit 后立即进入下一阶段”；手动时写明等待用户选择是否审查
+
+`run-state.md` 无法创建或写入时 SHALL 立即停止并报告原始错误，SHALL NOT 进入方案自审。该文件后续由步骤 5.7 增量更新并随步骤 6 一起提交。
+
 ### 5. 方案自审（commit 前，由方案提出者执行）
 
 在确定真实 change 名（步骤 4）之后、暂存并 commit（步骤 6）之前，由当前会话（方案提出者）对该 change 的全部 artifacts（`proposal.md`/`design.md`/`tasks.md`/全部 delta spec）执行一次**方案自审**。提出者刚完成方案生成、上下文最全，负责查"逻辑闭环"与"业务全面性"这两类依赖上下文的问题；独立视角的"一致性 + 风险"仍归 `@lyx-review-plan` 的外部审查（职责分工，不重复）。
@@ -151,9 +163,9 @@ lyx:
 
 写入 metadata 后 SHALL 再运行一次 `openspec validate --changes <change-name>`；若验证失败，停止在 commit 前并报告原始错误。
 
-### 5.7 创建或更新 run-state.md（commit 前）
+### 5.7 更新 run-state.md（commit 前）
 
-在 change 确定后、步骤 6 commit 前，SHALL 按 `references/recovery-and-evidence.md` 的骨架创建 `run-state.md`（已存在则增量更新），至少写入：
+在方案自审、context.md 与 metadata 完成后、步骤 6 commit 前，SHALL 增量更新步骤 4.5 已创建的 `run-state.md`，至少写入：
 
 - `阶段: propose`
 - `执行模式: <EXECUTION_MODE>`

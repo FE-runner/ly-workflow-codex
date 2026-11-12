@@ -9,6 +9,8 @@
 ### Requirement: 长 skill 主文件保持压缩安全体积
 仓库中 `propose`、`review-plan`、`review-code` 的最终宿主渲染 `SKILL.md` SHALL 保持在 20,000 字节以内。超出主文件职责的判级表、终止条件、提交协议、快照格式、恢复语义和详细示例 SHALL 移入同 skill 的 `references/` sidecar，并由主文件在对应步骤显式要求按需读取。参考文件 SHALL NOT 被要求在每个会话开始时预读。
 
+**关键续跑不变量例外**：为避免关键阶段连续执行规则只存在于工具读取的 reference 输出中，`propose` 与 `review-plan` 主 `SKILL.md` SHALL 保留一份简短、最高优先级的“全自动执行不变量”，至少说明 stage report 非终态、下一阶段必须同回合续跑、结束前核对 `run-state.md`。该摘要 SHALL 控制在能让主文件继续低于 20,000 字节的范围内；完整判据和详细流程仍由 references 提供，不得把全部 reference 内容搬回主文件。
+
 #### Scenario: Claude Code 压缩后重挂
 - **WHEN** 长时间会话发生上下文压缩，宿主只重新挂载主 `SKILL.md`
 - **THEN** 主文件中的阶段入口仍存在，并明确指示在审查、提交或恢复前读取对应 reference
@@ -16,6 +18,10 @@
 #### Scenario: reference 缺失
 - **WHEN** 主文件要求的 reference 文件在安装目录中缺失
 - **THEN** 命令停止并报告缺失路径，不得在缺少规则的情况下继续执行关键关卡
+
+#### Scenario: 全自动续跑不变量在压缩后仍可见
+- **WHEN** 会话压缩后宿主只重新挂载 propose 或 review-plan 主 `SKILL.md`
+- **THEN** 主文件仍包含“阶段报告非终态、下一阶段同回合续跑、结束前核对 run-state”的简短不变量，不依赖重新读取工具输出才能知道该要求
 
 ### Requirement: skill description 只描述触发条件
 核心 skill 的 frontmatter `description` SHALL 描述何时使用该 skill、覆盖哪些用户触发条件和不适用边界，SHALL NOT 概括完整执行流程、审查轮次、提交顺序或宿主实现细节。完整流程 SHALL 只在主 `SKILL.md` 正文和 references 中定义。三个超限 skill 的渲染后 description SHALL NOT 包含固定禁止片段：`审查-修复循环`、`终止条件`、`提交顺序`、`自动流水线`、`reviewExecutor`、`spawn`。

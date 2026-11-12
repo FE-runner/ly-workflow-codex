@@ -16,4 +16,10 @@ references:
 - `references/review-contract.md`：审查对象定位、执行者选择、分级判据、Critical 裁决、修复循环、终止条件、快照和统一提交。
 - `references/recovery-and-evidence.md`：run-state 恢复、审查轮次记录和新鲜验证证据。
 
-本文件只负责入口和路由。不得只读 description 或主文件后就开始审查。
+## 全自动执行不变量（最高优先级）
+
+- `run-state.md` 的 `执行模式` 为 `full-auto` 时，正常清零报告是中间状态，不是流水线最终回复。
+- 正常清零且无待用户决策、失败或终止条件时，SHALL 在同一回合返回编排方并继续 apply 前置校验与 apply，SHALL NOT 等待用户再次触发。
+- 准备结束全自动回合前 SHALL 核对 run-state 的下一流水线阶段；仅正常终态或明确人工介入条件允许结束。
+
+除上述 references 与全自动执行不变量外，本文件只负责入口和路由。不得只读 description 或主文件后就开始审查。

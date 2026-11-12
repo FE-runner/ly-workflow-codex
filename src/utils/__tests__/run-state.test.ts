@@ -48,6 +48,23 @@ describe('run-state lifecycle contract', () => {
     expect(proposeSpec).toContain('阶段报告非终态')
   })
 
+  it('keeps continuation invariants in main skills and initializes run-state before self-review', () => {
+    const proposeMain = read('templates/skills/propose.md')
+    const reviewPlanMain = read('templates/skills/review-plan.md')
+    const proposeContract = read('templates/skill-references/propose/propose-contract.md')
+
+    expect(proposeMain).toContain('全自动执行不变量（最高优先级）')
+    expect(proposeMain).toContain('不得结束当前回合')
+    expect(proposeMain).toContain('run-state.md')
+    expect(reviewPlanMain).toContain('全自动执行不变量（最高优先级）')
+    expect(reviewPlanMain).toContain('正常清零')
+
+    expect(proposeContract).toContain('### 4.5 初始化 run-state.md（方案自审前）')
+    expect(proposeContract).toContain('阶段: propose-self-review')
+    expect(proposeContract.indexOf('### 4.5 初始化 run-state.md（方案自审前）'))
+      .toBeLessThan(proposeContract.indexOf('### 5. 方案自审'))
+  })
+
   it('requires fresh command evidence before completion claims', () => {
     for (const path of [
       'templates/skills/apply.md',

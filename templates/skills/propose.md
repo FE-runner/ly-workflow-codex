@@ -16,4 +16,13 @@ references:
 - `references/propose-contract.md`：隔离询问、自动/手动选择、artifact 生成、change 名确认、方案自审、context/run-state、提交和流水线。
 - `references/recovery-and-evidence.md`：运行账本、机械裁决和新鲜验证证据规则。
 
-本文件只负责入口和路由。除上述 references 明确规定外，不得根据 frontmatter description 自行简化流程。
+## 全自动执行不变量（最高优先级）
+
+- 用户选择全自动后，真实 change 名一经确认，SHALL 立即创建 `run-state.md`，写入 `执行模式: full-auto`、当前阶段和下一步；该初始化 SHALL 早于方案自审。
+- 方案自审清单、review-plan 报告、apply 完成证据和节点校验结论都只是中间状态，SHALL NOT 被当作最终回复。
+- 当前阶段正常完成且不存在待用户决策、失败或终止条件时，SHALL 立即调用下一阶段所需工具并继续同一回合。
+- review-plan 正常清零后 SHALL 继续 apply；apply 正常完成并提交后 SHALL 继续 review-code。
+- 只有 review-code 正常清零，或出现明确业务决策、失败、终止条件时，才允许结束全自动回合。
+- 准备结束回合前 SHALL 核对 `run-state.md`；若 `执行模式=full-auto` 且流水线尚未到正常终态，不得结束当前回合。
+
+除上述 references 与全自动执行不变量外，本文件只负责入口和路由；不得根据 frontmatter description 自行简化流程。

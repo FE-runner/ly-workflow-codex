@@ -68,7 +68,7 @@ Later propose/apply/review/archive runs reuse it; explicit normal/off configurat
 | `@lyx-publish` | Four npm publishing scenarios (bmc private Nexus / GitHub Packages / npmjs + GitHub Release / CI auto publish), from preflight → version inference → build → publish → verification |
 | `@lyx-commit` `@lyx-rollback` `@lyx-clean-branches` `@lyx-worktree` | Git tools (worktree only has `add` / `list` / `remove` / `prune` / `migrate`; `switch` is removed, and isolation switching is always triggered by `@lyx-propose`) |
 
-Review-fix loop details now live in each installed skill's `references/` directory (executor branches, `send_input` reuse and incremental passing, termination conditions, run-state, and commit timing); the main `SKILL.md` keeps only the entry point and on-demand reads. [docs/codex-exec-contract.md](./docs/codex-exec-contract.md) is DEPRECATED and kept only for historical reference.
+Review-fix loop details now live in each installed skill's `references/` directory (executor branches, `send_input` reuse and incremental passing, termination conditions, run-state, and commit timing); the main `SKILL.md` keeps the entry point, on-demand reads, and a compact "full-auto execution invariants" block so critical continuation rules do not exist only in tool-read reference output. [docs/codex-exec-contract.md](./docs/codex-exec-contract.md) is DEPRECATED and kept only for historical reference.
 
 ## Typical Workflow
 
