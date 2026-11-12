@@ -17,7 +17,7 @@ skills 检查 SHALL NOT 以"任一 `openspec-*` skill 存在"判定通过。检�
 
 **本能力其他 Requirement 的技能根按宿主解读（自本 change 起）**：本能力其余 Requirement 正文与其 Scenario 中出现的具体技能根路径（`<project>/.agents/skills`、`<project>/.codex/skills`、`~/.agents/skills`、`~/.codex/skills`）SHALL 按上述宿主展开规则解读——在 claude 宿主场景下对应 `<project>/.claude/skills` 与 `~/.claude/skills`。这些 Requirement 描述的分层检查、状态口径、非阻断提示与降级行为本身 SHALL 保持不变。
 
-**OpenSpec 2.x 项目产物**：项目同时安装 Codex 与 Claude 时，OpenSpec 官方命令 SHALL 只在 `.agents/skills/openspec-*` 写一份项目级 skill；Claude Code 的 `.claude/skills/openspec-*` SHALL 是指向该源的链接或等价可发现副本。项目版本控制 SHALL 能提交 `.agents/skills/openspec-*`、`.agents/skills/.openspec-target` 与 `.claude/skills/openspec-*`，同时继续忽略其他项目级 agent 本地缓存。
+**OpenSpec 2.x 项目产物**：项目同时安装 Codex 与 Claude 时，OpenSpec 官方命令 SHALL 只在 `.agents/skills/openspec-*` 写一份项目级 skill；Claude Code 的 `.claude/skills/openspec-*` SHALL 是指向该源的链接或等价可发现副本。`.agents/` 与 `.claude/` SHALL 被视为本机生成的非版本控制产物，项目 `.gitignore` SHALL 忽略整个 `.agents/` 与 `.claude/` 目录；项目仓库 SHALL 只跟踪 `openspec/` 下的配置、spec、change 与归档状态，SHALL NOT 跟踪任何 skill、命令、链接或 `.openspec-target` 文件。
 
 **宿主集合为空时的处理（自本 change 起）**：本检查在主流程之前执行，此时可能尚不存在任何宿主配置文件。不存在任何宿主配置文件时，读取型检查（技能与 root 的扫描判定）的宿主集合 SHALL 按 `multi-host-install` 的"无配置文件时的宿主集合"语义取全部已注册宿主，SHALL NOT 因集合为空而跳过技能层检查、报告 `missing`，或让修复目标落空。
 

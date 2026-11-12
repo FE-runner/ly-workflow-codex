@@ -21,7 +21,7 @@ lycx project test-mode --unset              # 移除当前项目覆盖，回退�
 
 - CLI 二进制名 `lycx`（子命令：`init`/`project test-mode`/`doctor`/`status`/`uninstall`/`openspec inspect|ensure`，宿主相关命令支持 `--host <codex,claude>`；裸命令进菜单；`update` 在菜单内）
 - 安装产物与配置：见下方「宿主」一节
-- OpenSpec 2.x：项目级 skills 统一写入 `.agents/skills/openspec-*`，Claude Code 使用 `.claude/skills/openspec-*` 链接；`/opsx:*` 命令已移除，`lyx` 继续委托同名 `openspec-*` skills。升级后在每个 OpenSpec 项目运行 `openspec update --dry-run` 与 `openspec update`，并提交生成产物
+- OpenSpec 2.x：项目级 skills 统一写入 `.agents/skills/openspec-*`，Claude Code 使用 `.claude/skills/openspec-*` 链接；`/opsx:*` 命令已移除，`lyx` 继续委托同名 `openspec-*` skills。项目级 `.agents/` 与 `.claude/` 是本地生成产物并被忽略，仓库只跟踪 `openspec/`；升级后在每个 OpenSpec 项目运行 `openspec update --dry-run` 与 `openspec update`
 - 审查范围：`[host] reviewMode`（`full` / `plan-only` / `code-only` / `off`，未配置或非法等价 `full`）门控 `@lyx-propose` 编排入口执行哪些审查关卡（`plan-only` 跳过代码审查、`code-only` 跳过方案审查、`off` 两级都跳过；apply 始终执行），不影响被直接调用的 `@lyx-review-plan` / `@lyx-review-code`、`@lyx-apply` 与归档前验证；被跳过的关卡打印显式 `[跳过]` 状态行。交互 `init` 先问 `testMode`，随后在审查配置段开头问 `reviewMode`（`off` 跳过 review 侧提问、既有值保留），`lycx doctor` 展示该字段并对非法取值 / `off` + review 侧字段非空输出 WARN
 - 测试模式：有效配置 `testMode` 按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析，支持 `normal` / `off` / `ask`。配置为 `ask` 时，change 命令按 `normal` / `off` 首次询问一次并写入 change 的 `.openspec.yaml`：
 

@@ -24,18 +24,11 @@ Thumbs.db
 *.backup
 *.bak
 
-# Local agent tooling; OpenSpec 2.x project skills are tracked below.
+# Local agent tooling; OpenSpec state is tracked under openspec/.
 .ace-tool/
-.claude/*
-!.claude/skills/
-.claude/skills/*
-!.claude/skills/openspec-*
+.agents/
+.claude/
 .magi/
-.agents/*
-!.agents/skills/
-.agents/skills/*
-!.agents/skills/.openspec-target
-!.agents/skills/openspec-*
 .codex/
 .hermes/
 

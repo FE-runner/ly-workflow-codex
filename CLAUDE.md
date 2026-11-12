@@ -25,7 +25,7 @@ lycx uninstall [--host <hosts>]             # 按宿主卸载（缺省 = 全部�
 pnpm eval:skills -- --help                  # 开发期真实 skill 行为评测（不进入默认 CI）
 ```
 
-安装产物（按宿主）：codex = `~/.agents/skills/lyx-*/`（15 个 skills）+ `~/.codex/lyx/prompts/codex/`（审查角色词）+ `~/.codex/lyx/config.toml`；claude = `~/.claude/skills/lyx-*/`（15 个 skills）+ `~/.claude/agents/lyx-*.md`（3 个子代理定义）+ `~/.claude/lyx/config.toml`。本包私有目录，不做任何自动迁移；lyx 不写 Claude Code 自身的 provider / settings。OpenSpec 2.x 的项目级产物位于 `.agents/skills/openspec-*`，Claude Code 侧是 `.claude/skills/openspec-*` 链接；卸载 lyx 不触碰这些 OpenSpec 自有产物。Node.js 最低版本为 `22.12.0`。
+安装产物（按宿主）：codex = `~/.agents/skills/lyx-*/`（15 个 skills）+ `~/.codex/lyx/prompts/codex/`（审查角色词）+ `~/.codex/lyx/config.toml`；claude = `~/.claude/skills/lyx-*/`（15 个 skills）+ `~/.claude/agents/lyx-*.md`（3 个子代理定义）+ `~/.claude/lyx/config.toml`。本包私有目录，不做任何自动迁移；lyx 不写 Claude Code 自身的 provider / settings。OpenSpec 2.x 的项目级产物位于 `.agents/skills/openspec-*`，Claude Code 侧是 `.claude/skills/openspec-*` 链接；项目级 `.agents/` 与 `.claude/` 是本地生成产物，应忽略且不纳入仓库，只跟踪 `openspec/`。卸载 lyx 不触碰这些 OpenSpec 自有产物。Node.js 最低版本为 `22.12.0`。
 
 ## 15 个 @lyx-* skills
 
