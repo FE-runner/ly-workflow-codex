@@ -125,7 +125,7 @@ Claude 宿主交互模式下，宿主默认以后台方式运行子代理，主�
 
 ### Requirement: 不越界修改宿主自有配置与 OpenSpec 产物
 
-安装与卸载 Claude 宿主时，lyx SHALL NOT 写入该宿主自身的 provider（模型与网关）配置，SHALL NOT 删除或修改 OpenSpec 自有产物（如 `.claude/commands/` 下的 OpenSpec 命令与 `.claude/skills/openspec-*`）。对当前项目的 OpenSpec 依赖修复 SHALL 经 OpenSpec 官方命令完成，SHALL NOT 由 lyx 直接改写其产物。
+安装与卸载 Claude 宿主时，lyx SHALL NOT 写入该宿主自身的 provider（模型与网关）配置，SHALL NOT 删除或修改 OpenSpec 自有产物（OpenSpec 2.x 的 `.agents/skills/openspec-*`、`.openspec-target` 与 `.claude/skills/openspec-*` 链接；历史 1.x 的 `.claude/commands/` 命令如仍存在也原样保留）。对当前项目的 OpenSpec 依赖修复 SHALL 经 OpenSpec 官方命令完成，SHALL NOT 由 lyx 直接改写其产物。
 
 #### Scenario: 卸载保留 OpenSpec 自有产物
 

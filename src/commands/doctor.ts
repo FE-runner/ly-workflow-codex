@@ -10,7 +10,8 @@ import { getHostConfigPath, sanitizeExecutor } from '../utils/config'
 import { listPrefixedDirs } from '../utils/fs-helpers'
 import { getAdapter } from '../utils/host-adapters'
 import { resolveTargetHosts } from '../utils/host-selection'
-import { PACKAGE_NAME } from '../utils/package-meta'
+import { isNodeVersionSupported } from '../utils/node-version'
+import { MIN_NODE_VERSION, PACKAGE_NAME } from '../utils/package-meta'
 import { inspectOpenspec } from '../utils/preflight'
 import { readEffectiveProjectTestMode } from '../utils/project-config'
 
@@ -134,11 +135,11 @@ export async function doctor(options: HostOpsOptions = {}): Promise<void> {
 
   // 1. Node version
   const nodeVer = process.version
-  const major = Number.parseInt(nodeVer.slice(1))
+  const nodeSupported = isNodeVersionSupported(nodeVer.slice(1))
   common.push({
     label: 'Node.js',
-    status: major >= 20 ? 'ok' : 'fail',
-    detail: `${nodeVer}${major < 20 ? ' (requires >=20)' : ''}`,
+    status: nodeSupported ? 'ok' : 'fail',
+    detail: `${nodeVer}${nodeSupported ? '' : ` (requires >=${MIN_NODE_VERSION})`}`,
   })
 
   // 2. OpenSpec dependency（按宿主判定 skills；共享检查器）

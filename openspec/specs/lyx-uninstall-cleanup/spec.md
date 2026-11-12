@@ -17,7 +17,7 @@
 
 作用于单一宿主时，SHALL NOT 删除、移动或修改另一宿主的私有目录与产物。
 
-**不触碰 OpenSpec 自有产物**：卸载任一宿主时 SHALL NOT 删除或修改 OpenSpec 自行生成的产物——包括项目内的 `.claude/commands/` 下由 OpenSpec 创建的命令、`.claude/skills/openspec-*`，以及 Codex 侧的 OpenSpec 技能目录。这类产物的归属方是 OpenSpec 而非本包，卸载本包不构成删除理由。
+**不触碰 OpenSpec 自有产物**：卸载任一宿主时 SHALL NOT 删除或修改 OpenSpec 自行生成的产物——包括 OpenSpec 2.x 的 `.agents/skills/openspec-*`、`.agents/skills/.openspec-target`、`.claude/skills/openspec-*` 链接，以及历史 1.x 的 `.claude/commands/` 命令。这类产物的归属方是 OpenSpec 而非本包，卸载本包不构成删除理由。
 
 #### Scenario: 卸载时删除配置与角色词
 - **WHEN** 用户运行 `lycx uninstall`，`~/.codex/lyx/config.toml` 与 `~/.codex/lyx/prompts/` 存在
@@ -32,7 +32,7 @@
 - **THEN** `~/.claude/lyx/`、`~/.claude/skills/lyx-*` 与 `~/.claude/agents/lyx-*` 被移除，而 `~/.codex/lyx/` 与 `~/.agents/skills/lyx-*` 原样保留
 
 #### Scenario: 卸载保留 OpenSpec 自有产物
-- **WHEN** 用户卸载 claude 宿主，项目中存在 OpenSpec 生成的 `.claude/commands/` 命令与 `.claude/skills/openspec-*` 技能
+- **WHEN** 用户卸载 claude 宿主，项目中存在 OpenSpec 2.x 生成的 `.agents/skills/openspec-*`、`.openspec-target` 与 `.claude/skills/openspec-*` 链接
 - **THEN** 这些 OpenSpec 产物原样保留，命令不删除、不移动、不改动其中任何文件
 
 #### Scenario: 卸载顺序无关且可重复

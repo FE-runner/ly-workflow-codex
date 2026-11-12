@@ -9,6 +9,8 @@ import { join } from 'pathe'
 import { i18n } from '../i18n'
 import { listInstalledHosts } from './config'
 import { getAdapter, listRegisteredHosts } from './host-adapters'
+import { isNodeVersionSupported } from './node-version'
+import { MIN_NODE_VERSION } from './package-meta'
 
 /**
  * OpenSpec dependency inspection and repair.
@@ -413,6 +415,13 @@ function printUnavailable(): void {
 }
 
 async function runNpmInstall(): Promise<boolean> {
+  if (!isNodeVersionSupported()) {
+    console.error(ansis.red(i18n.t('common:preflight.nodeTooOldForOpenspec', {
+      current: process.versions.node,
+      minimum: MIN_NODE_VERSION,
+    })))
+    return false
+  }
   return new Promise((resolve) => {
     const [cmd, ...args] = INSTALL_CMD
     const child = spawn(cmd, args, { stdio: 'inherit', ...SHELL_OPT })

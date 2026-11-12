@@ -2,7 +2,7 @@
 
 > ⚠️ **权威文档是 [AGENTS.md](./AGENTS.md)**：本仓库的开发指导、模块职责、关键设计决策以 AGENTS.md 为准；本文件只做精简导航，内容与 AGENTS.md 对齐，双向漂移时以 AGENTS.md 为准。对外说明见 [README.md](./README.md)。
 
-**Last Updated**: 2026-11-11 (v0.14.2)
+**Last Updated**: 2026-11-12 (v0.14.2)
 
 ---
 
@@ -25,7 +25,7 @@ lycx uninstall [--host <hosts>]             # 按宿主卸载（缺省 = 全部�
 pnpm eval:skills -- --help                  # 开发期真实 skill 行为评测（不进入默认 CI）
 ```
 
-安装产物（按宿主）：codex = `~/.agents/skills/lyx-*/`（15 个 skills）+ `~/.codex/lyx/prompts/codex/`（审查角色词）+ `~/.codex/lyx/config.toml`；claude = `~/.claude/skills/lyx-*/`（15 个 skills）+ `~/.claude/agents/lyx-*.md`（3 个子代理定义）+ `~/.claude/lyx/config.toml`。本包私有目录，不做任何自动迁移；lyx 不写 Claude Code 自身的 provider / settings，卸载不碰 OpenSpec 自有产物。
+安装产物（按宿主）：codex = `~/.agents/skills/lyx-*/`（15 个 skills）+ `~/.codex/lyx/prompts/codex/`（审查角色词）+ `~/.codex/lyx/config.toml`；claude = `~/.claude/skills/lyx-*/`（15 个 skills）+ `~/.claude/agents/lyx-*.md`（3 个子代理定义）+ `~/.claude/lyx/config.toml`。本包私有目录，不做任何自动迁移；lyx 不写 Claude Code 自身的 provider / settings。OpenSpec 2.x 的项目级产物位于 `.agents/skills/openspec-*`，Claude Code 侧是 `.claude/skills/openspec-*` 链接；卸载 lyx 不触碰这些 OpenSpec 自有产物。Node.js 最低版本为 `22.12.0`。
 
 ## 15 个 @lyx-* skills
 

@@ -39,7 +39,7 @@
     "templates/skills/"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "dev": "tsx src/cli.ts",

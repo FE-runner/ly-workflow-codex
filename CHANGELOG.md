@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- 适配 OpenSpec 2.0：OpenSpec 项目级 skills 统一从 `.agents/skills/openspec-*` 发现，Claude Code 使用 `.claude/skills/openspec-*` 链接；项目 `.gitignore` 允许提交 OpenSpec 2.x 产物
+- npm、`lycx doctor` 与 OpenSpec 缺失时的安装 preflight 统一要求 Node.js `>=22.12.0`；旧版本会跳过 npm 安装并提示升级
+- 同步中英文 README、OpenSpec preflight / Claude host / uninstall 主 spec 与双宿主文档
+
 ## [0.14.2] - 2026-11-11
 
 ### Fixed

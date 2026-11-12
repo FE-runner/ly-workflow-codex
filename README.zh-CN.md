@@ -5,7 +5,7 @@
 > **Codex 与 Claude Code** 双宿主单 Agent 工作流：同一会话内自己完成探索 / 方案 / 实施 / 审查编排，两个宿主共享同一套命令流程。审查与实施主体由当前宿主的 `[host] reviewExecutor` / `codingExecutor` 决定——未配置等价 `main`（主 agent 直接执行，默认），显式配置 `subagent` 才 spawn 独立子代理（非 fork + 范围点名；软上下文经 change 目录 `context.md` 到达）。慢验证（测试 / 类型检查）统一由 `@lyx-archive` 的归档前关卡执行一次；生产构建不属于 fix / archive 门禁。最大化复用 OpenSpec 原生工作流。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Node](https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/Node.js-%3E%3D22.12.0-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
 ## 安装
 
@@ -21,6 +21,7 @@ lycx project test-mode --unset              # 移除当前项目覆盖，回退�
 
 - CLI 二进制名 `lycx`（子命令：`init`/`project test-mode`/`doctor`/`status`/`uninstall`/`openspec inspect|ensure`，宿主相关命令支持 `--host <codex,claude>`；裸命令进菜单；`update` 在菜单内）
 - 安装产物与配置：见下方「宿主」一节
+- OpenSpec 2.x：项目级 skills 统一写入 `.agents/skills/openspec-*`，Claude Code 使用 `.claude/skills/openspec-*` 链接；`/opsx:*` 命令已移除，`lyx` 继续委托同名 `openspec-*` skills。升级后在每个 OpenSpec 项目运行 `openspec update --dry-run` 与 `openspec update`，并提交生成产物
 - 审查范围：`[host] reviewMode`（`full` / `plan-only` / `code-only` / `off`，未配置或非法等价 `full`）门控 `@lyx-propose` 编排入口执行哪些审查关卡（`plan-only` 跳过代码审查、`code-only` 跳过方案审查、`off` 两级都跳过；apply 始终执行），不影响被直接调用的 `@lyx-review-plan` / `@lyx-review-code`、`@lyx-apply` 与归档前验证；被跳过的关卡打印显式 `[跳过]` 状态行。交互 `init` 先问 `testMode`，随后在审查配置段开头问 `reviewMode`（`off` 跳过 review 侧提问、既有值保留），`lycx doctor` 展示该字段并对非法取值 / `off` + review 侧字段非空输出 WARN
 - 测试模式：有效配置 `testMode` 按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析，支持 `normal` / `off` / `ask`。配置为 `ask` 时，change 命令按 `normal` / `off` 首次询问一次并写入 change 的 `.openspec.yaml`：
 
@@ -47,7 +48,7 @@ lyx:
 | 子代理模型 / 推理档 | 按 `[host]` 取值随每次 spawn 传入 | 渲染进子代理定义（未配置 = `model: inherit`）；配置改动后 `lycx doctor` 提示偏差，`lycx update` 重渲染 |
 
 - **两个宿主都有两条审查路径**：`main`（默认）= 主 agent 直接审查 / 实施，保留完整语义（分级、正常清零准出、自审最多 2 轮、快照留痕）；`subagent`（可选）= 非 fork 独立子代理。Claude Code 侧用 `Agent` 工具调用自定义子代理、`SendMessage` 续跑；交互模式默认后台运行，"等待"语义为"结果必须被消费并如实报告"，不冒充本轮同步阻塞。子代理不可用时输出 `[回退] subagent 不可用: <原始报错>` 并回退主 agent。
-- **宿主边界**：共享安装层只认适配器接口与宿主注册表，宿主专属内容在 `src/hosts/<id>/` 与 `templates/hosts/<id>/`。lyx 不写 Claude Code 自身的 provider / settings；卸载不触碰 OpenSpec 自有产物（`.claude/commands/opsx/`、`.claude/skills/openspec-*`）与共用的 `~/.ly/worktrees/`。
+- **宿主边界**：共享安装层只认适配器接口与宿主注册表，宿主专属内容在 `src/hosts/<id>/` 与 `templates/hosts/<id>/`。lyx 不写 Claude Code 自身的 provider / settings；卸载不触碰 OpenSpec 自有产物（`.agents/skills/openspec-*`、`.claude/skills/openspec-*`、`.openspec-target`）与共用的 `~/.ly/worktrees/`。
 - **Claude Code 下的 `@lyx-init`** 额外产出导入 `AGENTS.md` 的 `CLAUDE.md`（`@AGENTS.md`）——Claude Code 仅在项目无 `CLAUDE.md` 时读取 `AGENTS.md`。
 - 下文的 `@lyx-<command>` 是命令标识；在 Claude Code 中请用 `/lyx-<command>`。
 
@@ -93,7 +94,7 @@ lyx:
 - **apply = 执行者可切换**：`codingExecutor = "main"`（默认）= 主 agent 直接实施；`codingExecutor = "subagent"` = spawn coding subagent（非 fork + 只实施 change 范围 + 经 context.md 获取软上下文）。两条路径均由主会话统一提交 `apply: <change-name>`
 - **agent 模型与推理档需额外配置（不做清单强校验）**：review-plan / review-code / apply 三模板按"模板指示 + 宿主能力"落实模型与推理档——模型 = 对应配置字段，未配置或空白 → 继承当前会话模型；推理档 = `reviewReasoningEffort`/`codingReasoningEffort`，仅在非空时随对应 spawn 传入 `reasoning_effort`，空白不传，取值不做枚举强校验；交互 init / 菜单可显式选择不覆盖（清除字段）或覆盖指定档位，非交互 update 保留原值。能否 spawn 由运行环境实际能力决定，以宿主 spawn 报错为准（报错含 `Unknown model ... Available models: ...` 时如实展示并提示改用可用模型）；读取配置失败 → "配置状态未知"提示运行 `lycx doctor`；宿主无 subagent 能力或初始 spawn 失败 → 按环境级不可用回退。`lycx doctor` 按宿主分组输出，codex 宿主含"Codex 子代理模型配置"提示检查项（模型留空 OK / 已配置 OK；两个推理档展示"未覆盖 / 已覆盖"；`spawnableModels` 格式非法输出 WARN），并附验证某模型是否可 spawn 的示例 prompt
 - **发布**：打 tag `v*.*.*` push 触发 GitHub Actions 自动发 npm 包；无独立二进制构建步骤
-- **生命周期**：直接委托 OpenSpec 原生 skills（按宿主：`openspec init --tools codex|claude`；skills 在各宿主自己的技能根里判定，只为缺失的宿主补齐）（`@openspec-explore` / `@openspec-propose` / `@openspec-apply-change` / `@openspec-archive-change`）；`lycx init` / `@lyx-init` / `lycx doctor` 共用同一 OpenSpec 三层检查（CLI + 按 profile 推导的 skills + `openspec doctor --json` root 健康）。`lycx init` 默认只诊断、不写当前项目；`--init-openspec` 或 `@lyx-init` 才执行项目级修复。skills 仅全局可用时输出 `global-only` WARN 并继续
+- **生命周期**：直接委托 OpenSpec 2.x 原生 skills（`openspec init --tools codex|claude`；Codex 从项目 `.agents/skills` 发现，Claude Code 从指向同一目录的 `.claude/skills` 链接发现，只为缺失的宿主补齐）（`@openspec-explore` / `@openspec-propose` / `@openspec-apply-change` / `@openspec-archive-change`）；`lycx init` / `@lyx-init` / `lycx doctor` 共用同一 OpenSpec 三层检查（CLI + 按 profile 推导的 skills + `openspec doctor --json` root 健康）。`lycx init` 默认只诊断、不写当前项目；`--init-openspec` 或 `@lyx-init` 才执行项目级修复。skills 仅全局可用时输出 `global-only` WARN 并继续
 
 ## License
 

@@ -2,7 +2,7 @@
 
 让安装器在入口处检测 OpenSpec 依赖（openspec CLI + openspec-* skills），把"装了 ly-workflow-codex 但 OpenSpec 生命周期命令不可用"的发现时机从第一次命令调用前移到安装期，并为 `lycx doctor` 提供体检项。
 
-codex 单宿主下，技能存在性判定检测用户级 `~/.agents/skills/` 与项目 `.agents/skills/` 下的 `openspec-*` skill（`openspec-explore`/`openspec-propose`/`openspec-apply-change`/`openspec-archive-change` 任一存在 `SKILL.md` 即可，即已跑过 `openspec init`）。
+OpenSpec 2.x 下，项目级 OpenSpec skills 以 `.agents/skills/openspec-*` 为唯一源；Codex 直接扫描该目录，Claude Code 扫描指向同一目录的 `.claude/skills/openspec-*` 链接。技能存在性判定仍按当前 workflow profile 推导 required 清单，不能再以“任一 skill 存在”判定通过。
 
 ## Requirements
 
@@ -16,6 +16,8 @@ skills 检查 SHALL NOT 以"任一 `openspec-*` skill 存在"判定通过。检�
 **多宿主结论汇总（自本 change 起）**：宿主集合含多个宿主时，skills 层 SHALL 对每个宿主分别判定并按宿主分行输出各自状态；整体状态 SHALL 取各宿主中最差者（`missing` > `global-only` > `project-ready`）。缺失清单与建议修复命令 SHALL 只针对判定为 `missing` 的宿主，`global-only` 的 WARN 同样按宿主标注；SHALL NOT 因某一宿主就绪而掩盖另一宿主的缺失。
 
 **本能力其他 Requirement 的技能根按宿主解读（自本 change 起）**：本能力其余 Requirement 正文与其 Scenario 中出现的具体技能根路径（`<project>/.agents/skills`、`<project>/.codex/skills`、`~/.agents/skills`、`~/.codex/skills`）SHALL 按上述宿主展开规则解读——在 claude 宿主场景下对应 `<project>/.claude/skills` 与 `~/.claude/skills`。这些 Requirement 描述的分层检查、状态口径、非阻断提示与降级行为本身 SHALL 保持不变。
+
+**OpenSpec 2.x 项目产物**：项目同时安装 Codex 与 Claude 时，OpenSpec 官方命令 SHALL 只在 `.agents/skills/openspec-*` 写一份项目级 skill；Claude Code 的 `.claude/skills/openspec-*` SHALL 是指向该源的链接或等价可发现副本。项目版本控制 SHALL 能提交 `.agents/skills/openspec-*`、`.agents/skills/.openspec-target` 与 `.claude/skills/openspec-*`，同时继续忽略其他项目级 agent 本地缓存。
 
 **宿主集合为空时的处理（自本 change 起）**：本检查在主流程之前执行，此时可能尚不存在任何宿主配置文件。不存在任何宿主配置文件时，读取型检查（技能与 root 的扫描判定）的宿主集合 SHALL 按 `multi-host-install` 的"无配置文件时的宿主集合"语义取全部已注册宿主，SHALL NOT 因集合为空而跳过技能层检查、报告 `missing`，或让修复目标落空。
 
@@ -78,7 +80,18 @@ skills 检查 SHALL NOT 以"任一 `openspec-*` skill 存在"判定通过。检�
 - **WHEN** 用户同意就地安装但 npm 安装失败（网络错误、权限不足等）
 - **THEN** 如实报告 npm 原始错误，按"用户拒绝"同等口径继续安装器主流程
 
-### Requirement: CLI 在但 opsx 技能缺失时非阻断提示
+### Requirement: OpenSpec npm 安装执行 Node.js 版本门槛
+npm 安装的 OpenSpec 1.16+ / 2.x SHALL 要求 Node.js `>=22.12.0`。`package.json` 的 `engines.node`、`lycx doctor` 的 Node.js 检查与 OpenSpec 缺失时的自动 npm 安装 SHALL 使用同一个最低版本常量。当前 Node.js 低于该版本时，preflight SHALL NOT 执行 `npm install -g @fission-ai/openspec@latest`，只输出当前版本、最低版本与升级或改用 OpenSpec 独立二进制的建议；`lycx doctor` SHALL 将 Node.js 判为失败。
+
+#### Scenario: 旧 Node.js 不尝试 npm 安装 OpenSpec
+- **WHEN** 当前 Node.js 为 `22.11.0`，openspec CLI 缺失，用户同意安装 OpenSpec
+- **THEN** preflight 不执行 npm 安装命令，报告最低要求 `22.12.0`，并继续安装器主流程
+
+#### Scenario: 满足门槛的新版本通过
+- **WHEN** 当前 Node.js 为 `22.12.0` 或更高
+- **THEN** `lycx doctor` 的 Node.js 检查通过，OpenSpec 缺失时的自动安装可继续执行
+
+### Requirement: CLI 在但 OpenSpec 技能缺失时非阻断提示
 前置检查发现 openspec CLI 存在但 required skills 未达到 `project-ready` 时，SHALL 按共享检查器结果输出非阻断提示，SHALL NOT 询问是否代跑 `openspec init`。`global-only` 状态 SHALL 输出 WARN，说明 skills 仅全局可用但命令可继续；`missing` 状态 SHALL 输出缺失 skill 清单、当前 required workflows 来源和修复命令。`lycx init` SHALL NOT 自动写当前项目；`lycx init --init-openspec` 与 `@lyx-init` SHALL 按各自修复策略处理，且 SHALL NOT 因 `global-only` 自动写项目。
 
 #### Scenario: 仅全局技能可用时 WARN 不阻断

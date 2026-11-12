@@ -2,7 +2,7 @@
 
 > 多宿主（Codex / Claude Code）单 Agent 工作流：同一会话内自己完成聊天 / 分析 / 规划 / 实施，两个宿主共享同一套命令流程。审查与实施主体由当前宿主配置文件的 `[host] reviewExecutor` / `codingExecutor` 决定（未配置等价 `main` = 主 agent 直接执行；`subagent` = spawn 独立子代理，非 fork spawn + 主会话逐条裁决异议）；慢验证统一由 `@lyx-archive` 的归档前关卡执行。执行约定内联于各 skill 模板（[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED）。
 
-**Last Updated**: 2026-11-11 (v0.14.2)
+**Last Updated**: 2026-11-12 (v0.14.2)
 
 ---
 
@@ -18,7 +18,7 @@
 
 ## 包级常量
 
-`src/utils/package-meta.ts` 只保留包级常量：`PACKAGE_NAME`（`ly-workflow-codex`）、`BIN_NAME`（`lycx`）、`ISSUES_URL`。宿主路径常量在各宿主包：
+`src/utils/package-meta.ts` 只保留包级常量：`PACKAGE_NAME`（`ly-workflow-codex`）、`BIN_NAME`（`lycx`）、`ISSUES_URL`、`MIN_NODE_VERSION`（`22.12.0`，npm 安装 OpenSpec 1.16+ / 2.x 的最低版本）。宿主路径常量在各宿主包：
 
 | 宿主 | 常量（文件） | 值 |
 |------|-------------|-----|
@@ -178,7 +178,7 @@ testMode = "off"
 3. **实施走 coding subagent 而非本会话自实施**：不存在 routing 概念与外部实施后端；coding subagent 非 fork spawn、只实施 change 范围、可指定模型、经 context.md 获取软上下文，改动回传主会话，由主会话确认后回写 context.md 并统一提交（提交权收归主会话）。
 4. **每宿主一个自包含配置文件**：`~/.codex/lyx/config.toml` 与 `~/.claude/lyx/config.toml`，配置文件存在即已安装（部分卸载 = 删该宿主配置与产物），`general.version` 按宿主记录；宿主配置节归一为 `[host]`（历史 `[codexHost]` 兼容读取）；执行者字段决定审查与实施主体（未配置等价 `main`），模型与推理档仅在对应执行者为 `subagent` 时生效；交互 init / 菜单可选择"不覆盖（清除字段）"或覆盖指定档位，非交互 update 与未触碰字段保留原值。
 5. **宿主包 + 共享正文 + 渲染期差异**：共享层只认适配器接口与注册表；模板正文单源（`templates/skills/`），宿主差异只在 `templates/hosts/<id>/` 片段与渲染阶段（命令前缀改写、`@openspec-*` 委托改写、配置路径与宿主 id 注入）产生，正文不写宿主条件块。多宿主共有的行为不变量由一组遍历注册表的测试断言守护；上游 ly-workflow 的 wrapper、Web UI、routing.* 不在本项目内。与上游的关系（v0.2.0 起 codex 安装位改为 `~/.agents/skills/lyx-*/`；旧安装位残留由 init/uninstall 自动清理）见 [README.md](./README.md)。
-6. **OpenSpec 依赖检查统一为共享三层模型，按宿主判定与修复**：`lycx init` / `@lyx-init` / `lycx doctor` 共用 CLI、skills、root 三层检查；skills 按 OpenSpec profile 推导，每个宿主只在自己的技能根里判定（codex：项目/全局 `.agents`、`.codex`；claude：项目/全局 `.claude/skills`），整体取最差；项目级修复按缺失技能的宿主执行 `openspec init --tools <宿主>`，不重建另一宿主产物；无任何宿主配置文件时只读诊断，写入型修复延后到宿主确认之后；`global-only` WARN 并继续，不自动固化。
+6. **OpenSpec 2.x 依赖检查统一为共享三层模型，按宿主判定与修复**：`lycx init` / `@lyx-init` / `lycx doctor` 共用 CLI、skills、root 三层检查；OpenSpec 2.x 的项目级 skills 以 `.agents/skills/openspec-*` 为唯一源，Codex 直接发现该目录，Claude Code 通过 `.claude/skills/openspec-*` 链接发现；skills 按 OpenSpec profile 推导，每个宿主只在自己的技能根里判定（codex：项目/全局 `.agents`、`.codex`；claude：项目/全局 `.claude/skills`），整体取最差；项目级修复按缺失技能的宿主执行 `openspec init --tools <宿主>`，不重建另一宿主产物；无任何宿主配置文件时只读诊断，写入型修复延后到宿主确认之后；`global-only` WARN 并继续，不自动固化。`lyx` 包与 `doctor` 的 Node.js 最低版本为 `22.12.0`，降低版本时 preflight 不执行 npm 安装并给出升级提示。
 7. **Claude 侧以 main 为基线，子代理为可选增强**：子代理定义始终安装（执行者只决定是否使用），不启用 worktree 隔离（实施改动须留在主检出由主会话统一提交），审查子代理工具含 Bash 但正文限定只读 git / openspec；`@lyx-init` 在 Claude 宿主下额外产出导入 `AGENTS.md` 的 `CLAUDE.md`。
 
 8. **小改动走 `@lyx-fix` 轻量路径，spec 同步是它的强制职责**：不创建 OpenSpec change、不询问隔离与自动化档位、只解析当前项目有效 `testMode`（执行主体仍固定主 agent），一次完成定位 → spec 分流（A 对齐既有 spec / B 同一 commit 就地改主 spec，不走 delta / C 超出范围转 `@lyx-propose`）→ 按测试风险实施与验证 → 五项自审（修对 / spec 一致 / 漏改 / 改多 / 验证充分）→ 测试与类型检查门禁（不含生产构建）→ B 类提交前确认 → 单个非 change 生命周期 commit（正文追加 `- spec：` / `- 自审：` / `- 验证：`，无 Change trailer）。理由：流程越重越容易被绕开，绕开的改动才是 spec 漂移的主要来源；`git log -- openspec/specs/` 即可追溯轻流程的 spec 改动。
