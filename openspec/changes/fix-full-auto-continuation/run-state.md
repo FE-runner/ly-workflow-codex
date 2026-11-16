@@ -1,13 +1,13 @@
 # 运行状态
 
 - 变更名: fix-full-auto-continuation
-- 阶段: apply
+- 阶段: review-code-complete
 - 源分支: main
 - 开发分支: fix/full-auto-continuation
 - 执行模式: full-auto
-- 流水线阶段: review-code
-- 最后成功 commit: bd5a1dd
-- 下一步安全动作: apply 实施、门禁与阶段 commit 已正常完成；读取同级 `lyx-review-code/SKILL.md` 及其 frontmatter 声明的全部 references，以 `fix-full-auto-continuation` 和本次 apply commit SHA 进入 review-code。继续条件为 apply 统一提交校验通过；不得在阶段报告后结束回合。
+- 流水线阶段: completed
+- 最后成功 commit: addc9e3
+- 下一步安全动作: review-code 已正常清零；等待用户显式决定是否执行 `@lyx-archive fix-full-auto-continuation`。
 
 ## 任务证据
 
@@ -40,6 +40,7 @@
 - `pnpm typecheck`：退出码 0
 - `pnpm test`：退出码 0，26 个文件 / 464 个测试通过
 - `pnpm eval:skills -- --case propose-full-auto --version both --baseline-ref dce2466 --keep-temp --output /tmp/lyx-full-auto-eval-final3`：退出码 1（baseline 预期 failed），结果 1/2，current passed
+- apply 阶段 commit：addc9e3
 
 ## 验证
 
@@ -49,6 +50,14 @@
 - `pnpm typecheck`：退出码 0
 - `pnpm test`：退出码 0，26 个文件 / 464 个测试通过
 - 真实连续性评测：baseline failed；current passed；summary `/tmp/lyx-full-auto-eval-final3/summary.json`
+
+## 代码审查状态
+
+- 审查基线：apply commit `addc9e3`
+- 第 1 轮：0 个 Critical，1 个 Warning；Warning `可自动修复=否`、`影响落地=否`，落快照
+- 终止类型：normal
+- 统一提交：待本次阶段提交归属
+- 快照提交：待快照写入后归属
 
 ## 裁决
 
