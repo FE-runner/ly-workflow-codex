@@ -93,6 +93,30 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     }
   })
 
+  it('full-auto stage handoff stays visible in main skills and references', () => {
+    const proposeMain = readMain('propose')
+    const reviewPlanMain = readMain('review-plan')
+    const applyMain = readMain('apply')
+
+    expect(proposeMain).toContain('lyx-review-plan/SKILL.md')
+    expect(proposeMain).toContain('lyx-apply/SKILL.md')
+    expect(proposeMain).toContain('lyx-review-code/SKILL.md')
+    expect(proposeMain).toContain('frontmatter 声明的全部 references')
+    expect(proposeMain).toContain('SHALL NOT 视为已进入下一阶段')
+
+    expect(reviewPlanMain).toContain('lyx-apply/SKILL.md')
+    expect(reviewPlanMain).toContain('frontmatter 声明的全部 references')
+    expect(reviewPlanMain).toContain('SHALL NOT 视为已交接')
+
+    expect(applyMain).toContain('lyx-review-code/SKILL.md')
+    expect(applyMain).toContain('frontmatter 声明的全部 references')
+    expect(applyMain).toContain('SHALL NOT 视为已交接')
+
+    expect(read('propose')).toContain('**下一阶段 bundle 读取协议（SHALL）**')
+    expect(read('review-plan')).toContain('**apply bundle 读取（SHALL）**')
+    expect(read('propose')).toContain('下一阶段命令、同级 skill 路径、change 参数和继续条件')
+  })
+
   it('core descriptions only describe triggers', () => {
     const forbidden = ['审查-修复循环', '终止条件', '提交顺序', '自动流水线', 'reviewExecutor', 'spawn']
     for (const command of ['propose', 'review-plan', 'review-code']) {

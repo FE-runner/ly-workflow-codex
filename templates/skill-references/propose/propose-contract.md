@@ -219,17 +219,19 @@ lyx:
 
 各阶段命令 SHALL 从 `run-state.md` 读取 `执行模式`、`流水线阶段` 与 `下一步安全动作`，并在阶段结束时更新；SHALL NOT 只依赖会话记忆判断是否自动续跑。阶段报告不是人工确认点，SHALL NOT 等待用户再次触发下一阶段。
 
+**下一阶段 bundle 读取协议（SHALL）**：进入任何下一阶段前，以当前已加载 skill 所在目录为锚点解析同级 `lyx-<next-command>/SKILL.md`，完整读取该主文件及 frontmatter `references:` 声明的全部 sidecar，再按该 bundle 执行。`@lyx-*` 在本流程中是命令标识；只输出命令标识、写出下一阶段名称或说明“下一步应执行”SHALL NOT 触发 skill。同级 bundle 缺失或无法定位时停止并报告缺失路径，SHALL NOT 猜测绝对路径后继续。
+
 **执行者语义（自 switchable-executor-flow 起）**：流水线每一步的主体按配置决定，不由本模板写死——review-plan / review-code 按 `[host] reviewExecutor`（`main` = 主 agent 直接审查，默认；`subagent` = spawn 审查 subagent），apply 按 `[host] codingExecutor`（`main` = 主 agent 直接实施，默认；`subagent` = spawn coding subagent）。**慢验证中的测试 / 类型检查 SHALL NOT 在流水线内的审查循环执行**——统一由 `@lyx-archive` 的归档前验证关卡执行一次；生产构建不在归档门禁范围。
 
 **审查范围门控（自 add-review-mode 起）**：流水线执行哪些审查关卡 SHALL 由当前宿主 `[host]` 的 `reviewMode` 决定（未配置 / 空白 / 非法取值等价 `full`）：`full` = 两级都跑；`plan-only` = 跑 review-plan、跳过 review-code；`code-only` = 跳过 review-plan、跑 review-code；`off` = 两级都跳过。apply 在任何取值下都执行。被跳过的审查关卡 SHALL 打印显式状态行（形如 `[跳过] review-plan（reviewMode=code-only）`），SHALL NOT 静默跳过；被跳过关卡对应的节点前置校验一并跳过。
 
-1. **review-plan 关卡（仅 `full` / `plan-only`）**：自动执行 `@lyx-review-plan <change-name>` 编排流程（完整指示见 `@lyx-review-plan skill 的指示`，按其指示逐轮执行审查-修复循环；审查对象为 propose 阶段 commit（带 `Change-Stage: propose` trailer），清零时由循环统一提交修复）。`code-only` / `off` 时跳过本步（连同第 2 步一并跳过），并打印 `[跳过] review-plan（reviewMode=<取值>）` 状态行。
+1. **review-plan 关卡（仅 `full` / `plan-only`）**：读取同级 `lyx-review-plan/SKILL.md` 及其全部 references，再按该 bundle 以 `<change-name>` 执行审查-修复循环（审查对象为 propose 阶段 commit（带 `Change-Stage: propose` trailer），清零时由循环统一提交修复）。`code-only` / `off` 时跳过本步（连同第 2 步一并跳过），并打印 `[跳过] review-plan（reviewMode=<取值>）` 状态行。
    - 正常清零（Critical 为 0 且所有 `影响落地=是` 的 Warning 都已解决）→ 进入下一步。
    - 其余任一种终止（熔断、驳回硬线、无法安全修复、验证失败、审查调用失败、达到轮数上限）→ **停止流水线**，复用该循环已产出的终止报告（不重新生成或重复一份）报告终止原因，结束，不执行后续步骤。
 2. **节点前置校验（进入 apply 前，仅 `full` / `plan-only`）**：进入 apply 之前 SHALL 校验 review-plan 是否以"正常清零"收尾——判据为 **`run-state.md` 记录的 review-plan 循环终止类型 == 正常清零**且无未决人工介入项；会话记忆与该记录冲突时以可核验的 run-state、git 和审查报告事实为准。校验 SHALL 在该节点显式打印一行校验结论（含依据：终止类型、是否无未决项）；校验不过（终止类型为熔断/驳回硬线/无法安全修复/验证失败/审查调用失败/轮数上限，或存在未决项）SHALL 停在该节点，复用 review-plan 已产出的终止报告说明阻断原因，SHALL NOT 硬闯 apply。校验通过后 SHALL 在同一回合立即进入第 3 步。第 1 步跳过 review-plan 时本节一并跳过。
-3. 自动执行 `@lyx-apply <change-name>` 编排流程（完整指示见 `@lyx-apply skill 的指示`；实施主体按 `codingExecutor` 决定，实施完成后由主会话确认、回写 `context.md`（实施决策）并统一提交 apply 阶段 commit——message 为 CC 前缀（type 由主会话按实际改动判断）+ `Change-Stage: apply` + `Change-Name: <change-name>` trailer）。apply 完成报告输出后 SHALL 在同一回合继续第 4 步，SHALL NOT 把实施完成报告当作全自动终点。
+3. 读取同级 `lyx-apply/SKILL.md` 及其 frontmatter 声明的全部 references，再按该 bundle 以 `<change-name>` 执行实施（实施主体按 `codingExecutor` 决定，实施完成后由主会话确认、回写 `context.md`（实施决策）并统一提交 apply 阶段 commit——message 为 CC 前缀（type 由主会话按实际改动判断）+ `Change-Stage: apply` + `Change-Name: <change-name>` trailer）。apply 完成报告输出后 SHALL 在同一回合继续第 4 步，SHALL NOT 把实施完成报告当作全自动终点。
 4. **节点前置校验（进入 review-code 前，仅 `full` / `code-only`）**：apply 实施完成并提交时 SHALL 以 `git rev-parse HEAD` 记录本次 apply 提交后的 HEAD SHA；进入 review-code 之前 SHALL 按 trailer 优先定位最近一期 apply 阶段 commit 的 SHA（`git log --grep="^Change-Stage: apply$" --grep="^Change-Name: <change-name>$" --all-match -1 --format=%H`；未命中时回退旧前缀 `git log --grep="^apply: <change-name>" -1 --format=%H` 并打印 DEPRECATED 兼容通道提示），并校验其等于本次记录（**历史存在旧 apply commit 不得绕过本次校验**）。校验 SHALL 在该节点显式打印一行校验结论（含依据：本次记录的 SHA、最近一期 apply 阶段 commit SHA、是否相等）。校验不过（SHA 不等、commit 缺失或实施阶段未正常收尾）SHALL 停在该节点如实报告实施收尾失败详情，SHALL NOT 以旧 commit 作为本次审查对象进入 review-code。第 5 步跳过 review-code 时本节一并跳过。
-5. **review-code 关卡（仅 `full` / `code-only`）**：自动执行 `@lyx-review-code <change-name>` 编排流程（完整指示见 `@lyx-review-code skill 的指示`；审查主体按 `reviewExecutor` 决定；审查对象为 apply 阶段 commit（带 `Change-Stage: apply` trailer），清零时由循环统一提交修复）。`plan-only` / `off` 时跳过本步（连同第 4 步一并跳过），并打印 `[跳过] review-code（reviewMode=<取值>）` 状态行。
+5. **review-code 关卡（仅 `full` / `code-only`）**：读取同级 `lyx-review-code/SKILL.md` 及其 frontmatter 声明的全部 references，再按该 bundle 以 `<change-name>` 执行代码审查（审查主体按 `reviewExecutor` 决定；审查对象为 apply 阶段 commit（带 `Change-Stage: apply` trailer），清零时由循环统一提交修复）。`plan-only` / `off` 时跳过本步（连同第 4 步一并跳过），并打印 `[跳过] review-code（reviewMode=<取值>）` 状态行。
    - 正常清零（Critical 为 0 且所有 `影响落地=是` 的 Warning 都已解决）→ 流水线结束，提示可手动 `@lyx-archive` 归档。
    - 其余任一种终止 → **停止流水线**，复用该循环已产出的终止报告报告终止原因，结束。
 6. 流水线执行过程中任一环节 `git commit` 失败：如实报告 Git 原始错误，停止流水线。

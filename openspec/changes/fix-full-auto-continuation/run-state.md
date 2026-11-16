@@ -1,29 +1,29 @@
 # 运行状态
 
 - 变更名: fix-full-auto-continuation
-- 阶段: review-plan
+- 阶段: apply
 - 源分支: main
 - 开发分支: fix/full-auto-continuation
 - 执行模式: full-auto
-- 流水线阶段: apply
-- 最后成功 commit: 71ab3cd
-- 下一步安全动作: review-plan 第 2 轮正常清零且无未决项；完成 review-plan 统一提交后读取同级 `lyx-apply/SKILL.md` 及其 frontmatter 声明的全部 references，以 `fix-full-auto-continuation` 进入 apply。继续条件为 review-plan commit 成功；不得在阶段报告后结束回合。
+- 流水线阶段: review-code
+- 最后成功 commit: bd5a1dd
+- 下一步安全动作: apply 实施、门禁与阶段 commit 已正常完成；读取同级 `lyx-review-code/SKILL.md` 及其 frontmatter 声明的全部 references，以 `fix-full-auto-continuation` 和本次 apply commit SHA 进入 review-code。继续条件为 apply 统一提交校验通过；不得在阶段报告后结束回合。
 
 ## 任务证据
 
-- 已完成任务: 0/17
+- 已完成任务: 17/17
 
 ## 基线评测
 
-- propose: not-executed — 当前 change 方案尚未生成，真实全自动连续性评测在 apply 阶段执行
+- propose-full-auto: failed — baseline 未写入 `终止类型: normal`，fixture 终态证据不完整
 
 ## 修改后评测（中间）
 
-- propose: not-executed — 等待模板与评测运行器实施
+- propose-full-auto: passed — current 完成 review-plan → apply → review-code，apply commit、源码/测试与 run-state normal 均存在
 
 ## 修改后评测（最终）
 
-- propose: not-executed — 等待 apply 阶段真实执行
+- propose-full-auto: passed — 最终 baseline/current 对照 1/2，baseline failed / current passed
 
 ## 审查状态
 
@@ -32,12 +32,23 @@
 - 第 1 轮 Verification：`openspec validate --changes fix-full-auto-continuation` 退出码 0
 - 第 2 轮 Verification：`openspec validate --changes fix-full-auto-continuation` 退出码 0
 - 终止类型：normal
-- 统一提交：待本次阶段提交归属
+- 统一提交：bd5a1dd
+
+## 实施状态
+
+- 1.1-5.3：全部完成并勾选
+- `pnpm typecheck`：退出码 0
+- `pnpm test`：退出码 0，26 个文件 / 464 个测试通过
+- `pnpm eval:skills -- --case propose-full-auto --version both --baseline-ref dce2466 --keep-temp --output /tmp/lyx-full-auto-eval-final3`：退出码 1（baseline 预期 failed），结果 1/2，current passed
 
 ## 验证
 
 - baseline `pnpm install --frozen-lockfile`：退出码 0
 - baseline `pnpm test`：退出码 0，26 个文件 / 459 个测试通过
+- `openspec validate --changes fix-full-auto-continuation`：退出码 0，1 passed / 0 failed
+- `pnpm typecheck`：退出码 0
+- `pnpm test`：退出码 0，26 个文件 / 464 个测试通过
+- 真实连续性评测：baseline failed；current passed；summary `/tmp/lyx-full-auto-eval-final3/summary.json`
 
 ## 裁决
 

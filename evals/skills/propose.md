@@ -45,33 +45,35 @@ Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` an
 
 - 用户已选择全自动，run-state 记录 `执行模式: full-auto` 与当前流水线阶段。
 - 当前阶段正常完成且没有待用户决策、失败或终止条件。
-- propose 与 review-plan 的主 `SKILL.md` 已包含“全自动执行不变量”，且 run-state 在方案自审前已经创建。
+- propose、review-plan 与 apply 的主 `SKILL.md` 已包含“全自动执行不变量”，且 run-state 记录 `full-auto`。
 
 ### User Prompt
 
-`继续当前全自动流程。`
+`@lyx-review-plan eval-change`，并要求从 run-state 记录的全自动流程继续。
 
 ### Required Evidence
 
-- 阶段报告后实际进入下一流水线阶段，不以报告作为最终回复。
+- 阶段报告后实际读取同级下一阶段 `SKILL.md` 与全部 references，不以报告作为最终回复。
 - review-plan 正常清零后继续 apply；apply 正常完成后继续 review-code。
+- apply 产生真实代码与测试文件，并形成带 `Change-Stage: apply` / `Change-Name` trailer 的提交。
+- run-state 匹配 `终止类型: normal`，最终文本包含 review-code、0 Critical/未发现问题与正常终态锚点。
 - run-state 的流水线阶段与下一步安全动作随阶段推进更新。
-- 自审前已存在 `run-state.md`；主 `SKILL.md` 注入内容自身包含阶段非终态和同回合续跑要求。
 
 ### Forbidden Actions
 
-- 在 propose 自审、review-plan 报告或 apply 完成证据后等待用户再次说“继续”。
-- 仅更新自然语言状态但不执行下一阶段。
+- 在 review-plan 报告或 apply 完成证据后等待用户再次说“继续”。
+- 仅输出 `@lyx-apply` / `@lyx-review-code` 或更新自然语言状态，但没有执行下一阶段。
 
 ### Pass Criteria
 
-- 无额外用户输入时，至少从 review-plan 正常清零推进到 apply，且回合未因阶段报告结束。
+- 无额外用户输入时，从 review-plan 正常清零推进到 apply，再继续到 review-code 正常终态。
+- apply commit、任务勾选、代码/测试文件、run-state normal 和 review-code 报告锚点必须同时存在。
 - 若测试环境无法连续执行多阶段，结论必须记录为 `not-executed` 并附原因，不得记为通过。
 
 ### Evidence Record
 
-Baseline: not-executed — 现有单轮 runner 在初始隔离/模式询问处结束，尚未执行此连续场景。
+Baseline: failed — 旧 bundle 能生成实现与 apply commit，但未把 `终止类型: normal` 写入 run-state，fixture 终态证据不完整。
 
-Modified: not-executed — 模板与静态契约测试已覆盖续跑字段和非终态约束；真实多阶段 runner 尚未执行。
+Modified: passed — `propose-full-auto` 在同一回合完成 review-plan、apply 与 review-code，产生 apply commit、源码/测试文件、run-state normal 和正常终态文本。
 
-Evidence: 当前缺陷由 2026-11-11 的 `public-market-hard-gate-review` 与 `unify-skill-package-validation` 会话轨迹确认，待补真实全自动连续性评测。
+Evidence: `pnpm eval:skills -- --case propose-full-auto --version both --baseline-ref dce2466 --keep-temp --output /tmp/lyx-full-auto-eval-final3`（exit 1：baseline failed / current passed，1/2）；见 `../results/2026-11-16-fix-full-auto-continuation.md` 与 `/tmp/lyx-full-auto-eval-final3/summary.json`。

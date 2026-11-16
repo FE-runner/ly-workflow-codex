@@ -13,6 +13,7 @@
 - 使用当前 skill 同级目录的相对坐标，不写死 `~/.agents/skills` 或 `~/.claude/skills`；同一规则覆盖全局、项目级和评测 fixture。
 - “读取下一阶段主文件及其全部 references”是交接动作的一部分；输出 `@lyx-*` 或说“下一步将执行”不算执行。
 - 默认评测套件继续只有四个基础场景；`propose-full-auto` 是显式运行的第五个场景，避免破坏既有 8 单元审计口径。
+- 评测 child Codex 使用 `workspace-write` 时无法写 fixture 的 `.git`；runner 只把 `fixture.repoDir/.git` 加入 `--add-dir`，不扩大到宿主目录。
 
 ## 已否决的备选
 
@@ -32,3 +33,4 @@
 - 连续性 fixture 必须产生真实 apply 改动和 apply 阶段 commit；只看最终文本出现 `apply` 会误判。
 - 真实评测可能受模型、网络或认证影响，环境失败只能记 `not-executed`。
 - 已安装副本需要 `lycx update` 或后续发版才会采用新模板。
+- `propose-full-auto` 的自然语言终态断言必须覆盖“0 Critical / 未发现 Critical / 未发现问题”等常见表达，硬门禁仍由 commit、文件与 run-state 证据承担。

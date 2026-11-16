@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import type { HostAdapterContext } from '../utils/host-adapters'
-import type { EvalFixture, EvalSkill, SideEffectCheck, SkillEvalCase } from './cases'
+import type { EvalCaseId, EvalFixture, EvalSkill, SideEffectCheck, SkillEvalCase } from './cases'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -15,14 +15,14 @@ import {
   parseSkillReferences,
   replaceHomePathsInTemplate,
 } from '../utils/installer-template'
-import { EVAL_SKILLS, getSkillEvalCase } from './cases'
+import { DEFAULT_EVAL_CASES, EVAL_CASES, getSkillEvalCase } from './cases'
 
 export type EvalVersion = 'baseline' | 'current'
 export type EvalVersionSelection = EvalVersion | 'both'
 export type EvalStatus = 'passed' | 'failed' | 'not-executed'
 
 export interface CliOptions {
-  caseIds: EvalSkill[]
+  caseIds: EvalCaseId[]
   version: EvalVersionSelection
   baselineRef: string
   outputDir?: string
@@ -67,7 +67,7 @@ export interface Classification {
 }
 
 export interface EvalUnitResult {
-  case: EvalSkill
+  case: EvalCaseId
   version: EvalVersion
   status: EvalStatus
   reason: string
@@ -119,7 +119,7 @@ export function getHelpText(): string {
     'Usage: pnpm eval:skills -- [options]',
     '',
     'Options:',
-    '  --case <propose|apply|review-plan|review-code>  只运行指定 case，可重复或逗号分隔',
+    `  --case <${EVAL_CASES.join('|')}>  只运行指定 case，可重复或逗号分隔`,
     `  --version <baseline|current|both>              默认 both`,
     `  --baseline-ref <git-ref>                       默认 ${DEFAULT_BASELINE_REF}`,
     '  --output <dir>                                 结果目录；缺省写到临时目录',
@@ -136,12 +136,12 @@ function requireValue(argv: string[], index: number, flag: string): string {
   return value
 }
 
-function parseCase(value: string): EvalSkill[] {
+function parseCase(value: string): EvalCaseId[] {
   const ids = value.split(',').map(item => item.trim()).filter(Boolean)
-  const invalid = ids.filter(item => !EVAL_SKILLS.includes(item as EvalSkill))
+  const invalid = ids.filter(item => !EVAL_CASES.includes(item as EvalCaseId))
   if (invalid.length > 0)
-    throw new Error(`未知 case: ${invalid.join(', ')}；可选值: ${EVAL_SKILLS.join(', ')}`)
-  return ids as EvalSkill[]
+    throw new Error(`未知 case: ${invalid.join(', ')}；可选值: ${EVAL_CASES.join(', ')}`)
+  return ids as EvalCaseId[]
 }
 
 export function parseCliOptions(argv: string[]): CliOptions {
@@ -199,7 +199,7 @@ export function parseCliOptions(argv: string[]): CliOptions {
 
   options.caseIds = [...new Set(options.caseIds)]
   if (options.caseIds.length === 0)
-    options.caseIds = [...EVAL_SKILLS]
+    options.caseIds = [...DEFAULT_EVAL_CASES]
   return options
 }
 
@@ -539,6 +539,8 @@ async function executeCodex(
     fixture.repoDir,
     '-s',
     'workspace-write',
+    '--add-dir',
+    join(fixture.repoDir, '.git'),
     '-c',
     'approval_policy="never"',
     '--output-last-message',
@@ -580,11 +582,13 @@ async function runUnit(options: RunUnitOptions): Promise<EvalUnitResult> {
   const { evalCase, version, sourceRoot, temporaryRoot, codexHome, timeoutMs, setupOnly } = options
   const fixture = await prepareFixtureForUnit(evalCase, temporaryRoot, version)
   await installEvalRolePrompts(sourceRoot, fixture)
-  await installEvalSkillBundle(sourceRoot, fixture, evalCase.skillCommand, {
-    reviewExecutor: evalCase.hostConfig?.reviewExecutor ?? 'main',
-    codingExecutor: 'main',
-    testMode: 'normal',
-  })
+  for (const skillCommand of evalCase.skillCommands) {
+    await installEvalSkillBundle(sourceRoot, fixture, skillCommand, {
+      reviewExecutor: evalCase.hostConfig?.reviewExecutor ?? 'main',
+      codingExecutor: 'main',
+      testMode: 'normal',
+    })
+  }
 
   const unitRoot = join(temporaryRoot, 'runs', `${evalCase.id}-${version}`)
   const transcriptPath = join(unitRoot, 'transcript.log')
