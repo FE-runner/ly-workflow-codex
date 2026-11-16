@@ -1,13 +1,13 @@
 # 运行状态
 
 - 变更名: fix-full-auto-continuation
-- 阶段: propose
+- 阶段: review-plan
 - 源分支: main
 - 开发分支: fix/full-auto-continuation
 - 执行模式: full-auto
-- 流水线阶段: review-plan
-- 最后成功 commit: 590f71d
-- 下一步安全动作: propose 阶段 commit 成功后，读取同级 `lyx-review-plan/SKILL.md` 及其 frontmatter 声明的全部 references；以 `fix-full-auto-continuation` 执行 review-plan，继续条件为 phase commit 成功且无未决业务决策。不得在阶段报告后结束回合。
+- 流水线阶段: apply
+- 最后成功 commit: 71ab3cd
+- 下一步安全动作: review-plan 第 2 轮正常清零且无未决项；完成 review-plan 统一提交后读取同级 `lyx-apply/SKILL.md` 及其 frontmatter 声明的全部 references，以 `fix-full-auto-continuation` 进入 apply。继续条件为 review-plan commit 成功；不得在阶段报告后结束回合。
 
 ## 任务证据
 
@@ -27,7 +27,12 @@
 
 ## 审查状态
 
-- 尚未开始 review-plan
+- 第 1 轮：0 个 Critical，1 个 Warning；认可并修复
+- 第 2 轮：0 个 Critical，0 个 Warning；复评确认上一轮 Warning 已解决
+- 第 1 轮 Verification：`openspec validate --changes fix-full-auto-continuation` 退出码 0
+- 第 2 轮 Verification：`openspec validate --changes fix-full-auto-continuation` 退出码 0
+- 终止类型：normal
+- 统一提交：待本次阶段提交归属
 
 ## 验证
 
