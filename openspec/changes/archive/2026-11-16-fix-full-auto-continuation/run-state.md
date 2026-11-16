@@ -1,13 +1,13 @@
 # 运行状态
 
 - 变更名: fix-full-auto-continuation
-- 阶段: review-code-complete
+- 阶段: archive
 - 源分支: main
 - 开发分支: fix/full-auto-continuation
 - 执行模式: full-auto
 - 流水线阶段: completed
 - 最后成功 commit: addc9e3
-- 下一步安全动作: review-code 已正常清零；等待用户显式决定是否执行 `@lyx-archive fix-full-auto-continuation`。
+- 下一步安全动作: 归档目录已生成，提交 archive 阶段 commit 后按 isolation metadata 执行分支收尾确认。
 
 ## 任务证据
 
@@ -56,8 +56,16 @@
 - 审查基线：apply commit `addc9e3`
 - 第 1 轮：0 个 Critical，1 个 Warning；Warning `可自动修复=否`、`影响落地=否`，落快照
 - 终止类型：normal
-- 统一提交：待本次阶段提交归属
-- 快照提交：待快照写入后归属
+- 统一提交：38d0e72
+- 快照提交：ab97cb7
+
+## 归档验证
+
+- final testMode: normal
+- 来源：项目配置 `/Users/ly/.codex/lyx/config.toml` 的 `[projects."/Users/ly/codes/learn/ly-workflow-codex"].testMode`
+- `pnpm test`：退出码 0，26 个文件 / 464 个测试通过
+- `pnpm typecheck`：退出码 0
+- `git diff --check`：退出码 0
 
 ## 裁决
 
