@@ -7,7 +7,11 @@ import { join } from 'pathe'
 export const EVAL_SKILLS = ['propose', 'apply', 'review-plan', 'review-code'] as const
 export type EvalSkill = typeof EVAL_SKILLS[number]
 export const DEFAULT_EVAL_CASES = EVAL_SKILLS
-export const EVAL_CASES = [...DEFAULT_EVAL_CASES, 'propose-full-auto'] as const
+export const EVAL_CASES = [
+  ...DEFAULT_EVAL_CASES,
+  'propose-full-auto',
+  'propose-self-review-full-auto',
+] as const
 export type EvalCaseId = typeof EVAL_CASES[number]
 
 export interface EvalFixture {
@@ -418,7 +422,7 @@ export const skillEvalCases: SkillEvalCase[] = [
     passPatterns: [
       /review-code/,
       /(?:0\s*Critical|未发现\s*Critical|未发现问题)/,
-      /(?:全自动流程.*(?:完成|跑完)|正常终态)/,
+      /(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)/,
     ],
     forbiddenPatterns: [/请回复.*继续/i, /等待用户.*触发/i],
     notApplicableReason: null,
@@ -493,6 +497,87 @@ export const skillEvalCases: SkillEvalCase[] = [
           && testImplemented
           && unexpectedPaths.length === 0,
         evidence: `tasksChecked=${tasksChecked}; runStateNormal=${runStateNormal}; applyCommit=${applyCommit || '(missing)'}; featureImplemented=${featureImplemented}; testImplemented=${testImplemented}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
+      }
+    },
+  },
+  {
+    id: 'propose-self-review-full-auto',
+    skillCommand: 'propose',
+    skillCommands: ['propose', 'review-plan', 'apply', 'review-code'],
+    hostConfig: { reviewExecutor: 'main' },
+    prompt: [
+      '@lyx-propose 为 change eval-self-review 新增 docs/self-review-continuation.md，内容包含 propose-self-review continued。',
+      '用户已选择：留在当前分支；全自动。',
+    ].join('\n'),
+    passPatterns: [
+      /review-code/,
+      /(?:0\s*Critical|未发现\s*Critical|未发现问题)/,
+      /(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)/,
+    ],
+    forbiddenPatterns: [/请回复.*(?:隔离|全自动|手动)/i, /等待用户.*触发/i],
+    notApplicableReason: null,
+    async setup(fixture) {
+      await initRepo(fixture.repoDir)
+      await writeFile(fixture.homeDir, 'eval-metadata.txt', 'scenario=from-empty\n')
+    },
+    async verifySideEffects(fixture) {
+      const context = readOptionalRepoFile(
+        fixture.repoDir,
+        'openspec/changes/eval-self-review/context.md',
+      )
+      const tasks = readOptionalRepoFile(
+        fixture.repoDir,
+        'openspec/changes/eval-self-review/tasks.md',
+      )
+      const runState = readOptionalRepoFile(
+        fixture.repoDir,
+        'openspec/changes/eval-self-review/run-state.md',
+      )
+      const document = readOptionalRepoFile(
+        fixture.repoDir,
+        'docs/self-review-continuation.md',
+      )
+      const proposeCommit = runGit(fixture.repoDir, [
+        'log',
+        '--grep=^Change-Stage: propose$',
+        '--grep=^Change-Name: eval-self-review$',
+        '--all-match',
+        '-1',
+        '--format=%H',
+      ])
+      const reviewCodeCommit = runGit(fixture.repoDir, [
+        'log',
+        '--grep=^Change-Stage: review-code-fix$',
+        '--grep=^Change-Name: eval-self-review$',
+        '--all-match',
+        '-1',
+        '--format=%H',
+      ])
+      const paths = statusPaths(fixture.repoDir)
+      const allowedOpenSpecInitPaths = new Set([
+        'openspec/config.yaml',
+        'openspec/specs/.gitkeep',
+        'openspec/changes/archive/.gitkeep',
+      ])
+      const unexpectedPaths = paths.filter(path =>
+        !path.startsWith('openspec/changes/eval-self-review/')
+        && !allowedOpenSpecInitPaths.has(path),
+      )
+      const contextCreated = context.trim().length > 0
+      const tasksChecked = tasks.length > 0 && !tasks.includes('- [ ]')
+      const runStateNormal = /终止类型[：:]\s*normal/.test(runState)
+      const proposeCommitted = proposeCommit.length > 0
+      const reviewCodeCommitted = reviewCodeCommit.length > 0
+      const documentCreated = document.includes('propose-self-review continued')
+      return {
+        passed: contextCreated
+          && tasksChecked
+          && runStateNormal
+          && proposeCommitted
+          && reviewCodeCommitted
+          && documentCreated
+          && unexpectedPaths.length === 0,
+        evidence: `contextCreated=${contextCreated}; tasksChecked=${tasksChecked}; runStateNormal=${runStateNormal}; proposeCommit=${proposeCommit || '(missing)'}; reviewCodeCommit=${reviewCodeCommit || '(missing)'}; documentCreated=${documentCreated}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
       }
     },
   },

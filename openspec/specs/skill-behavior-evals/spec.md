@@ -89,3 +89,7 @@
 #### Scenario: 环境无法调用模型时不算通过
 - **WHEN** Codex 调用缺失、超时、认证失败或最终输出为空
 - **THEN** 该场景标记为 not-executed，保留原因，不把静态断言当作全自动续跑通过
+
+#### Scenario: propose 自审后继续外部流水线
+- **WHEN** 空仓库中用户一次确认“留在当前分支 + 全自动”，运行 propose 自审连续性场景
+- **THEN** opsx artifacts 与方案自审清单均不作为终态，current 在同一回合产生 context、propose commit 并继续 review-plan、apply、review-code 到 run-state normal

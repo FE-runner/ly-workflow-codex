@@ -4,7 +4,7 @@
 
 | Skill | 场景文件 | 目标 |
 |---|---|---|
-| `propose` | `propose.md` | 脏工作区与重叠改动、自审和 change 提交；含显式 `propose-full-auto` 多阶段连续性场景 |
+| `propose` | `propose.md` | 脏工作区与重叠改动、自审和 change 提交；含 `propose-full-auto` 与 `propose-self-review-full-auto` 多阶段连续性场景 |
 | `apply` | `apply.md` | 歧义任务、执行证据和 run-state 恢复 |
 | `review-plan` | `review-plan.md` | 缺少可执行信息的方案审查 |
 | `review-code` | `review-code.md` | 误报 Critical 的可核验裁决 |
@@ -18,6 +18,7 @@
 ```bash
 pnpm eval:skills -- --case propose --version current
 pnpm eval:skills -- --case propose-full-auto --version both --baseline-ref dce2466
+pnpm eval:skills -- --case propose-self-review-full-auto --version both --baseline-ref dce2466
 pnpm eval:skills -- --version both --baseline-ref dce2466 --output /tmp/lyx-skill-evals
 ```
 

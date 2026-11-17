@@ -29,7 +29,7 @@
 |------|------|------|
 | `init.md` | 真逻辑 | 生成 AGENTS.md（claude 宿主额外产出导入它的 `CLAUDE.md`）+ `lycx openspec ensure --host <当前宿主>` + 自动 commit |
 | `explore.md` | 薄壳委托 | 直接调用 `@openspec-explore skill`，收敛到方案时按规模提示转 `@lyx-fix` / `@lyx-propose` |
-| `propose.md` | 主文件 + references | 主文件保留入口、按需读取指令和简短“全自动执行不变量”，含同级下一阶段 `SKILL.md` / references 读取锚点；`propose-contract.md` 承载隔离、提交、流水线与方案自审细节，`recovery-and-evidence.md` 承载 run-state、机械裁决和证据规则 |
+| `propose.md` | 主文件 + references | 主文件保留入口、按需读取指令和简短“全自动执行不变量”，含同级下一阶段 bundle、opsx planning-boundary 从属规则与方案自审内部 checkpoint；`propose-contract.md` 承载隔离、恢复、提交、流水线与方案自审细节，`recovery-and-evidence.md` 承载 run-state、机械裁决和证据规则 |
 | `apply.md` | 真逻辑 | 启动先读 run-state 并核对 git/tasks；按 `codingExecutor` 实施、逐任务记录证据与机械裁决，主会话确认后回写 context/run-state 并统一提交 apply 阶段 commit；全自动下主文件保留读取同级 `lyx-review-code/SKILL.md` 与 references 的交接锚点 |
 | `fix.md` | 真逻辑 | 小需求 / bug 轻量路径：不建 change；bug 分支执行根因调查、单假设验证、3 次失败后质疑架构；最终输出测试 / 类型检查证据，不执行生产构建 |
 | `archive.md` | 真逻辑 | 启动恢复核对 + archive 前测试 / 类型检查（不含生产构建）+ final testMode/证据写入 run-state + 归档 commit + 分支收尾 |

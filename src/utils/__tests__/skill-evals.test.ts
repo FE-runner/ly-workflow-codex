@@ -97,6 +97,7 @@ describe('skill eval runner arguments and outcomes', () => {
       'propose,review-code',
       '--case=apply',
       '--case=propose-full-auto',
+      '--case=propose-self-review-full-auto',
       '--version=current',
       '--baseline-ref',
       'dce2466',
@@ -105,7 +106,13 @@ describe('skill eval runner arguments and outcomes', () => {
       '--keep-temp',
       '--setup-only',
     ])
-    expect(options.caseIds).toEqual(['propose', 'review-code', 'apply', 'propose-full-auto'])
+    expect(options.caseIds).toEqual([
+      'propose',
+      'review-code',
+      'apply',
+      'propose-full-auto',
+      'propose-self-review-full-auto',
+    ])
     expect(options.version).toBe('current')
     expect(options.baselineRef).toBe('dce2466')
     expect(options.outputDir).toBe('/tmp/evals')
@@ -246,7 +253,7 @@ describe('skill eval fixtures and cleanup', () => {
         expect.arrayContaining([
           'review-code',
           '(?:0\\s*Critical|未发现\\s*Critical|未发现问题)',
-          '(?:全自动流程.*(?:完成|跑完)|正常终态)',
+          '(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)',
         ]),
       )
       await evalCase.setup(fixture)
@@ -255,6 +262,32 @@ describe('skill eval fixtures and cleanup', () => {
       expect(before.evidence).toContain('applyCommit=(missing)')
       expect(before.evidence).toContain('runStateNormal=false')
       expect(before.evidence).toContain('featureImplemented=false')
+    }
+    finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('defines a propose self-review continuation case from an empty repo', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'lyx-eval-self-review-sideeffect-'))
+    const fixture = { repoDir: join(base, 'repo'), homeDir: join(base, 'home') }
+    try {
+      const evalCase = getSkillEvalCase('propose-self-review-full-auto')
+      expect(evalCase.skillCommands).toEqual(['propose', 'review-plan', 'apply', 'review-code'])
+      expect(evalCase.prompt).toContain('留在当前分支；全自动')
+      expect(evalCase.passPatterns.map(pattern => pattern.source)).toEqual(
+        expect.arrayContaining([
+          'review-code',
+          '(?:0\\s*Critical|未发现\\s*Critical|未发现问题)',
+          '(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)',
+        ]),
+      )
+      await evalCase.setup(fixture)
+      const before = await evalCase.verifySideEffects(fixture)
+      expect(before.passed).toBe(false)
+      expect(before.evidence).toContain('contextCreated=false')
+      expect(before.evidence).toContain('proposeCommit=(missing)')
+      expect(before.evidence).toContain('documentCreated=false')
     }
     finally {
       rmSync(base, { recursive: true, force: true })

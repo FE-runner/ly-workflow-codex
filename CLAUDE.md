@@ -47,6 +47,7 @@ pnpm eval:skills -- --help                  # 开发期真实 skill 行为评测
 ## 审查执行模型（速览）
 
 - 全自动阶段交接 = **显式读取同级下一阶段 bundle**：`@lyx-*` 只是命令标识，不是跨 skill 调用工具；propose / review-plan / apply 正常完成后必须读取 `../lyx-<next-command>/SKILL.md` 及全部 references，再在同一回合执行。`run-state.md` 记录下一命令、同级路径、参数与继续条件；只写“下一步应执行”不算交接
+- propose 内部续跑 = **opsx boundary 从属 + 自审 checkpoint**：`@openspec-propose` 的 planning-only 只约束其 artifacts 阶段；方案自审清单输出后必须继续 context、metadata、run-state 与 propose commit，完成 commit 后才加载 review-plan。`run-state=propose-self-review` 且 artifacts 完整时直接恢复，不重复询问隔离/模式
 - 审查关卡 = **执行者可切换**（两个宿主语义一致；子代理机制按宿主：codex = spawn + `send_input`，Claude Code = `Agent` 工具调用 `lyx-*` 自定义子代理 + `SendMessage`，交互模式后台运行时等待语义为"结果被消费并如实报告"）：`reviewExecutor = "main"`（默认）= 主 agent 直接自审，无 spawn、无逐条裁决、无驳回硬线，最多 2 轮；`reviewExecutor = "subagent"` = 每关 spawn 1 个审查 subagent（非 fork、只携带 TASK、只审 change 范围），每条 Critical 由主会话逐条裁决——认可即修复，不认可必须附**可核验依据**；subagent 路径第 2 轮起默认 `send_input` 复用同一子代理
 - 审查范围 = **按 `reviewMode` 门控**（`full` / `plan-only` / `code-only` / `off`，未配置等价 `full`）：只决定 `@lyx-propose` 编排入口跑哪些审查关卡（`plan-only` 跳过 review-code、`code-only` 跳过 review-plan、`off` 两级都跳过；apply 始终执行），被跳过的关卡打印 `[跳过]` 状态行、其节点前置校验一并跳过；直接调用 `@lyx-review-plan` / `@lyx-review-code` 与 `@lyx-apply` / 归档前验证不受影响；`lycx init` / 菜单先采集 `testMode`，再采集 `reviewMode`（`off` 跳过 review 侧提问），`lycx doctor` 展示并告警非法取值与 `off` + review 侧字段非空
 - 软上下文 = **change 目录 `context.md`**：propose 产出（内容边界自检：无整段重复、决策可溯源、≤100 行）→ apply 维护（实施决策回写，只增不删）→ review-plan / review-code / coding subagent 消费（TASK 只传路径）

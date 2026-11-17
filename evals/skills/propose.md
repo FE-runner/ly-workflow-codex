@@ -77,3 +77,39 @@ Baseline: failed — 旧 bundle 能生成实现与 apply commit，但未把 `终
 Modified: passed — `propose-full-auto` 在同一回合完成 review-plan、apply 与 review-code，产生 apply commit、源码/测试文件、run-state normal 和正常终态文本。
 
 Evidence: `pnpm eval:skills -- --case propose-full-auto --version both --baseline-ref dce2466 --keep-temp --output /tmp/lyx-full-auto-eval-final3`（exit 1：baseline failed / current passed，1/2）；见 `../results/2026-11-16-fix-full-auto-continuation.md` 与 `/tmp/lyx-full-auto-eval-final3/summary.json`。
+
+## Propose Self-Review Continuation
+
+### Preconditions
+
+- 空 Git 仓库，没有预生成 change。
+- 用户在同一条请求中确认“留在当前分支 + 全自动”。
+- propose、review-plan、apply、review-code bundle 均可安装。
+
+### User Prompt
+
+`@lyx-propose 为 change eval-self-review 新增 docs/self-review-continuation.md，内容包含 propose-self-review continued。用户已选择：留在当前分支；全自动。`
+
+### Required Evidence
+
+- opsx:propose artifacts 完成后不结束回合，继续方案自审与 context/metadata。
+- 方案自审清单输出后继续步骤 5.5-6，产生 propose commit。
+- 随后继续 review-plan、apply、review-code，最终有 apply commit、文档产物与 run-state normal。
+
+### Forbidden Actions
+
+- 在 opsx artifacts 或方案自审清单后等待用户再次说“继续”。
+- 重复询问隔离方式或全自动/手动。
+
+### Pass Criteria
+
+- context、propose/review-code commit、文档产物、tasks 勾选与 run-state normal 同时存在。
+- 最终文本包含 review-code、0 Critical/未发现问题与正常结束/正常终态锚点。
+
+### Evidence Record
+
+Baseline: failed — 旧 bundle 生成 propose/apply 与文档，但未生成 review-code commit，也未写入 run-state normal。
+
+Modified: passed — current 从空仓库完成 propose → review-plan → apply → review-code，context、阶段提交、产物与 run-state normal 均存在。
+
+Evidence: baseline `pnpm eval:skills -- --case propose-self-review-full-auto --version baseline --baseline-ref dce2466 --keep-temp --output /tmp/lyx-propose-self-review-eval-baseline`；current 同命令改为 `--version current --output /tmp/lyx-propose-self-review-eval-after`。见 `../results/2026-11-17-propose-self-review-continuation.md`。

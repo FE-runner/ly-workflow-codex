@@ -460,3 +460,15 @@ apply 在最终模式为 `normal` 时 SHALL 校验 artifacts 与该模式一致�
 #### Scenario: 人工介入点仍允许结束
 - **WHEN** review-plan 或 apply 因业务决策、失败或审查终止条件需要人工介入
 - **THEN** 不加载下一阶段 bundle，如实报告停止原因并结束全自动回合
+
+#### Scenario: 方案自审后先完成 propose 内部步骤
+- **WHEN** 全自动 propose 输出方案自审逐项结论清单且无待用户决策项
+- **THEN** 同一回合依次产出 context.md、写入 isolation metadata、更新 run-state 并提交 propose 阶段 commit，之后才读取 review-plan bundle
+
+#### Scenario: opsx planning boundary 不终止 lyx 编排
+- **WHEN** 被委托的 opsx:propose 完成 artifacts 并声明 planning boundary 或 “stop after artifacts”
+- **THEN** 当前会话返回 lyx-propose 编排，继续后续步骤；该声明不要求用户再次触发环节，也不把 artifacts 完成作为全自动终态
+
+#### Scenario: 自审中断后从 run-state 恢复
+- **WHEN** 唯一活跃 change 的 run-state 记录 `阶段: propose-self-review`、`执行模式: full-auto` 且 proposal/design/tasks 完整
+- **THEN** 恢复执行沿用原 isolation 与执行模式，从方案自审或 context.md 产出继续，不重复询问隔离方式或全自动/手动

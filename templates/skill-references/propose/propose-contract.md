@@ -6,6 +6,10 @@
 
 ## 步骤
 
+### 0. 启动恢复（创建方案前）
+
+若 `参数` 显式包含一个活跃 change 名，或 `openspec/changes/` 下恰好只有一个活跃 change，且其 `run-state.md` 记录 `阶段: propose-self-review`、`执行模式: full-auto`，同时 proposal/design/tasks（及已声明的 delta spec）完整：SHALL 视为恢复未完成的 propose 阶段。此时沿用 run-state 中的文件名、isolation 与执行模式，跳过步骤 1-4 的隔离/模式询问和 artifact 重生成，核对 git/files 后从步骤 5 继续；若自审清单已在上一回合输出但尚无 `context.md` 或 propose 阶段 commit，则从步骤 5.5 继续。不得再次询问隔离方式或全自动/手动，也不得新建第二个 change。
+
 ### 1. 是否已在 worktree 内 + 隔离方式询问（创建方案前，全局只问一次）
 
 先读取当前分支：`SOURCE_BRANCH="$(git branch --show-current)"`。若为空（detached HEAD），**停止编排**，要求用户切到命名分支后再运行。
@@ -75,6 +79,8 @@
 
 读取 `@openspec-propose skill`（opsx propose 编排 prompt）并按其定义的完整流程，围绕 `参数`（需求描述）生成 proposal/design/tasks 全部 artifacts。生成过程中遵循该编排 prompt 的全部步骤与约束（本命令的步骤 4-9 在其后继续编排）。
 
+**Planning boundary 从属规则（SHALL）**：`@openspec-propose` 的 “planning artifacts only / stop after artifacts” 约束只限定它自己的委托阶段，防止该阶段直接修改项目代码；它不是 `@lyx-propose` 编排入口的终止条件。用户调用 `@lyx-propose` 并选择全自动后，已授权当前会话在 artifacts 返回后继续方案自审、context/metadata、propose commit 与 review-plan → apply → review-code。SHALL NOT 因 opsx 的 “wait for a new user request” 文案在 artifacts 或方案自审后结束回合，也不得要求用户再次说“继续”。
+
 **产物语言（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 的 `[general].language`（缺失、空白或非法时按 `zh-CN`）。proposal.md、design.md、tasks.md、delta spec、context.md 与 run-state.md 的标题、说明、决策、任务、场景和验收描述 SHALL 使用该语言；`zh-CN` 用中文，`en` 用英文。OpenSpec 提供的模板栏目结构必须保留，但栏目标题和自然语言内容要按配置语言表达；代码标识符、命令、路径、错误原文和必要技术术语 MAY 保留英文。该规则同样约束方案自审对 artifacts 的修改与后续各阶段对 run-state.md 的续写，SHALL NOT 因 OpenSpec 默认模板是英文而生成英文正文。
 
 **测试模式与风险策略适配（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时停止并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
@@ -136,7 +142,7 @@
 
 **自审修改后验证**：自审产生任何 artifact 修改（尤其 delta spec）后，SHALL 运行 `openspec validate --changes <change-name>` 确认结构合法，再进入步骤 5.5。
 
-**阶段报告非终态（SHALL）**：本清单是 propose 阶段的中间状态输出。只要不存在"待用户决策"项、失败或终止条件，输出清单后 SHALL 立即继续进入步骤 5.5；SHALL NOT 在此结束回合或等待用户再次确认。
+**阶段报告非终态（SHALL）**：本清单是 propose 内部 checkpoint，不是流水线阶段交接。只要不存在"待用户决策"项、失败或终止条件，输出清单后 SHALL 立即执行工具动作进入步骤 5.5，再依次完成 5.6、5.7 与步骤 6 propose commit；SHALL NOT 在此结束回合、等待用户再次确认，也 SHALL NOT 在 propose commit 前读取 review-plan bundle。
 
 ### 5.5 产出 context.md 软上下文 artifact（commit 前）
 

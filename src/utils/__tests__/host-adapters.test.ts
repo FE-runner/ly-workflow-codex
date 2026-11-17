@@ -103,6 +103,9 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(proposeMain).toContain('lyx-review-code/SKILL.md')
     expect(proposeMain).toContain('frontmatter 声明的全部 references')
     expect(proposeMain).toContain('SHALL NOT 视为已进入下一阶段')
+    expect(proposeMain).toContain('Planning boundary')
+    expect(proposeMain).toContain('propose 内部 checkpoint')
+    expect(proposeMain).toContain('propose-self-review')
 
     expect(reviewPlanMain).toContain('lyx-apply/SKILL.md')
     expect(reviewPlanMain).toContain('frontmatter 声明的全部 references')
@@ -113,6 +116,8 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(applyMain).toContain('SHALL NOT 视为已交接')
 
     expect(read('propose')).toContain('**下一阶段 bundle 读取协议（SHALL）**')
+    expect(read('propose')).toContain('Planning boundary 从属规则（SHALL）')
+    expect(read('propose')).toContain('### 0. 启动恢复（创建方案前）')
     expect(read('review-plan')).toContain('**apply bundle 读取（SHALL）**')
     expect(read('propose')).toContain('下一阶段命令、同级 skill 路径、change 参数和继续条件')
   })
