@@ -16,6 +16,8 @@ references:
 - `references/review-contract.md`：审查对象定位、执行者选择、分级判据、Critical 裁决、修复循环、终止条件、快照和统一提交。
 - `references/recovery-and-evidence.md`：run-state 恢复、审查轮次记录和新鲜验证证据。
 
+**范围简化审查镜头（SHALL）**：开始审查前 SHALL 读取并遵循 `{{HOST_SKILLS_DIR}}/lyx-ponytail/SKILL.md`，重点识别方案中的无依据扩权、投机抽象、可删除配置或用户未要求的扩展；只有会改变交付范围、实施方式或验收结论的问题才按既有 Critical/Warning/Info 判级，不得为“看起来更简”强制要求重构。
+
 ## 全自动执行不变量（最高优先级）
 
 - `run-state.md` frontmatter 的 `lyx.executionMode` 为 `full-auto` 时，正常清零报告是中间状态，不是流水线最终回复。

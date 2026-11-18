@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- 新增 lyx 内部包装 skill `lyx-ponytail` 与 `lyx-code-simplification`：随 npm 包发布，`lycx init` 缺失时补齐，`--force` 刷新，不依赖宿主预装无前缀同名 skill
+- propose / review-plan / apply / fix / review-code 按阶段显式读取包装 skill；范围最小化、行为不变简化和代码审查仍复用既有 testMode、分级、双轴、提交与审查门禁
+- doctor / status 独立展示包装 skill 状态，命令计数仍保持 15 个生命周期命令
+
+### Changed
+
+- 安装、备份与卸载把两个包装 skill 视为 lyx 自有 `lyx-*` 产物；非 force 安装不覆盖已有文件，卸载不影响宿主外部同名 skill
+
 ## [0.16.0] - 2026-11-18
 
 ### Added

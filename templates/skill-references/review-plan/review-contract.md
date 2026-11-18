@@ -18,6 +18,8 @@
 
 **测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 run-state frontmatter `lyx.testModeDecision`，目标 change 没有 YAML frontmatter 时 MAY 只读回退旧 `.openspec.yaml lyx.testModeDecision`。决策为 `normal` / `off` 时沿用；缺失、为 `null` 或为非法枚举字符串时询问一次并写入 run-state；frontmatter、mapping、`schemaVersion` 或字段类型结构非法时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `run-state.md`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
 
+**范围简化审查镜头（SHALL）**：`main` 路径的主 agent 与 `subagent` 路径的审查 subagent SHALL 读取并应用 `{{HOST_SKILLS_DIR}}/lyx-ponytail/SKILL.md`，检查方案是否包含用户未要求的扩展、投机抽象、可删除配置或未说明的范围膨胀。只有该问题会改变交付范围、实施顺序、公开契约或验收结论时才按既有 Critical/Warning/Info 与双轴判级；纯文档可读性或抽象层次偏好不得强制形成发现，也不得要求把“更少 Requirement / task”本身当作目标。
+
 **实施可执行性检查（SHALL）**：审查 tasks 是否足以让一个没有会话历史的实施者直接开始，逐项检查明确文件或定位锚点、跨任务接口、验证命令、预期结果和独立交付/验证/审查边界。含糊任务或缺失验证属于方案发现；跨模块接口缺失且文档没有权威定义时，判 `影响落地=是`，不得仅当作可机械自动修复。
 
 ## 判级标准（先定级，再写条目）
@@ -31,6 +33,7 @@
 3. **文档互相矛盾**：`proposal.md` / `design.md` / `tasks.md` / delta spec 对同一行为给出互相冲突的结论。
 4. **方案不可实施**：依赖的接口 / 数据 / 权限在现有系统中不存在，且文档没有给出任何获取路径或替代方案。
 5. **可证实的范围缺口**：文档已明确会改动 X，却遗漏 X 的下游受影响面（调用方 / 迁移 / 回滚），且该遗漏可由文档内信息直接证实。
+6. **方案校验失败**：执行 `openspec validate --changes <change-name>` 失败，且原因属于 Requirement 缺 Scenario、artifact schema 或结构错误等方案工件自身缺陷；环境或 CLI 缺失不得误判为方案 Critical。
 
 **纯展示与 `skip_specs`**：proposal 明确声明纯展示改动、New/Modified Capabilities 为空且在 `.openspec.yaml` 设置 `skip_specs: true` 时，无 delta spec 与无测试任务均属合法，SHALL NOT 报 Critical 或 Warning。若 proposal 声明了至少一个 New/Modified Capability，`skip_specs: true` 仍属误用，按「缺失 delta spec」处理。
 
@@ -123,6 +126,7 @@ TASK SHALL 携带主会话已解析的 final `testMode`（`normal` / `off`）与
 
 TASK 核心约束（写入审查 subagent 的任务）：
 - 只审查该 change 目录下 artifact 之间的内在一致性和完整性（proposal vs design vs tasks vs spec 是否互相矛盾、是否有遗漏）
+- 审查前读取并应用 `{{HOST_SKILLS_DIR}}/lyx-ponytail/SKILL.md`，识别有实际交付影响的范围膨胀或投机抽象；无具体影响时不得强制形成简化发现
 - 可做轻量代码库确认（确认 plan 列出的文件路径是否存在、grep 硬编码数字/常量是否遗漏关联文件），但不深入读源码实现、不做逐行代码审查——后者是 apply 后 code-review 的职责
 - 不把'代码库尚未实现该方案条目'当作 Critical（方案审查阶段代码库本来就没有实现，这是正常状态）
 

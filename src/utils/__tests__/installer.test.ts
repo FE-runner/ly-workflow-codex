@@ -239,6 +239,9 @@ describe('installWorkflows — prompts installation', () => {
     expect(result.success).toBe(true)
     expect(result.installedCommands.length).toBe(15)
     expect(result.installedPrompts.length).toBeGreaterThan(0)
+    expect(result.installedBundledSkills).toEqual(['lyx-ponytail', 'lyx-code-simplification'])
+    expect(fs.existsSync(join(codexSkillsDir, 'lyx-ponytail', 'SKILL.md'))).toBe(true)
+    expect(fs.existsSync(join(codexSkillsDir, 'lyx-code-simplification', 'SKILL.md'))).toBe(true)
 
     // 只装 codex 共享角色词；claude/gemini/grok 不得存在
     expect(fs.existsSync(join(lyPromptsDir, 'codex'))).toBe(true)
@@ -261,6 +264,7 @@ describe('installWorkflows — prompts installation', () => {
     expect(codex).toBeDefined()
     expect(codex!.installedCommands).toEqual(result.installedCommands)
     expect(codex!.installedPrompts).toEqual(result.installedPrompts)
+    expect(codex!.installedBundledSkills).toEqual(result.installedBundledSkills)
     expect(codex!.configPath).toBe(codexSkillsDir)
     expect(result.configPath).toBe(codexSkillsDir)
   })
@@ -297,6 +301,7 @@ describe('installWorkflows — non-force skip counting', () => {
     expect(result.success).toBe(true)
     // 没有真正写入 → 不得报"已装 15 个命令"
     expect(result.installedCommands.length).toBe(0)
+    expect(result.installedBundledSkills).toEqual(['lyx-ponytail', 'lyx-code-simplification'])
     // 全部因目标已存在而跳过，记录在 skippedCommands
     expect(result.skippedCommands?.length).toBe(15)
     expect(result.errors).toEqual([])

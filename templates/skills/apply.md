@@ -26,6 +26,13 @@ argument-hint: '[<change-name>]'
 
 最终模式为 `normal` 时，若历史决策为 `off` 但配置覆盖为 `normal`，或决策缺失后补问为 `normal`，而 proposal/tasks 没有测试任务或测试执行计划，SHALL 在实施前停止并要求更新 change artifacts 或恢复配置，SHALL NOT 临时添加范围外测试。
 
+**简化 skills（两条执行者路径共同遵守）**：
+
+- 实施前 SHALL 读取 `{{HOST_SKILLS_DIR}}/lyx-ponytail/SKILL.md`，用最小完整改动满足 tasks；不得借“最简”跳过 tasks、验证、错误处理、安全或可访问性。
+- tasks 全部实施并完成任务级验证后、进入步骤 3 主会话确认前，实施者 SHALL 读取 `{{HOST_SKILLS_DIR}}/lyx-code-simplification/SKILL.md`，只对本次 change 已改代码做一次行为不变的简化收口；SHALL NOT 修改测试语义、顺手重构范围外代码或新增独立重构 commit。
+- 简化改动代码时 SHALL 重跑受影响的任务级验证，验证证据随实施结果回传。`testMode = "off"` 时不运行测试命令，改用 tasks 指定的 typecheck 或其他非测试验证。
+- 本流程的范围、审查配置、testMode、提交与审查纪律优先于两个 skill 的通用建议。任一 skill 缺失或不可读时 SHALL 停止并报告缺失路径。
+
 主会话确认后回写 `context.md`（实施决策）并按共用 index 隔离协议统一提交 apply 阶段 commit（message 为 CC 前缀 + `Change-Stage: apply` + `Change-Name: <change-name>` trailer），作为 `@lyx-review-code` 的审查对象。本轮新写入，或继承并实际消费的 dirty `run-state.md` 决策，SHALL 纳入待提交清单；新 change SHALL NOT 因决策写入 `.openspec.yaml`。失败区分两阶段：**环境级不可用**（仅 `subagent` 路径可能发生——宿主无 subagent 能力、初始 spawn 失败）按回退口径回退主 agent 直接实施，输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为业务失败；**实施中/验证失败** SHALL 原样呈报转人工，不自动重试、不自动兜底；若决策已写入或消费，允许保留为 dirty 并如实报告。隔离 worktree 的询问/新建统一收敛到 `@lyx-propose` 入口，apply 不触发任何 worktree 询问、不做隔离检测——直接在当前工作目录实施。
 
 **启动恢复（SHALL）**：进入实施前先读取该 change 的 `run-state.md` frontmatter，获取 `lyx.stage`、`lyx.executionMode`、`lyx.pipelineStage`、`lyx.lastGoodCommit`、`lyx.completedTasks`、`lyx.review` 与 `lyx.nextSafeAction`，再以 `git status --porcelain`、`git log`、`tasks.md` 与实际目标文件核对。账本与 git/files 冲突时以可核验事实为准，并把冲突写成新的恢复记录；SHALL NOT 因账本存在而跳过核对。旧 change 没有 YAML frontmatter 时按旧格式容错继续；frontmatter 损坏时停止，不得静默回退。
@@ -62,7 +69,9 @@ argument-hint: '[<change-name>]'
 {{HOST_FRAGMENT:subagent-nonfork}}
 4. **范围点名（只实施 change 范围）**：任务点名"只实施 change 范围"——读取 `openspec/changes/<change-name>/tasks.md`，按需读取同目录 `proposal.md`/`design.md`/`context.md` 及任务引用的上下文文件，理解现有模式；SHALL NOT 改动范围外文件。
 5. **实施规范**（coding subagent 内部执行）：
+   - 实施前读取并遵循 `{{HOST_SKILLS_DIR}}/lyx-ponytail/SKILL.md`；全部任务验证完成后、回传前读取并遵循 `{{HOST_SKILLS_DIR}}/lyx-code-simplification/SKILL.md`，只整理本次 change 已改代码且保持行为不变。
    - 自顶向下逐任务实施，每完成一个任务立即验证：只修改任务列出的文件，不添加任务之外的功能/重构/注释；按 tasks.md 指定的验证方式运行验证（如 typecheck/build/test），失败则修复后重试，每个任务最多 3 次修复尝试；验证通过后，把 tasks.md 中对应条目从 `- [ ]` 改为 `- [x]`，继续下一个任务。
+   - 实施完成后的简化收口不得修改测试语义、扩大任务范围或新增独立重构 commit；若简化了代码，重跑受影响的任务级验证并随回传清单给出证据。两个 skill 任一缺失或不可读时停止并报告路径，不得自行内联替代。
    - 每个任务完成后 SHALL 增量更新 `run-state.md`：更新 `lyx.completedTasks`，并在正文沿用现有语言记录任务编号、最近可用基线 commit、验证命令、退出码、结果摘要和待归属的统一提交状态。尚未形成 apply 阶段 commit 时 SHALL 标记“待本次阶段提交归属”，SHALL NOT 填写不存在的 SHA。
    - 任务存在机械歧义时按最简方案处理并立即在 run-state 写入 `裁决：<选择>；理由：<依据>；如果判断错误：<代价与重做范围>`；涉及产品语义、公开契约、安全或不可逆操作时停止转人工。
    - 最终模式为 `testMode = "off"` 时不新增或修改测试文件、不执行测试命令。测试专用任务跳过、输出 `[跳过] <任务>（testMode=off）`；来源为项目覆盖时写为 `[跳过] <任务>（testMode=off，项目配置）`。把 `tasks.md` 对应条目标为 `- [x]` 且注明 `（testMode=off，已跳过）`，来源为项目覆盖时注明项目来源；混合任务只跳过测试部分，实现部分照常执行。

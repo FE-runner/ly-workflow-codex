@@ -41,7 +41,7 @@ describe('claude host — invocation prefix rendering (4.2)', () => {
   it.each(COMMANDS)('codex %s keeps the @lyx- prefix', (cmd) => {
     const rendered = renderHostCommand('codex', cmd)
     expect(rendered).toContain(`@lyx-${cmd}`)
-    expect(rendered).not.toContain('/lyx-')
+    expect(rendered).not.toContain(`/lyx-${cmd}`)
   })
 
   it('delegates OpenSpec via skill names in propose / explore / archive', () => {
@@ -147,7 +147,13 @@ describe('claude host — install / uninstall', () => {
     expect(result.success, result.errors.join('\n')).toBe(true)
     expect(result.hosts?.claude?.installedCommands.length).toBe(COMMANDS.length)
     expect(result.hosts?.codex).toBeUndefined()
-    expect(readdirSync(paths.skillsDir).sort()).toEqual(COMMANDS.map(c => `lyx-${c}`).sort())
+    expect(readdirSync(paths.skillsDir).sort()).toEqual([
+      ...COMMANDS.map(c => `lyx-${c}`),
+      'lyx-code-simplification',
+      'lyx-ponytail',
+    ].sort())
+    const ponytail = readFileSync(join(paths.skillsDir, 'lyx-ponytail', 'SKILL.md'), 'utf8')
+    expect(ponytail).toContain('`/lyx-ponytail [lite|full|ultra|off]`')
     expect(readdirSync(paths.agentsDir).sort()).toEqual(CLAUDE_AGENT_DEFINITIONS.map(d => d.file).sort())
     expect(fs.existsSync(join(paths.promptsDir, 'codex'))).toBe(false)
 
@@ -166,7 +172,7 @@ describe('claude host — install / uninstall', () => {
     })
     expect(frontmatter(readFileSync(join(paths.agentsDir, 'lyx-reviewer.md'), 'utf-8')).model).toBe('inherit')
     expect(readdirSync(paths.agentsDir).length).toBe(CLAUDE_AGENT_DEFINITIONS.length)
-    expect(readdirSync(paths.skillsDir).length).toBe(COMMANDS.length)
+    expect(readdirSync(paths.skillsDir).length).toBe(COMMANDS.length + 2)
   })
 
   it('uninstall removes lyx-* skills, lyx-* agents and ~/.claude/lyx only', async () => {

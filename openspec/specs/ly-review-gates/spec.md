@@ -138,6 +138,8 @@
 
 核心行为未覆盖、接口或配置契约不一致、已确认逻辑缺陷缺少复现测试时，SHALL NOT 使用纯展示或补充覆盖豁免；这些情况继续按既有 Critical/Warning 规则判定。对于未声明任何 New/Modified Capability 的纯展示 change，review-plan SHALL 将空 Capabilities 与 `skip_specs: true` 视为合法组合；一旦声明了 Capability，缺失 delta spec 仍按既有 Critical 处理。
 
+方案工件自身导致 `openspec validate --changes <change-name>` 失败时，review-plan SHALL 判为 Critical；典型原因包括 Requirement 缺 Scenario、delta spec schema 或结构错误。环境缺失、CLI 不可用等非方案工件原因 SHALL NOT 误判为方案 Critical。
+
 #### Scenario: 纯展示改动缺测试不产生发现
 - **WHEN** review-code 审查只修改静态文案和样式的 diff，且相称的既有验证已通过
 - **THEN** 审查报告不因“没有新增测试”产生 Critical、Warning 或 Info
@@ -716,3 +718,21 @@ review-plan 与 review-code 的报告 SHALL 为正常清零和终止结论提供
 #### Scenario: subagent 声称修复成功
 - **WHEN** 审查 subagent 报告问题已修复但没有对应 diff 或命令证据
 - **THEN** 主会话要求下一轮核验或把结论标为证据不足，不据此清零
+
+### Requirement: 审查关卡应用 lyx 包装的简化 skills
+
+`@lyx-review-plan` SHALL 读取并应用当前宿主的 `lyx-ponytail`，识别方案中有实际交付影响的范围膨胀、投机抽象或用户未要求的扩展。`@lyx-review-code` SHALL 读取并应用 `lyx-ponytail` 与 `lyx-code-simplification`，只评估本次 diff 中具体、可验证且保持行为不变的简化机会。
+
+包装 skill SHALL NOT 新增独立严重度或发现类型；发现继续按既有 Critical/Warning/Info 与 `可自动修复` / `影响落地` 双轴消费。纯样式偏好、抽象层次争论或无具体影响的“更简”建议 SHALL NOT 形成发现，也不得扩大审查范围、修改测试语义或要求独立 refactor commit。`main` 与 `subagent` 两条执行者路径均遵守本 Requirement；包装 skill 缺失或不可读时按审查调用失败停止并报告路径。
+
+#### Scenario: review-plan 发现投机扩展
+- **WHEN** proposal 增加了用户未请求且会改变公开契约的扩展点
+- **THEN** review-plan 读取 `lyx-ponytail` 后按既有判级标准报告有实际落地影响的范围问题
+
+#### Scenario: review-code 发现本次 diff 的具体复杂度
+- **WHEN** 本次 diff 中存在深层嵌套且可机械改成等价 guard clause，不影响错误路径和测试
+- **THEN** review-code 读取 `lyx-code-simplification` 后按既有 Warning 双轴规则报告，不追加新的审查机制
+
+#### Scenario: 无具体简化收益不造发现
+- **WHEN** 本次 diff 已清晰可读，只是审查者偏爱另一种等价写法
+- **THEN** 不形成 Critical、Warning 或 Info，SHALL NOT 为证明已使用 skill 而制造纯风格发现

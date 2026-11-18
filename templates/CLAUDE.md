@@ -14,7 +14,8 @@
 
 | 目录 | 用途 | 安装目标 |
 |------|------|----------|
-| `skills/` | 15 个 SKILL.md 共享正文（`name`/`description`/`argument-hint` frontmatter）。宿主差异处以 `{{HOST_FRAGMENT:<片段>}}` 占位，另有 `{{LYX_CONFIG_FILE}}` / `{{HOST_ID}}` 两个宿主变量；正文中的 `@lyx-<command>` 是**命令标识**（codex 原样保留，claude 渲染为 `/lyx-<command>`，`@openspec-<skill>` 渲染为 `openspec-<skill>`） | codex：`~/.agents/skills/lyx-*/SKILL.md`；claude：`~/.claude/skills/lyx-*/SKILL.md` |
+| `skills/` | 15 个 SKILL.md 共享正文（`name`/`description`/`argument-hint` frontmatter）。宿主差异处以 `{{HOST_FRAGMENT:<片段>}}` 占位，另有 `{{LYX_CONFIG_FILE}}` / `{{HOST_SKILLS_DIR}}` / `{{HOST_ID}}` 三个宿主变量；正文中的 `@lyx-<command>` 是**命令标识**（codex 原样保留，claude 渲染为 `/lyx-<command>`，`@openspec-<skill>` 渲染为 `openspec-<skill>`） | codex：`~/.agents/skills/lyx-*/SKILL.md`；claude：`~/.claude/skills/lyx-*/SKILL.md` |
+| `bundled-skills/` | 2 个 lyx 内部包装 skill（`lyx-ponytail` / `lyx-code-simplification`）。随包发布，不注册为生命周期命令；`lycx init` 缺失补齐，`--force` 刷新，已有非 force 保留 | `<skillsDir>/lyx-ponytail/`、`<skillsDir>/lyx-code-simplification/` |
 | `skill-references/<command>/` | 长 skill 的按需 references（完整编排、恢复/证据规则）。主文件 frontmatter 的 `references:` 列表是唯一 required-reference 契约；不进入命令注册表 | `<skillsDir>/lyx-<command>/references/` |
 | `hosts/codex/fragments/<命令>/` | codex 宿主片段（审查 / 实施子代理的 spawn、`send_input` 复用、模型与推理档、ROLE_FILE 角色词路径、`codex "…"` 兜底续接命令等） | 渲染进 codex 产物 |
 | `hosts/codex/prompts/` | 2 个审查角色提示词（plan-reviewer / reviewer），codex 审查命令 ROLE_FILE 以绝对路径引用 | `~/.codex/lyx/prompts/codex/` |
@@ -56,6 +57,7 @@
 
 | `{{HOST_FRAGMENT:<片段>}}` | 宿主片段注入：替换为 `hosts/<宿主>/fragments/<命令>/<片段>.md` 的内容 |
 | `{{LYX_CONFIG_FILE}}` | 当前宿主的配置文件（`~/.codex/lyx/config.toml` / `~/.claude/lyx/config.toml`） |
+| `{{HOST_SKILLS_DIR}}` | 当前宿主的 skills 根（`~/.agents/skills` / `~/.claude/skills`），用于定位 lyx 内部包装 skill |
 | `{{HOST_ID}}` | 当前宿主 id（`codex` / `claude`） |
 | `{{AGENT_MODEL_LINES}}` | 仅 claude 子代理定义：`model` / `effort` frontmatter 行 |
 

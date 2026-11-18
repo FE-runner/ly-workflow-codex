@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url'
 import fs from 'fs-extra'
 import { basename, dirname, join, resolve } from 'pathe'
 import { codexAdapter } from '../hosts/codex/adapter'
+import { installBundledSkills } from '../utils/bundled-skills'
 import {
   isPathInside,
   listMissingSkillReferences,
@@ -327,6 +328,11 @@ export async function installEvalSkillBundle(
 ): Promise<void> {
   const templateDir = join(sourceRoot, 'templates')
   const skillsDir = join(fixture.repoDir, '.agents', 'skills')
+  if (await fs.pathExists(join(templateDir, 'bundled-skills'))) {
+    const bundled = await installBundledSkills({ templateDir, skillsDir, force: true })
+    if (bundled.errors.length > 0)
+      throw new Error(`Installed eval bundled skills failed: ${bundled.errors.join('; ')}`)
+  }
   const ctx: HostAdapterContext = {
     installDir: fixture.repoDir,
     force: true,

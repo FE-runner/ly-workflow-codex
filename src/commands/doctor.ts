@@ -6,6 +6,7 @@ import fs from 'fs-extra'
 import { join } from 'pathe'
 import { version as packageVersion } from '../../package.json'
 import { i18n } from '../i18n'
+import { isBundledSkillDirName, listMissingBundledSkills } from '../utils/bundled-skills'
 import { getHostConfigPath, sanitizeExecutor } from '../utils/config'
 import { listPrefixedDirs } from '../utils/fs-helpers'
 import { getAdapter } from '../utils/host-adapters'
@@ -223,15 +224,18 @@ export async function status(options: HostOpsOptions = {}): Promise<void> {
     const installedVer = config?.general?.version || 'unknown'
     let cmdCount: string
     try {
-      cmdCount = String((await listPrefixedDirs(adapter.defaultPaths().skillsDir, 'lyx-')).length)
+      cmdCount = String((await listPrefixedDirs(adapter.defaultPaths().skillsDir, 'lyx-'))
+        .filter(path => !isBundledSkillDirName(path.split('/').pop() ?? '')).length)
     }
     catch (error) {
       cmdCount = ansis.red(i18n.t('doctor:hostCheckFailed', { error: error instanceof Error ? error.message : String(error) }))
     }
     const executor = (key: 'reviewExecutor' | 'codingExecutor') => sanitizeExecutor(config?.host?.[key]) ?? 'main'
+    const missingBundledSkills = await listMissingBundledSkills(adapter.defaultPaths().skillsDir)
     console.log(ansis.magenta.bold(`  ${i18n.t('doctor:hostGroup', { host })}`))
     console.log(`  ${ansis.bold('Version')}        ${installedVer}${installedVer !== latestVer ? ansis.yellow(` (latest: ${latestVer})`) : ansis.green(' (up to date)')}`)
     console.log(`  ${ansis.bold('Commands')}       ${cmdCount} (${adapter.commandPrefix}lyx-*)`)
+    console.log(`  ${ansis.bold('Lyx skills')}    ${missingBundledSkills.length === 0 ? ansis.green('lyx-ponytail, lyx-code-simplification') : ansis.yellow(i18n.t('doctor:bundledSkills.missing', { list: missingBundledSkills.join(', ') }))}`)
     console.log(`  ${ansis.bold('Config')}         ${getHostConfigPath(host)}`)
     console.log(`  ${ansis.bold('Executors')}      review=${executor('reviewExecutor')}, coding=${executor('codingExecutor')}`)
     if (effective.status === 'ok') {

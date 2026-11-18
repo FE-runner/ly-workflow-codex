@@ -182,3 +182,17 @@
 #### Scenario: 旧 change 不被自动迁移
 - **WHEN** 生命周期命令处理一个只有旧 `.openspec.yaml lyx:` 的活跃 change
 - **THEN** 命令按兼容规则只读旧值，不向 `.openspec.yaml` 写回，也不批量复制旧字段
+
+### Requirement: apply 使用 lyx 包装的简化 skills
+
+`@lyx-apply` 的 `main` 与 `subagent` 两条实施路径 SHALL 在实施前读取并应用 `lyx-ponytail`，并在全部 tasks 完成任务级验证后、主会话确认前读取并应用 `lyx-code-simplification`。简化收口只覆盖本次 change 已改代码，SHALL 保持行为、错误路径和测试语义不变，且 SHALL NOT 新增独立 commit 或修改范围外文件。
+
+简化若改动代码，实施者 SHALL 重跑受影响的任务级验证并回传“命令 + 退出码 + 结果摘要”。`testMode = "off"` 时不运行测试命令，改用任务指定的 typecheck 或其他非测试验证。任一包装 skill 缺失或不可读时 apply SHALL 停止并报告路径。
+
+#### Scenario: main 路径先最小实施再简化
+- **WHEN** `codingExecutor = "main"` 且 tasks 全部通过任务级验证
+- **THEN** 主 agent 在提交前只整理本次 change 的 diff，简化后重跑受影响验证，再进入主会话确认
+
+#### Scenario: subagent 路径回传简化证据
+- **WHEN** `codingExecutor = "subagent"` 且 coding subagent 完成全部 tasks
+- **THEN** subagent 应用两个包装 skill，把简化后的文件清单与新鲜验证证据随结果回传，不自行 commit

@@ -2,6 +2,7 @@ import type { InstallResult } from '../types'
 import type { HostAdapter, HostAdapterConfig, HostAdapterContext, HostId, HostPaths, HostUninstallReport } from './host-adapters'
 import fs from 'fs-extra'
 import { basename, join, resolve } from 'pathe'
+import { installBundledSkills } from './bundled-skills'
 import { FALLBACK_HOSTS, getAdapter } from './host-adapters'
 import { getWorkflowById } from './installer-data'
 import { isPathInside, isSafeSkillReference, listMissingSkillReferences, PACKAGE_ROOT, parseSkillReferences, replaceHomePathsInTemplate } from './installer-template'
@@ -47,6 +48,7 @@ function emptyResult(): InstallResult {
     success: true,
     installedCommands: [],
     installedPrompts: [],
+    installedBundledSkills: [],
     skippedCommands: [],
     errors: [],
     configPath: '',
@@ -208,6 +210,21 @@ async function installHost(
     result: emptyResult(),
   }
 
+  const bundledSkills = await installBundledSkills({
+    templateDir: ctx.templateDir,
+    skillsDir: ctx.paths.skillsDir,
+    force: ctx.force,
+    render: (content, name) => replaceHomePathsInTemplate(
+      adapter.renderTemplate(content, ctx, name),
+      ctx.installDir,
+    ),
+  })
+  ctx.result.installedBundledSkills!.push(...bundledSkills.installed)
+  if (bundledSkills.errors.length > 0) {
+    ctx.result.errors.push(...bundledSkills.errors)
+    ctx.result.success = false
+  }
+
   await installCommandFiles(ctx, workflowIds, adapter)
   await adapter.installExtras?.(ctx)
   await adapter.verify?.(ctx)
@@ -268,6 +285,7 @@ export async function installWorkflows(
     result.success &&= hostResult.success
     result.installedCommands.push(...hostResult.installedCommands)
     result.installedPrompts.push(...hostResult.installedPrompts)
+    result.installedBundledSkills!.push(...(hostResult.installedBundledSkills ?? []))
     result.skippedCommands!.push(...(hostResult.skippedCommands ?? []))
     result.errors.push(...hostResult.errors)
     if (!result.configPath)

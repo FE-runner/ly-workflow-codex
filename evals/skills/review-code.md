@@ -38,3 +38,5 @@ Modified: passed — 消费固定第二轮报告，同一误报再次被拒后�
 Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` and `/tmp/lyx-skill-evals-2026-10-31/summary.json`.
 
 Latest current: passed — 2026-11-18 run read run-state frontmatter, consumed the fixed round-two report, and stopped at the rejection hardline with verifiable evidence. See `../results/2026-11-18-run-state-metadata.md`.
+
+Bundled-skill check: passed — current fixture installed `lyx-ponytail` / `lyx-code-simplification`; review-code still produced no style-only findings and stopped at the rejection hardline. See `../results/2026-11-18-bundled-simplification-skills.md`.

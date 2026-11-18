@@ -63,6 +63,8 @@ export function renderCodexTemplate(content: string, config: HostAdapterConfig):
 
 /** 模板中展示的配置文件路径（安装期 ~/ 再展开为绝对路径） */
 const CODEX_CONFIG_FILE_DISPLAY = '~/.codex/lyx/config.toml'
+/** 模板中展示的宿主 skills 根目录（安装期 ~/ 再展开为绝对路径） */
+const CODEX_SKILLS_DIR_DISPLAY = '~/.agents/skills'
 
 // ═══════════════════════════════════════════════════════
 // codex adapter — SKILL.md 形态（Codex 官方 skill 机制）
@@ -138,6 +140,7 @@ export const codexAdapter: HostAdapter = {
   renderTemplate: (content, ctx, command) => renderCodexTemplate(
     injectHostFragments(content, join(ctx.templateDir, 'hosts', 'codex', 'fragments'), command)
       .replace(/\{\{LYX_CONFIG_FILE\}\}/g, CODEX_CONFIG_FILE_DISPLAY)
+      .replace(/\{\{HOST_SKILLS_DIR\}\}/g, CODEX_SKILLS_DIR_DISPLAY)
       .replace(/\{\{HOST_ID\}\}/g, 'codex'),
     ctx.config,
   ),

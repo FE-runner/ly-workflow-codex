@@ -94,6 +94,8 @@ export interface InstallResult {
   success: boolean
   installedCommands: string[]
   installedPrompts: string[]
+  /** 本次由 lyx 安装/刷新的内部包装 skill */
+  installedBundledSkills?: string[]
   /** 非 force 安装时因目标已存在而跳过的命令（修复"假成功"计数，供共存提示） */
   skippedCommands?: string[]
   errors: string[]

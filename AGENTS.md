@@ -77,6 +77,8 @@ src/utils/                   共享层（不出现宿主名与宿主路径）
   installer.ts               安装 / 卸载主流程：按宿主遍历适配器，结果按宿主记录
   installer-template.ts      PACKAGE_ROOT 解析、宿主片段注入、~/ 展开、共享变量
   installer-data.ts          15 个命令注册
+  bundled-skills.ts          lyx 内部包装 skill（lyx-ponytail / lyx-code-simplification）的缺失安装、
+                             强制刷新、缺失检查与命令目录排除
   preflight.ts               OpenSpec 三层检查（CLI + skills + root）：skills 按宿主判定、整体取最差；root 必须位于项目顶层之下（否则 outside-project）；
                              修复按宿主传 --tools；无宿主配置时只读诊断
   fs-helpers.ts platform.ts version.ts package-meta.ts
@@ -89,6 +91,7 @@ src/i18n/                    i18next 文案（zh-CN / en）
 src/types/                   LyConfig（host 节）/ WorkflowConfig / CLI 类型
 
 templates/skills/            15 个 SKILL.md 共享正文
+templates/bundled-skills/   2 个 lyx 内部包装 skill：lyx-ponytail / lyx-code-simplification
 templates/skill-references/ 长 skill 按需 references（propose / review-plan / review-code）
 templates/hosts/codex/       codex 片段 + 角色词（→ ~/.codex/lyx/prompts/codex/）
 templates/hosts/claude/      claude 片段 + 子代理定义（→ ~/.claude/agents/lyx-*.md）
@@ -99,7 +102,7 @@ docs/codex-exec-contract.md  审查子会话调用契约（DEPRECATED，历史�
 
 ```bash
 npx ly-workflow-codex        # 一键安装/菜单（默认动作，含 preflight）
-npx ly-workflow-codex init   # 选择宿主并安装 15 个 skills + 配置；OpenSpec 默认 check-only（i 为别名）
+npx ly-workflow-codex init   # 选择宿主并安装 15 个生命周期 skills + 2 个 lyx 包装 skills + 配置；OpenSpec 默认 check-only（i 为别名）
 npx ly-workflow-codex init --init-openspec  # 宿主确认后，为所选宿主初始化当前项目 OpenSpec root/skills
 lycx init --skip-prompt [--host codex,claude]  # 非交互：已安装宿主 → 探测宿主 → 兜底 codex
 lycx project test-mode normal|off|ask [--host <hosts>]  # 写入当前主仓库根的项目测试模式覆盖
@@ -169,6 +172,7 @@ testMode = "off"
 - 驳回硬线（终止条件，防主会话裁决失效）：（a）逐条口径——同一 Critical 复现且再被驳回；（b）整轮口径——连续 2 轮对当轮全部 Critical 均不认可（零认可零修复）；命中即停转人工
 - 实施 = **按 `codingExecutor` 切换**：`main`（默认）= 主 agent 直接读 tasks.md 逐任务实施 + 验证 + 勾选；`subagent` = spawn coding subagent（非 fork + 只实施 change 范围），回传主会话**不自行 commit**。两条路径均由主会话统一提交 `apply: <change-name>`；subagent 路径环境级不可用回退主 agent，业务失败原样呈报转人工
 - 模型与推理档：审查 subagent = `[host] reviewModel` + 非空 `reviewReasoningEffort`，coding subagent = `[host] codingModel` + 非空 `codingReasoningEffort`（claude 侧写入子代理定义，见上）；**仅在对应执行者为 `subagent` 时生效**，执行者为 `main` 时字段被忽略并由 doctor 输出 WARN；模型未配置或空白回退当前会话模型，推理档未配置或空白不传，经"模板指示 + 宿主 spawn 能力"落实，无 shell 层模型参数；推理档不做枚举强校验，禁止模型名到档位的硬编码映射
+- lyx 包装简化 skill = **`lyx-ponytail` + `lyx-code-simplification`**：二者随 npm 包发布到 `templates/bundled-skills/`，由 `lycx init` 安装到当前宿主 skills 根的 `<skillsDir>/lyx-ponytail/` 与 `<skillsDir>/lyx-code-simplification/`。缺失时安装，`--force` 时按包内版本刷新，已有且非 force 不覆盖；SHALL NOT 依赖宿主另行预装无 `lyx-` 前缀的 `ponytail` / `code-simplification`。propose / review-plan 用 `lyx-ponytail` 约束方案与范围，apply / fix 用两者完成最小实施与行为不变简化，review-code 用两者审查本次 diff；发现与自审仍走既有分级、双轴、testMode、提交与范围纪律，包装 skill 的通用建议不得覆盖流程硬门禁
 - 角色设定来源按宿主：codex 的 ROLE_FILE——`review-plan` 用 `~/.codex/lyx/prompts/codex/plan-reviewer.md`，`review-code` 用 `~/.codex/lyx/prompts/codex/reviewer.md`（绝对路径为行为契约不可改，角色词内容不重写）；claude 用子代理定义正文（`lyx-plan-reviewer` / `lyx-reviewer`），产物中不出现 codex 角色词路径
 - 第 2 轮起优先以 `send_input` 复用同一审查 subagent（实测宿主支持跨轮唤醒并保留其会话上下文）；复用失败才回退重新 spawn（非 fork，只携带 TASK），增量 TASK 附上一轮全部 Critical 逐字原文 + 路径清单，无需 session_id/resume
 - 完整执行约定（spawn 协议 / 任务构造 / 主会话裁决与驳回硬线 / 修复循环 / 终止条件 / 提交时机）内联在各 skill 模板；[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED（历史参考）
@@ -201,6 +205,8 @@ testMode = "off"
 
 16. **真实 skill 行为评测是显式开发工具**：`pnpm eval:skills` 在独立临时 Git 仓库中安装 baseline 或 current bundle，以 fixture HOME 隔离配置，经真实 `codex exec --json` 执行并把 `passed` / `failed` / `not-executed` 分开记录。该 runner 不属于 15 个用户命令，不进入普通 `pnpm test` 或默认 CI；真实执行后须把结果回写到 `evals/skills/*.md` 的 `Evidence Record`。
 
+17. **简化能力以 lyx 内部 skill 包装，不做宿主外部依赖**：`lyx-ponytail` 与 `lyx-code-simplification` 属于本包产物，不写入 OpenSpec 的 15 个生命周期命令表，也不要求 `~/.agents/skills/ponytail` 或 `~/.claude/skills/code-simplification` 等外部目录存在。安装器负责缺失补齐和 force 刷新；doctor 独立检查；uninstall 随 `lyx-*` 一起清理。这样 workflow 只使用自身可控版本，避免宿主预装差异和同名 skill 更新漂移。
+
 ## 改动对称清单
 
 改动以下任一侧时须同步另一侧（`@lyx-fix` 自审③逐项核对，全流程实施同样适用）：
@@ -209,6 +215,7 @@ testMode = "off"
 - 宿主片段：`templates/hosts/codex/fragments/<命令>/` ↔ `templates/hosts/claude/fragments/<命令>/`（片段集合一一对应）
 - 配置采集入口：`lycx init`（`src/commands/init.ts`）↔ 菜单配置（`src/commands/menu.ts`），以及 `lycx doctor` 对同一字段的展示与告警
 - 模板正文 ↔ 断言模板文本的测试（`src/utils/__tests__/host-adapters.test.ts`、`src/hosts/claude/__tests__/claude-host.test.ts`）
+- lyx 包装 skill：`templates/bundled-skills/` ↔ `src/utils/bundled-skills.ts` / 安装器 / doctor / uninstall / `src/utils/__tests__/bundled-skills.test.ts` / 双语 README
 - 核心 skill 行为规则 ↔ `docs/skill-behavior-evals.md` / `evals/skills/` / `src/utils/__tests__/skill-evals.test.ts`
 - skill frontmatter `references:` ↔ `templates/skill-references/` / 安装器 / doctor / `src/utils/__tests__/skill-references.test.ts`
 - run-state 规则 ↔ propose / apply / review / archive 模板 / `execution-run-state` spec / `src/utils/__tests__/run-state.test.ts`

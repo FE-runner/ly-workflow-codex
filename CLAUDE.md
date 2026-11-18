@@ -14,7 +14,7 @@
 
 ```bash
 npx ly-workflow-codex        # 交互式菜单（裸命令）
-npx ly-workflow-codex init   # 选择宿主并安装 15 个 skills + 配置；OpenSpec 默认 check-only（不写当前项目）
+npx ly-workflow-codex init   # 选择宿主并安装 15 个生命周期 skills + 2 个 lyx 包装 skills + 配置；OpenSpec 默认 check-only（不写当前项目）
 npx ly-workflow-codex init --init-openspec  # 宿主确认后为所选宿主初始化当前项目 OpenSpec root/skills
 lycx project test-mode normal|off|ask [--host ...]  # 设置当前主仓库根的项目测试模式覆盖
 lycx project test-mode --unset [--host ...]    # 移除当前项目全部规范化等价覆盖
@@ -25,7 +25,7 @@ lycx uninstall [--host <hosts>]             # 按宿主卸载（缺省 = 全部�
 pnpm eval:skills -- --help                  # 开发期真实 skill 行为评测（不进入默认 CI）
 ```
 
-安装产物（按宿主）：codex = `~/.agents/skills/lyx-*/`（15 个 skills）+ `~/.codex/lyx/prompts/codex/`（审查角色词）+ `~/.codex/lyx/config.toml`；claude = `~/.claude/skills/lyx-*/`（15 个 skills）+ `~/.claude/agents/lyx-*.md`（3 个子代理定义）+ `~/.claude/lyx/config.toml`。本包私有目录，不做任何自动迁移；lyx 不写 Claude Code 自身的 provider / settings。OpenSpec 2.x 的项目级产物位于 `.agents/skills/openspec-*`，Claude Code 侧是 `.claude/skills/openspec-*` 链接；项目级 `.agents/` 与 `.claude/` 是本地生成产物，应忽略且不纳入仓库，只跟踪 `openspec/`。卸载 lyx 不触碰这些 OpenSpec 自有产物。Node.js 最低版本为 `22.12.0`。
+安装产物（按宿主）：codex = `~/.agents/skills/lyx-*/`（15 个生命周期命令 + `lyx-ponytail` / `lyx-code-simplification` 2 个内部包装 skill）+ `~/.codex/lyx/prompts/codex/`（审查角色词）+ `~/.codex/lyx/config.toml`；claude = `~/.claude/skills/lyx-*/`（同 17 个 skill）+ `~/.claude/agents/lyx-*.md`（3 个子代理定义）+ `~/.claude/lyx/config.toml`。包装 skill 不依赖宿主预装无 `lyx-` 前缀的同名外部 skill；`lycx init` 缺失时补齐，`--force` 刷新，卸载随 `lyx-*` 清理。本包私有目录，不做任何自动迁移；lyx 不写 Claude Code 自身的 provider / settings。OpenSpec 2.x 的项目级产物位于 `.agents/skills/openspec-*`，Claude Code 侧是 `.claude/skills/openspec-*` 链接；项目级 `.agents/` 与 `.claude/` 是本地生成产物，应忽略且不纳入仓库，只跟踪 `openspec/`。卸载 lyx 不触碰这些 OpenSpec 自有产物。Node.js 最低版本为 `22.12.0`。
 
 ## 15 个 @lyx-* skills
 
@@ -44,6 +44,8 @@ pnpm eval:skills -- --help                  # 开发期真实 skill 行为评测
 | `@lyx-publish` | npm 包发布四场景 |
 | `@lyx-commit` `@lyx-rollback` `@lyx-clean-branches` `@lyx-worktree` | Git 工具（worktree 无 `switch`） |
 
+另有 2 个不在生命周期命令表中的 lyx 内部包装 skill：`lyx-ponytail` 负责最小完整范围，`lyx-code-simplification` 负责本次 diff 的行为不变简化。propose / review-plan / apply / fix / review-code 按阶段显式读取；宿主外部同名 skill 不参与。
+
 ## 审查执行模型（速览）
 
 - 全自动阶段交接 = **显式读取同级下一阶段 bundle**：`@lyx-*` 只是命令标识，不是跨 skill 调用工具；propose / review-plan / apply 正常完成后必须读取 `../lyx-<next-command>/SKILL.md` 及全部 references，再在同一回合执行。`run-state.md` 记录下一命令、同级路径、参数与继续条件；只写“下一步应执行”不算交接
@@ -57,6 +59,7 @@ pnpm eval:skills -- --help                  # 开发期真实 skill 行为评测
 - **驳回硬线**（终止条件）：（a）同一 Critical 复现且再被驳回；（b）连续 2 轮对当轮全部 Critical 均不认可——命中即停转人工
 - 实施 = **按 `codingExecutor` 切换**：`main`（默认）= 主 agent 直接实施；`subagent` = spawn coding subagent（非 fork，只实施 change 范围 + context.md），模型 = `[host] codingModel`。两条路径均由主会话统一提交 `apply: <change-name>`；subagent 路径环境级不可用回退主 agent，业务失败原样呈报转人工
 - 模型与推理档：仅在对应执行者为 `subagent` 时生效（审查 = `reviewModel` + 非空 `reviewReasoningEffort`；实施 = `codingModel` + 非空 `codingReasoningEffort`）；执行者为 `main` 时字段不生效并由 doctor 输出 WARN；模型未配置或空白回退当前会话模型，推理档空白不传、不做枚举强校验；交互 init / 菜单可选择不覆盖（清除字段）或覆盖指定档位，非交互 update 保留原值；能否 spawn 由宿主实际报错判定（报错含 `Unknown model` / `Available models: ...` 时如实展示）；读取配置失败 → "配置状态未知"提示运行 `lycx doctor`；宿主无 subagent 能力或 spawn 失败 → 环境级不可用回退
+- lyx 包装简化 skill：`lyx-ponytail` 在 propose / review-plan 中约束范围，在 apply / fix 中选择最小完整改动，在 review-code 中识别无必要扩展；`lyx-code-simplification` 在 apply / fix 的行为稳定后对本次 diff 做行为不变整理，并在 review-code 中作为审查镜头。二者不新增严重度、不绕过 testMode / 审查 / 提交门禁，缺失时提示 `lycx init`
 - 角色设定来源按宿主：codex 角色词绝对路径 `~/.codex/lyx/prompts/codex/{reviewer,plan-reviewer}.md` 为行为契约（角色词内容不重写）；Claude Code 为子代理定义正文，产物中不出现 codex 角色词路径
 - 完整执行约定（spawn 协议、主会话裁决与驳回硬线、修复循环、终止条件、提交时机）内联在各 skill 模板；[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED（历史参考）
 

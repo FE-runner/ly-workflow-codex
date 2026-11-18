@@ -18,6 +18,13 @@
 
 **测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 run-state frontmatter `lyx.testModeDecision`，目标 change 没有 YAML frontmatter 时 MAY 只读回退旧 `.openspec.yaml lyx.testModeDecision`。决策为 `normal` / `off` 时沿用；缺失、为 `null` 或为非法枚举字符串时询问一次并写入 run-state；frontmatter、mapping、`schemaVersion` 或字段类型结构非法时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `run-state.md`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
 
+**简化 skill 审查镜头（SHALL）**：`main` 路径的主 agent 与 `subagent` 路径的审查 subagent SHALL 在读取审查范围后分别读取并应用 `{{HOST_SKILLS_DIR}}/lyx-ponytail/SKILL.md` 与 `{{HOST_SKILLS_DIR}}/lyx-code-simplification/SKILL.md`。
+
+- `lyx-ponytail` 只用于识别本次 diff 直接引入的无必要功能、依赖、配置、抽象或用户未要求的扩展；不得据此要求删除既有共用能力。
+- `lyx-code-simplification` 只用于判断本次 diff 中是否存在可具体说明、保持行为不变且能明显降低理解成本的整理点；应用 Chesterton's Fence，先理解调用方、错误路径和既有测试再判断，不按行数或个人风格强制“简化”。
+- 两项 skill 不新增独立审查维度或发现类型；命中时仍按既有 Critical/Warning/Info 与 `可自动修复` / `影响落地` 双轴判级。`可自动修复=是` 的纯可读性整理不得借机扩大审查范围、修改测试语义或新增独立 refactor commit。
+- 本次 diff 已经清晰、没有具体简化收益时 SHALL NOT 为证明“用过 skill”而制造发现。skill 文件缺失或不可读时视为审查调用失败，停止并报告缺失路径。
+
 ## 判级标准（先定级，再写条目）
 
 同一类问题两次跑出不同级别会让流程行为不可预期，因此按下面规则定级；定级只看"不修会发生什么"，不看修复难度、改动行数与是否顺手。
@@ -116,6 +123,8 @@ git status --porcelain | grep '^??'
 TASK SHALL 携带主会话已解析的 final `testMode`（`normal` / `off`）与来源（配置 / change 决策）；审查 subagent SHALL NOT 再自行推断 ask 决策。若 final mode 缺失或仍为 `ask`，审查 subagent SHALL 停止并报告调用方未提供最终模式。
 {{HOST_FRAGMENT:subagent-model}}
 {{HOST_FRAGMENT:subagent-task}}
+
+审查 TASK SHALL 指示 subagent 在读取审查范围后应用 `{{HOST_SKILLS_DIR}}/lyx-ponytail/SKILL.md` 与 `{{HOST_SKILLS_DIR}}/lyx-code-simplification/SKILL.md`；只报告本次 diff 中具体、可验证且不扩大范围的简化问题，不得为证明使用 skill 而制造纯风格发现。
 
 OUTPUT 约定（写入审查 subagent 的任务）：审查发现按严重度分级 Critical/Warning/Info，每条含位置（含可解析的文件相对路径）、问题、建议；**每条 Warning 还须同时附 `可自动修复：是 / 否` 与 `影响落地：是 / 否` 两项标注**（判据见 `## 判级标准`），Critical 与 Info 不附标注。
 

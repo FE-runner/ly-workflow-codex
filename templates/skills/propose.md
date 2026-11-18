@@ -16,6 +16,8 @@ references:
 - `references/propose-contract.md`：隔离询问、自动/手动选择、artifact 生成、change 名确认、方案自审、context/run-state、提交和流水线。
 - `references/recovery-and-evidence.md`：运行账本、机械裁决和新鲜验证证据规则。
 
+**方案范围 skill（SHALL）**：生成 artifacts 前 SHALL 读取并遵循 `{{HOST_SKILLS_DIR}}/lyx-ponytail/SKILL.md`，用最小完整方案覆盖用户目标；不得生成用户未要求的功能、选项、扩展点或“以后可能用”的抽象。省略项只在 proposal 范围边界需要时简短说明，不自行扩成 Requirement、Scenario 或 task。方案阶段不运行 `lyx-code-simplification`；代码改动后的行为不变简化由 `@lyx-apply` / `@lyx-fix` 执行，代码审查视角由 `@lyx-review-code` 执行。skill 缺失或不可读时 SHALL 停止并报告缺失路径。
+
 ## 全自动执行不变量（最高优先级）
 
 - 用户选择全自动后，真实 change 名一经确认，SHALL 立即创建 `run-state.md`，在固定 YAML frontmatter 写入 `lyx.executionMode: full-auto`、当前阶段、测试模式（如已选择）、隔离信息和下一步；该初始化 SHALL 早于方案自审。

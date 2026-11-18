@@ -39,6 +39,8 @@ Latest: passed — 2026-11-18 current run recognized the run-state frontmatter c
 
 Evidence: `pnpm eval:skills -- --case apply --version both --baseline-ref dce2466 --output /tmp/lyx-run-state-eval`; see `../results/2026-11-18-run-state-metadata.md`.
 
+Bundled-skill check: passed — current fixture included both lyx wrapper skills and still stopped on partial apply without source or committed-state mutation. See `../results/2026-11-18-bundled-simplification-skills.md`.
+
 ## Legacy `.openspec.yaml` Compatibility
 
 ### Preconditions

@@ -180,6 +180,7 @@ const zhCN = {
     installCancelled: '安装已取消',
     installedCommands: '已安装命令:',
     installedPrompts: '已安装角色提示词:',
+    installedBundledSkills: '已安装 lyx 包装 skills:',
     installationErrors: '安装过程中出现错误:',
     summary: {
       title: '配置摘要:',
@@ -231,6 +232,11 @@ const zhCN = {
     },
   },
   doctor: {
+    bundledSkills: {
+      label: 'Lyx 包装 skills',
+      present: 'lyx-ponytail / lyx-code-simplification 已安装',
+      missing: '缺少 {{list}}——运行 lycx init 补齐',
+    },
     claude: {
       label: 'Claude 子代理配置',
       agentsMissing: '缺失 {{list}}（{{dir}}/）——运行 lycx init --force 重装',
@@ -560,6 +566,7 @@ const en: typeof zhCN = {
     installCancelled: 'Installation cancelled',
     installedCommands: 'Installed commands:',
     installedPrompts: 'Installed role prompts:',
+    installedBundledSkills: 'Installed lyx wrapper skills:',
     installationErrors: 'Installation errors:',
     summary: {
       title: 'Configuration summary:',
@@ -611,6 +618,11 @@ const en: typeof zhCN = {
     },
   },
   doctor: {
+    bundledSkills: {
+      label: 'Lyx wrapper skills',
+      present: 'lyx-ponytail / lyx-code-simplification installed',
+      missing: 'missing {{list}} — run lycx init to install',
+    },
     claude: {
       label: 'Claude subagent config',
       agentsMissing: 'missing {{list}} ({{dir}}/) — run lycx init --force to reinstall',

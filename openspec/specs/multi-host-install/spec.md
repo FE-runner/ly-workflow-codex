@@ -159,3 +159,29 @@ lyx 的安装、卸载与安装后校验 SHALL 经宿主注册表与适配器接
 #### Scenario: doctor 发现 reference 缺失
 - **WHEN** 安装目录存在主 SKILL.md 但缺少必需 reference
 - **THEN** doctor 报告结构性缺失并给出重装建议
+
+### Requirement: init 安装 lyx 包装 skill 且不依赖宿主已有同名 skill
+
+发布包 SHALL 包含 `lyx-ponytail` 与 `lyx-code-simplification` 两个由 lyx 命名空间包装的内部 skill。`lycx init` 与安装流程 SHALL 把它们安装到当前宿主 lyx skills 根下的 `lyx-ponytail/` 与 `lyx-code-simplification/`；目标缺失时必须安装，`--force` 时按包内当前版本刷新，非 force 且目标已存在时不得覆盖。
+
+这两个包装 skill SHALL NOT 被安装或解析为 `~/.agents/skills/ponytail`、`~/.agents/skills/code-simplification`、`~/.claude/skills/ponytail` 或其他宿主外部依赖目录。它们不加入 15 个生命周期命令的计数与命令表，但 SHALL 随 lyx 备份并在 uninstall 时作为 `lyx-*` 产物移除。`lycx doctor` SHALL 检查两者是否缺失，缺失时提示运行 `lycx init` 补齐。
+
+#### Scenario: init 补齐缺失包装 skill
+- **WHEN** 宿主 skills 根不存在 `lyx-ponytail` 或 `lyx-code-simplification`
+- **THEN** `lycx init` 从包内模板安装缺失项，输出安装结果，且不要求宿主预装同名外部 skill
+
+#### Scenario: 非 force 保留已有包装 skill
+- **WHEN** 目标 `lyx-ponytail/SKILL.md` 已存在且用户未使用 `--force`
+- **THEN** 安装器不覆盖该文件；另一缺失包装 skill 仍照常安装
+
+#### Scenario: force 刷新包装 skill
+- **WHEN** 用户运行 `lycx init --force`
+- **THEN** 两个 `lyx-*` 包装 skill 按当前包内容刷新，与生命周期命令同步
+
+#### Scenario: 命令计数排除包装 skill
+- **WHEN** 宿主 skills 根同时存在 15 个 `lyx-*` 生命周期命令和 2 个包装 skill
+- **THEN** `lycx doctor` / `lycx status` 的生命周期命令计数仍为 15，包装 skill 作为独立检查项展示
+
+#### Scenario: uninstall 清理 lyx 包装 skill
+- **WHEN** 用户卸载宿主上的 lyx workflow
+- **THEN** `lyx-ponytail` 与 `lyx-code-simplification` 随其他 `lyx-*` 产物移除，宿主外部同名 skill 不受影响

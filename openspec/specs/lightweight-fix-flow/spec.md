@@ -189,3 +189,21 @@ message SHALL NOT 追加 `Change-Stage` / `Change-Name` trailer。`git commit` �
 #### Scenario: 连续三次修复失败
 - **WHEN** 同一问题连续三次修复仍未通过验证
 - **THEN** 命令停止猜修复，报告需要质疑架构、接口或原方案的证据并转人工
+
+### Requirement: fix 使用 lyx 包装的简化 skills
+
+`@lyx-fix` SHALL 从当前宿主的 lyx skills 根读取并应用 `lyx-ponytail` 与 `lyx-code-simplification`。`lyx-ponytail` 用于以最小完整改动覆盖用户目标；`lyx-code-simplification` 只在功能或修复行为稳定后整理本次 diff，并保持行为、错误路径、副作用和既有测试语义不变。
+
+简化收口 SHALL NOT 扩大修复范围、顺手重构 diff 外代码、修改测试来迁就实现或新增独立重构 commit。`testMode`、五项自审、B 类确认、单 commit 与验证门禁的优先级高于两个包装 skill 的通用建议。任一包装 skill 缺失或不可读时命令 SHALL 停止并报告缺失路径。
+
+#### Scenario: fix 实施前使用最小完整范围
+- **WHEN** 用户用 `@lyx-fix` 修复一个既有逻辑缺陷
+- **THEN** 命令先读取 `lyx-ponytail`，只修改根因、调用方和相称验证所需的文件，不生成用户未要求的选项或扩展
+
+#### Scenario: fix 自审前简化本次 diff
+- **WHEN** 行为稳定且相关验证已通过，进入五项自审前
+- **THEN** 命令读取 `lyx-code-simplification`，只保留能明确降低本次 diff 复杂度的整理，并在最终验证中覆盖简化后的代码
+
+#### Scenario: 包装 skill 缺失时停止
+- **WHEN** 当前宿主的 `lyx-ponytail` 或 `lyx-code-simplification` 的 `SKILL.md` 缺失
+- **THEN** 命令停止并提示运行 `lycx init` 补齐，不使用内联摘要冒充已加载

@@ -40,3 +40,5 @@ Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` an
 Latest baseline: failed — matched 2/3 required patterns because the old run-state format did not satisfy the current recovery expectations.
 
 Latest current: passed — matched 3/3 patterns, found the missing spec Scenario and executable task contract, and stopped at the non-autofixable impact warnings. See `../results/2026-11-18-run-state-metadata.md`.
+
+Bundled-skill check: passed after correction — the first current run downgraded a missing-Scenario `openspec validate` failure; the rubric now keeps plan-artifact validation failures as Critical, and the rerun matched 3/3. See `../results/2026-11-18-bundled-simplification-skills.md`.

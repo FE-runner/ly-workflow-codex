@@ -118,6 +118,8 @@ Evidence: baseline `pnpm eval:skills -- --case propose-self-review-full-auto --v
 
 Latest current: passed — 2026-11-18 run kept the existing proposal unchanged and asked only for the two startup choices. See `../results/2026-11-18-run-state-metadata.md`.
 
+Bundled-skill check: passed — current installed `lyx-ponytail` / `lyx-code-simplification` in the fixture and still stopped at the startup checkpoint without scope drift. See `../results/2026-11-18-bundled-simplification-skills.md`.
+
 ## Run-State Frontmatter And Legacy Compatibility
 
 ### Preconditions

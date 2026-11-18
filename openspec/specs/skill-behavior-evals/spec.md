@@ -33,16 +33,16 @@
 - **THEN** 评测记录标记为未执行并说明阻塞原因，不声明行为评测通过
 
 ### Requirement: 评测资产不进入用户命令面
-行为评测资产 SHALL 作为仓库维护资料存在，SHALL NOT 增加用户可调用命令，SHALL NOT 被安装为 `lyx-*` skill，也不 SHALL 改变运行时配置字段。发布包是否包含评测资产 MAY 由项目维护策略决定，但安装后的用户工作流 SHALL NOT 依赖其存在。
+行为评测资产 SHALL 作为仓库维护资料存在，SHALL NOT 增加用户生命周期命令，SHALL NOT 被安装为 `lyx-*` skill，也不 SHALL 改变运行时配置字段。发布包是否包含评测资产 MAY 由项目维护策略决定，但安装后的用户工作流 SHALL NOT 依赖其存在。该限制只适用于评测资产，不改变 `lyx-ponytail` / `lyx-code-simplification` 作为包内包装 skill 的安装契约。
 
 #### Scenario: 安装 lyx
 - **WHEN** 用户运行 `lycx init --skip-prompt`
-- **THEN** 只安装既有 15 个命令及宿主产物，不新增评测命令目录
+- **THEN** 只安装既有 15 个生命周期命令、2 个 lyx 包装 skill 及宿主产物，不新增评测命令目录
 
 ### Requirement: 行为评测具备真实 Codex 运行器
 仓库 SHALL 提供显式调用的内部评测运行器，用于在隔离的临时 Git 仓库中安装 baseline 或 current skill bundle，并调用可用编码 agent 执行现有场景。运行器 SHALL 支持按 case 选择、baseline/current 对照、指定 baseline ref、输出目录和临时目录保留开关；SHALL NOT 由 `pnpm test` 或默认 CI 自动触发。
 
-运行时 SHALL 将被测 skill 放在项目本地 `.agents/skills/`，把 child `HOME` 指向隔离 fixture，并在渲染 `~/` 路径时使用同一 fixture HOME；使用显式 `CODEX_HOME` 访问已有认证，不复制、打印或提交凭据。baseline 模板没有 `templates/skill-references/` 时 MAY 安装单文件 bundle，但 current 声明的 references MUST 完整安装。每个 case SHALL 从干净 fixture 开始，结束后至少保留最终 agent 输出、退出码、适用性状态和通过/失败判定；运行器 MUST 在基础命令、认证/网络、调用超时、非零退出或最终文本缺失时标记 `not-executed`，只有最终文本存在但通过条件不满足时才标记行为 `failed`，SHALL NOT 把失败环境声称为行为通过。
+运行时 SHALL 将被测 skill 放在项目本地 `.agents/skills/`，把 child `HOME` 指向隔离 fixture，并在渲染 `~/` 路径时使用同一 fixture HOME；使用显式 `CODEX_HOME` 访问已有认证，不复制、打印或提交凭据。current 源包含 `templates/bundled-skills/` 时，runner SHALL 同时安装 `lyx-ponytail` 与 `lyx-code-simplification`，不得依赖评测机器上的无前缀外部 skill。baseline 模板没有 `templates/skill-references/` 时 MAY 安装单文件 bundle，但 current 声明的 references MUST 完整安装。每个 case SHALL 从干净 fixture 开始，结束后至少保留最终 agent 输出、退出码、适用性状态和通过/失败判定；运行器 MUST 在基础命令、认证/网络、调用超时、非零退出或最终文本缺失时标记 `not-executed`，只有最终文本存在但通过条件不满足时才标记行为 `failed`，SHALL NOT 把失败环境声称为行为通过。
 
 #### Scenario: 运行 current propose 场景
 - **WHEN** 用户执行 `pnpm eval:skills -- --case propose --version current`

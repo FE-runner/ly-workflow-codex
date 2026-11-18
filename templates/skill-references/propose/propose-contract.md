@@ -81,6 +81,8 @@
 
 **Planning boundary 从属规则（SHALL）**：`@openspec-propose` 的 “planning artifacts only / stop after artifacts” 约束只限定它自己的委托阶段，防止该阶段直接修改项目代码；它不是 `@lyx-propose` 编排入口的终止条件。用户调用 `@lyx-propose` 并选择全自动后，已授权当前会话在 artifacts 返回后继续方案自审、context/metadata、propose commit 与 review-plan → apply → review-code。SHALL NOT 因 opsx 的 “wait for a new user request” 文案在 artifacts 或方案自审后结束回合，也不得要求用户再次说“继续”。
 
+**范围最小化（SHALL）**：生成 artifacts 前读取并应用 `{{HOST_SKILLS_DIR}}/lyx-ponytail/SKILL.md`。proposal 的 What Changes、delta spec 与 tasks 只覆盖用户目标及完成任务必需的调用方、验证、错误处理、安全与迁移；用户未要求的扩展点、可选配置、向后兼容层和投机抽象 SHALL NOT 被自动生成。确实主动省略时，可在 proposal 的边界说明保留一句，不额外制造 Requirement、Scenario 或 task。该 skill 缺失或不可读时停止并报告缺失路径。
+
 **产物语言（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 的 `[general].language`（缺失、空白或非法时按 `zh-CN`）。proposal.md、design.md、tasks.md、delta spec、context.md 与 run-state.md 的标题、说明、决策、任务、场景和验收描述 SHALL 使用该语言；`zh-CN` 用中文，`en` 用英文。OpenSpec 提供的模板栏目结构必须保留，但栏目标题和自然语言内容要按配置语言表达；代码标识符、命令、路径、错误原文和必要技术术语 MAY 保留英文。该规则同样约束方案自审对 artifacts 的修改与后续各阶段对 run-state.md 的续写，SHALL NOT 因 OpenSpec 默认模板是英文而生成英文正文。
 
 **测试模式与风险策略适配（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时停止并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。

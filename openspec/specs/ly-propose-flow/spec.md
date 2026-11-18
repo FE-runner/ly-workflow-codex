@@ -486,3 +486,17 @@ propose SHALL NOT 为新建 change 向 `.openspec.yaml` 写入 `lyx:` 或 `x-lyx
 #### Scenario: 自审中断后从 run-state 恢复
 - **WHEN** 唯一活跃 change 的 run-state 记录 `stage: propose-self-review`、`executionMode: full-auto` 且 proposal/design/tasks 完整
 - **THEN** 恢复执行沿用 run-state 中的 isolation 与执行模式，从方案自审或 context.md 产出继续，不重复询问隔离方式或全自动/手动
+
+### Requirement: propose 使用 lyx-ponytail 约束方案范围
+
+`@lyx-propose` SHALL 在生成 artifacts 前读取并应用当前宿主的 `lyx-ponytail` skill，以用户目标及完成任务必需的调用方、验证、错误处理、安全与迁移作为方案边界。用户未要求的功能、选项、扩展点、兼容层和投机抽象 SHALL NOT 被自动扩成 What Changes、Requirement、Scenario 或 task。
+
+确需主动省略的范围可在 proposal 中简短说明，但该说明本身 SHALL NOT 生成额外 Requirement 或 task。方案阶段 SHALL NOT 运行 `lyx-code-simplification`；代码实施后的简化收口由 apply / fix 负责。`lyx-ponytail` 缺失或不可读时 propose 停止并报告路径。
+
+#### Scenario: 方案只覆盖用户目标
+- **WHEN** 用户要求增加一个必要配置字段，没有要求可选 provider 或未来扩展点
+- **THEN** propose 只生成字段、必要调用方与验证任务，不生成 provider、插件接口或“以后可能需要”的配置
+
+#### Scenario: 主动省略只留边界说明
+- **WHEN** 当前实现已足以满足需求，方案决定不增加可选配置
+- **THEN** proposal 可用一句话记录省略项，但不把该省略项扩成 Requirement、Scenario 或 task

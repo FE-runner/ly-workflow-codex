@@ -15,6 +15,8 @@ import { CLAUDE_AGENTS_DIR, CLAUDE_HOME_DIR, CLAUDE_LY_DIR, CLAUDE_PROMPTS_DIR, 
 
 /** 模板中展示的配置文件路径（安装期 ~/ 再展开为绝对路径） */
 const CLAUDE_CONFIG_FILE_DISPLAY = '~/.claude/lyx/config.toml'
+/** 模板中展示的宿主 skills 根目录（安装期 ~/ 再展开为绝对路径） */
+const CLAUDE_SKILLS_DIR_DISPLAY = '~/.claude/skills'
 
 /**
  * claude 宿主的推理档建议清单（仅作候选提示，不做枚举强校验）。
@@ -69,6 +71,7 @@ export function renderAgentDefinition(content: string, config: HostAdapterConfig
 export function renderClaudeTemplate(content: string, fragmentsDir: string, command: string): string {
   const withFragments = injectHostFragments(content, fragmentsDir, command)
     .replace(/\{\{LYX_CONFIG_FILE\}\}/g, CLAUDE_CONFIG_FILE_DISPLAY)
+    .replace(/\{\{HOST_SKILLS_DIR\}\}/g, CLAUDE_SKILLS_DIR_DISPLAY)
     .replace(/\{\{HOST_ID\}\}/g, 'claude')
   return rewriteClaudeInvocations(injectSharedVariables(withFragments))
 }

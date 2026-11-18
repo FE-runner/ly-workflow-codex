@@ -34,6 +34,7 @@
     "dist",
     "docs/codex-exec-contract.md",
     "docs/skill-behavior-evals.md",
+    "templates/bundled-skills/",
     "templates/hosts/",
     "templates/skill-references/",
     "templates/skills/"

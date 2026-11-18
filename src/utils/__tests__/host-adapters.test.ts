@@ -122,6 +122,27 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(read('propose')).toContain('下一阶段命令、同级 skill 路径、change 参数和继续条件')
   })
 
+  it('workflow templates load lyx-wrapped simplification skills with host-specific paths', () => {
+    const skillsDir = host === 'codex' ? '~/.agents/skills' : '~/.claude/skills'
+    const required: Record<string, string[]> = {
+      'fix.md': ['lyx-ponytail', 'lyx-code-simplification'],
+      'apply.md': ['lyx-ponytail', 'lyx-code-simplification'],
+      'propose.md': ['lyx-ponytail'],
+      'review-plan.md': ['lyx-ponytail'],
+      'review-code.md': ['lyx-ponytail', 'lyx-code-simplification'],
+    }
+
+    for (const [file, skills] of Object.entries(required)) {
+      const content = read(file)
+      for (const skill of skills)
+        expect(content, `${file} missing ${skill}`).toContain(`${skillsDir}/${skill}/SKILL.md`)
+      expect(content, file).not.toContain('{{HOST_SKILLS_DIR}}')
+    }
+
+    expect(read('apply.md')).toContain('本流程的范围、审查配置、testMode、提交与审查纪律优先')
+    expect(read('fix.md')).toContain('不得新增独立重构 commit')
+  })
+
   it('core descriptions only describe triggers', () => {
     const forbidden = ['审查-修复循环', '终止条件', '提交顺序', '自动流水线', 'reviewExecutor', 'spawn']
     for (const command of ['propose', 'review-plan', 'review-code']) {
@@ -821,9 +842,11 @@ describe('installWorkflows — codex host', () => {
     expect(result.errors).toEqual([])
 
     const installed = readdirSync(codexSkillsDir)
-    expect(installed.length).toBe(15)
+    expect(installed.length).toBe(17)
     expect(installed).toContain('lyx-apply')
     expect(installed).toContain('lyx-review-plan')
+    expect(installed).toContain('lyx-ponytail')
+    expect(installed).toContain('lyx-code-simplification')
     expect(fs.existsSync(join(codexSkillsDir, 'lyx-apply', 'SKILL.md'))).toBe(true)
 
     // 渲染产物：单审查 subagent（非 fork）编排指示；REVIEW_MODEL 未配置也无 -m/exec 残留；无 wrapper 残留

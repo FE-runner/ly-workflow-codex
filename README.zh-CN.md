@@ -11,7 +11,7 @@
 
 ```bash
 npx ly-workflow-codex        # 交互式菜单（含 openspec 依赖 preflight 检查）
-npx ly-workflow-codex init   # 选择宿主并安装 15 个 skills + 配置；OpenSpec 默认 check-only
+npx ly-workflow-codex init   # 选择宿主并安装 15 个生命周期 skills + 2 个 lyx 包装 skills + 配置；OpenSpec 默认 check-only
 npx ly-workflow-codex init --init-openspec  # 宿主确认后，为所选宿主初始化当前项目 OpenSpec root/skills
 lycx init --skip-prompt --host claude       # 非交互，只装指定宿主
 lycx project test-mode off                  # 当前主仓库根使用无测试模式（全部已安装宿主）
@@ -21,6 +21,7 @@ lycx project test-mode --unset              # 移除当前项目覆盖，回退�
 
 - CLI 二进制名 `lycx`（子命令：`init`/`project test-mode`/`doctor`/`status`/`uninstall`/`openspec inspect|ensure`，宿主相关命令支持 `--host <codex,claude>`；裸命令进菜单；`update` 在菜单内）
 - 安装产物与配置：见下方「宿主」一节
+- lyx 内部包装 skill：发布包内含 `lyx-ponytail` 与 `lyx-code-simplification`，`lycx init` 发现缺失时自动安装到当前宿主 skills 根，`--force` 时刷新；不要求或读取 `~/.agents/skills/ponytail`、`~/.claude/skills/code-simplification` 等宿主外部同名依赖。它们不计入 15 个生命周期命令，但会随 `lyx-*` 备份、体检和卸载
 - OpenSpec 2.x：项目级 skills 统一写入 `.agents/skills/openspec-*`，Claude Code 使用 `.claude/skills/openspec-*` 链接；`/opsx:*` 命令已移除，`lyx` 继续委托同名 `openspec-*` skills。项目级 `.agents/` 与 `.claude/` 是本地生成产物并被忽略，仓库只跟踪 `openspec/`；升级后在每个 OpenSpec 项目运行 `openspec update --dry-run` 与 `openspec update`
 - 审查范围：`[host] reviewMode`（`full` / `plan-only` / `code-only` / `off`，未配置或非法等价 `full`）门控 `@lyx-propose` 编排入口执行哪些审查关卡（`plan-only` 跳过代码审查、`code-only` 跳过方案审查、`off` 两级都跳过；apply 始终执行），不影响被直接调用的 `@lyx-review-plan` / `@lyx-review-code`、`@lyx-apply` 与归档前验证；被跳过的关卡打印显式 `[跳过]` 状态行。交互 `init` 先问 `testMode`，随后在审查配置段开头问 `reviewMode`（`off` 跳过 review 侧提问、既有值保留），`lycx doctor` 展示该字段并对非法取值 / `off` + review 侧字段非空输出 WARN
 - 测试模式：有效配置 `testMode` 按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析，支持 `normal` / `off` / `ask`。配置为 `ask` 时，change 命令按 `normal` / `off` 首次询问一次并写入 change 的 `run-state.md` YAML frontmatter：
@@ -51,7 +52,7 @@ lyx:
 | | Codex | Claude Code |
 |---|---|---|
 | 调用写法 | `@lyx-<command>` | `/lyx-<command>` |
-| 命令产物 | `~/.agents/skills/lyx-*/SKILL.md` + `references/` | `~/.claude/skills/lyx-*/SKILL.md` + `references/` |
+| 命令产物 | `~/.agents/skills/lyx-*/SKILL.md` + `references/`（15 个生命周期命令 + 2 个包装 skill） | `~/.claude/skills/lyx-*/SKILL.md` + `references/`（同 17 个 skill） |
 | 角色词 / 子代理 | `~/.codex/lyx/prompts/codex/`（ROLE_FILE） | `~/.claude/agents/lyx-{plan-reviewer,reviewer,implementer}.md`（始终安装） |
 | 配置 | `~/.codex/lyx/config.toml` | `~/.claude/lyx/config.toml` |
 | 子代理模型 / 推理档 | 按 `[host]` 取值随每次 spawn 传入 | 渲染进子代理定义（未配置 = `model: inherit`）；配置改动后 `lycx doctor` 提示偏差，`lycx update` 重渲染 |
@@ -78,6 +79,8 @@ lyx:
 | `@lyx-publish` | npm 包发布四场景（bmc 私域 Nexus / GitHub Packages / npmjs + GitHub Release / CI 自动发布），前置检查→版本号推导→构建→发布→验证 |
 | `@lyx-commit` `@lyx-rollback` `@lyx-clean-branches` `@lyx-worktree` | Git 工具（worktree 只留 `add`/`list`/`remove`/`prune`/`migrate`，`switch` 已移除——隔离切换统一由 `@lyx-propose` 触发） |
 
+另有 2 个 `lyx-*` 内部包装 skill，不属于生命周期命令：`lyx-ponytail`（最小完整范围和过度设计检查）与 `lyx-code-simplification`（本次 diff 的行为不变简化）。propose / review-plan 用前者约束方案范围，apply / fix 用两者完成实施与简化收口，review-code 用两者审查本次变更；现有 testMode、审查分级、提交与范围门禁优先。
+
 审查-修复循环细节位于各 skill 安装目录的 `references/`（执行者分支、subagent 路径的 `send_input` 复用与增量传递、终止条件、run-state 与提交时机）；主 `SKILL.md` 保留入口、按需读取指令和简短的“全自动执行不变量”，避免关键续跑规则只存在于工具读取的 reference 输出中。[docs/codex-exec-contract.md](./docs/codex-exec-contract.md) 已 DEPRECATED，仅作历史参考。
 
 ## 典型工作流
@@ -100,6 +103,7 @@ lyx:
 - **审查关卡 = 执行者可切换**：`reviewExecutor = "main"`（默认）= 主 agent 直接自审，不 spawn、无逐条裁决与驳回硬线，最多 2 轮；`reviewExecutor = "subagent"` = 每关 spawn 1 个审查 subagent（非 fork、只携带 TASK + 只审 change 范围），软上下文经 `context.md` 到达，每条 Critical 由主会话逐条裁决（不认可须附可核验依据），驳回硬线（同一 Critical 复现再驳回 / 连续 2 轮全驳回）即停转人工；subagent 路径第 2 轮起默认 `send_input` 复用同一子代理，复用失败才重新 spawn
 - **审查未修项快照 = `review-findings.md`**（快照式留痕，供事后回看，不是待办台账）：review-plan / review-code 循环结束时按节 upsert 写入最后一轮的 **Warning**（不收 Info / Critical），条目连续编号作为稳定锚点；正常清零时在统一 commit **之后**写入（保持未跟踪），随 `@lyx-archive` 的 `git add -- openspec/` 落库并搬入归档目录。`@lyx-commit --all` 与 propose WIP commit 的全量暂存以 `':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md'` 排除进行中快照；该文件也不进入审查范围与中间提交。`@lyx-explore` 扫描到快照时先询问再列出，只列出未解决条目（带 `- 解决：` 子项的视为已解决，不展示不计数；全部已解决时不询问）。后续 change 解决历史 Warning 时，在 `proposal.md` 的 `## 解决的审查未修项` 声明锚点，由 `@lyx-archive` 追加解决说明（原文不改、幂等、失败不阻断归档）；**同一 change 内**修复的 Warning 在 active 快照就地标注 `- 解决：本 change 内修复（commit <短 hash>）— …`（审查后同会话修复并提交后标注，或 `@lyx-archive` 归档前核对、用户逐条确认后标注；必带 commit hash、不新增提交）
 - **测试模式与风险策略**：最终 `normal` 按风险策略决定测试义务；最终 `off` 完全跳过测试文件、测试任务与测试命令，但仍执行 typecheck 与非测试审查门禁。`@lyx-fix` 与 `@lyx-archive` 不执行生产构建。配置 `ask` 时，每个 change 首次询问并持久化，fix 每次调用询问；未回答、change YAML 不可读或结构非法时停止，不猜测。覆盖按项目主仓库根生效；补充边界覆盖只记录为 `可自动修复：否` / `影响落地：否` Warning。
+- **简化能力内聚在 lyx 包内**：`lyx-ponytail` 与 `lyx-code-simplification` 随包发布和安装，不依赖宿主预装无前缀同名 skill。`lyx-ponytail` 用于方案与实施的最小完整范围，`lyx-code-simplification` 只整理本次 diff 且保持行为不变；二者不新增审查级别，不扩大范围、不修改测试语义、不新增独立 refactor commit。任一包装 skill 缺失时工作流停止并提示 `lycx init`
 - **apply = 执行者可切换**：`codingExecutor = "main"`（默认）= 主 agent 直接实施；`codingExecutor = "subagent"` = spawn coding subagent（非 fork + 只实施 change 范围 + 经 context.md 获取软上下文）。两条路径均由主会话统一提交 `apply: <change-name>`
 - **agent 模型与推理档需额外配置（不做清单强校验）**：review-plan / review-code / apply 三模板按"模板指示 + 宿主能力"落实模型与推理档——模型 = 对应配置字段，未配置或空白 → 继承当前会话模型；推理档 = `reviewReasoningEffort`/`codingReasoningEffort`，仅在非空时随对应 spawn 传入 `reasoning_effort`，空白不传，取值不做枚举强校验；交互 init / 菜单可显式选择不覆盖（清除字段）或覆盖指定档位，非交互 update 保留原值。能否 spawn 由运行环境实际能力决定，以宿主 spawn 报错为准（报错含 `Unknown model ... Available models: ...` 时如实展示并提示改用可用模型）；读取配置失败 → "配置状态未知"提示运行 `lycx doctor`；宿主无 subagent 能力或初始 spawn 失败 → 按环境级不可用回退。`lycx doctor` 按宿主分组输出，codex 宿主含"Codex 子代理模型配置"提示检查项（模型留空 OK / 已配置 OK；两个推理档展示"未覆盖 / 已覆盖"；`spawnableModels` 格式非法输出 WARN），并附验证某模型是否可 spawn 的示例 prompt
 - **发布**：打 tag `v*.*.*` push 触发 GitHub Actions 自动发 npm 包；无独立二进制构建步骤

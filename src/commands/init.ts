@@ -457,6 +457,12 @@ export async function init(options: InitOptions = {}): Promise<void> {
           console.log(`    ${ansis.green('✓')} ${name}`)
         }
       }
+      if ((result.installedBundledSkills?.length ?? 0) > 0) {
+        console.log(`  ${ansis.cyan(i18n.t('init:installedBundledSkills'))}`)
+        for (const name of result.installedBundledSkills!) {
+          console.log(`    ${ansis.green('✓')} ${name} ${ansis.gray(`→ ${paths.skillsDir}/${name}/SKILL.md`)}`)
+        }
+      }
       console.log(ansis.gray(`    Config: ${getHostConfigPath(host)}`))
     }
 

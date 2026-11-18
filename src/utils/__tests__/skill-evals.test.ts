@@ -239,6 +239,8 @@ describe('skill eval fixtures and cleanup', () => {
           'SKILL.md',
         ))).toBe(true)
       }
+      expect(existsSync(join(fixture.repoDir, '.agents', 'skills', 'lyx-ponytail', 'SKILL.md'))).toBe(true)
+      expect(existsSync(join(fixture.repoDir, '.agents', 'skills', 'lyx-code-simplification', 'SKILL.md'))).toBe(true)
     }
     finally {
       rmSync(base, { recursive: true, force: true })

@@ -3,6 +3,7 @@ import type { HostDoctorCheck, HostInspectContext } from '../../utils/host-adapt
 import fs from 'fs-extra'
 import { join } from 'pathe'
 import { i18n } from '../../i18n'
+import { isBundledSkillDirName, listMissingBundledSkills } from '../../utils/bundled-skills'
 import { sanitizeExecutor, sanitizeModelField, sanitizeReasoningEffort, sanitizeReviewMode, sanitizeReviewModel, sanitizeSpawnableModels, sanitizeTestMode } from '../../utils/config'
 import { listPrefixedDirs } from '../../utils/fs-helpers'
 import { listMissingSkillReferences } from '../../utils/installer-template'
@@ -216,14 +217,23 @@ function buildSubagentModelHintLines(currentModel?: string): string[] {
 export async function codexDoctorChecks(ctx: HostInspectContext): Promise<HostDoctorCheck[]> {
   const checks: HostDoctorCheck[] = []
 
-  const cmdCount = (await listPrefixedDirs(ctx.paths.skillsDir, 'lyx-')).length
+  const missingBundledSkills = await listMissingBundledSkills(ctx.paths.skillsDir)
+  checks.push({
+    label: i18n.t('doctor:bundledSkills.label'),
+    status: missingBundledSkills.length === 0 ? 'ok' : 'fail',
+    detail: missingBundledSkills.length === 0
+      ? i18n.t('doctor:bundledSkills.present')
+      : i18n.t('doctor:bundledSkills.missing', { list: missingBundledSkills.join(', ') }),
+  })
+
+  const skillDirs = await listPrefixedDirs(ctx.paths.skillsDir, 'lyx-')
+  const cmdCount = skillDirs.filter(path => !isBundledSkillDirName(path.split('/').pop() ?? '')).length
   checks.push({
     label: 'Commands',
     status: cmdCount > 0 ? 'ok' : 'fail',
     detail: `${cmdCount} installed (${ctx.paths.skillsDir}/lyx-*/)`,
   })
 
-  const skillDirs = await listPrefixedDirs(ctx.paths.skillsDir, 'lyx-')
   const missingReferences: string[] = []
   for (const skillDir of skillDirs) {
     for (const missing of await listMissingSkillReferences(skillDir))

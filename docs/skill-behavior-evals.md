@@ -45,6 +45,8 @@ Evidence: <paths, commands, transcript refs>
 3. 最终模板完成后再次运行，不得用中间证据替代。
 4. 失败或未执行的结论写入 change 的 `run-state.md`，不能写成“测试通过”。
 
+当前四类核心 skill 还依赖随包安装的 `lyx-ponytail` 与 `lyx-code-simplification`。评测 fixture 的 `.agents/skills/` SHALL 同时安装这两个 lyx 包装 skill，不能依赖评测机器上已有的无前缀同名外部 skill；涉及方案范围、实施简化或代码审查的场景应核对工作流是否实际读取包装 skill，而不只断言模板文本存在。
+
 当前 `evals/skills/` 是人工可复跑资产，不进入用户安装命令面。
 
 ## 可执行 runner
