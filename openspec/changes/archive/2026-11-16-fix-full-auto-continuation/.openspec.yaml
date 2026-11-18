@@ -1,0 +1,8 @@
+schema: spec-driven
+created: 2026-11-16
+lyx:
+  isolation: worktree
+  sourceBranch: main
+  developmentBranch: fix/full-auto-continuation
+  worktreePath: /Users/ly/.ly/worktrees/ly-workflow-codex/fix/full-auto-continuation
+  testModeDecision: normal

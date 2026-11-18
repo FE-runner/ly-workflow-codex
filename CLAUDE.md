@@ -33,8 +33,8 @@ pnpm eval:skills -- --help                  # 开发期真实 skill 行为评测
 |------|-----------|
 | `@lyx-init` | 生成项目 AGENTS.md（Claude Code 下额外产出导入它的 `CLAUDE.md`）+ `lycx openspec ensure --host <当前宿主>`（共享 CLI/skills/root 修复）+ 自动 commit |
 | `@lyx-explore` | 委托 `@openspec-explore skill`；委托前扫描 `review-findings.md` 审查未修项快照，有命中则先询问是否列出（纯薄壳 + 一次快照询问）；收敛时按规模提示 `@lyx-fix` / `@lyx-propose` |
-| `@lyx-propose` | 编排入口：隔离三选一 → 全自动/手动 → `@openspec-propose skill` → 记录 isolation metadata → change 名确认后同步会话标题 → 按风险测试策略生成 spec/tasks 与方案自审 → context.md 产出 → commit `propose:`；全自动 = review-plan → apply → review-code 流水线 |
-| `@lyx-apply` | 按 `codingExecutor` 实施（`main` = 主 agent 直接实施；`subagent` = spawn coding subagent，非 fork，经 context.md 获取软上下文）读 tasks.md 逐任务实施 + 验证 + 勾 checkbox，主会话确认后回写 context.md 并 commit `apply:` |
+| `@lyx-propose` | 编排入口：隔离三选一 → 全自动/手动 → `@openspec-propose skill` → 记录 isolation metadata → change 名确认后同步会话标题 → 按风险测试策略生成 spec/tasks 与方案自审 → context.md 产出 → commit `propose:`；全自动 = review-plan → apply → review-code 流水线，阶段报告后需显式读取同级下一阶段 `SKILL.md` 与 references |
+| `@lyx-apply` | 按 `codingExecutor` 实施（`main` = 主 agent 直接实施；`subagent` = spawn coding subagent，非 fork，经 context.md 获取软上下文）读 tasks.md 逐任务实施 + 验证 + 勾 checkbox，主会话确认后回写 context.md 并 commit `apply:`；全自动下完成后显式读取同级 `lyx-review-code/SKILL.md` 与 references |
 | `@lyx-fix` | 小需求 / bug 轻量路径：不建 change，spec 分流（A 对齐 / B 就地改主 spec / C 转 propose）→ 按风险测试策略实施与验证（逻辑 bug 先红后绿，纯展示可免新增测试）→ 主 agent 五项自审 → 测试 / 类型检查门禁（不含生产构建）→ B 类确认 → 单 commit（无 Change trailer） |
 | `@lyx-archive` | 归档前测试 / 类型检查（不含生产构建）→ 委托 `@openspec-archive-change skill` + 自动 commit + 按 isolation metadata 提示合并回 sourceBranch、清理 worktree/开发分支 |
 | `@lyx-review-plan` | 按 `reviewExecutor` 审方案（`main` = 主 agent 直接自审，最多 2 轮；`subagent` = 单审查 subagent + 主会话逐条裁决 + 驳回硬线），按风险策略把补充边界记为 `否+否`，清零统一提交；循环结束后写 `review-findings.md` 的 `## 方案审查` 节 |
@@ -46,6 +46,8 @@ pnpm eval:skills -- --help                  # 开发期真实 skill 行为评测
 
 ## 审查执行模型（速览）
 
+- 全自动阶段交接 = **显式读取同级下一阶段 bundle**：`@lyx-*` 只是命令标识，不是跨 skill 调用工具；propose / review-plan / apply 正常完成后必须读取 `../lyx-<next-command>/SKILL.md` 及全部 references，再在同一回合执行。`run-state.md` 记录下一命令、同级路径、参数与继续条件；只写“下一步应执行”不算交接
+- propose 内部续跑 = **opsx boundary 从属 + 自审 checkpoint**：`@openspec-propose` 的 planning-only 只约束其 artifacts 阶段；方案自审清单输出后必须继续 context、metadata、run-state 与 propose commit，完成 commit 后才加载 review-plan。`run-state=propose-self-review` 且 artifacts 完整时直接恢复，不重复询问隔离/模式
 - 审查关卡 = **执行者可切换**（两个宿主语义一致；子代理机制按宿主：codex = spawn + `send_input`，Claude Code = `Agent` 工具调用 `lyx-*` 自定义子代理 + `SendMessage`，交互模式后台运行时等待语义为"结果被消费并如实报告"）：`reviewExecutor = "main"`（默认）= 主 agent 直接自审，无 spawn、无逐条裁决、无驳回硬线，最多 2 轮；`reviewExecutor = "subagent"` = 每关 spawn 1 个审查 subagent（非 fork、只携带 TASK、只审 change 范围），每条 Critical 由主会话逐条裁决——认可即修复，不认可必须附**可核验依据**；subagent 路径第 2 轮起默认 `send_input` 复用同一子代理
 - 审查范围 = **按 `reviewMode` 门控**（`full` / `plan-only` / `code-only` / `off`，未配置等价 `full`）：只决定 `@lyx-propose` 编排入口跑哪些审查关卡（`plan-only` 跳过 review-code、`code-only` 跳过 review-plan、`off` 两级都跳过；apply 始终执行），被跳过的关卡打印 `[跳过]` 状态行、其节点前置校验一并跳过；直接调用 `@lyx-review-plan` / `@lyx-review-code` 与 `@lyx-apply` / 归档前验证不受影响；`lycx init` / 菜单先采集 `testMode`，再采集 `reviewMode`（`off` 跳过 review 侧提问），`lycx doctor` 展示并告警非法取值与 `off` + review 侧字段非空
 - 软上下文 = **change 目录 `context.md`**：propose 产出（内容边界自检：无整段重复、决策可溯源、≤100 行）→ apply 维护（实施决策回写，只增不删）→ review-plan / review-code / coding subagent 消费（TASK 只传路径）

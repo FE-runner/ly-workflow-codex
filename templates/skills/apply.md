@@ -8,6 +8,13 @@ argument-hint: '[<change-name>]'
 
 > 调用方式：`@lyx-apply` mention 后跟随的自然语言即参数（如 `@lyx-apply` 带需求描述/选项）；无参数时直接 `@lyx-apply`。
 
+## 全自动执行不变量（最高优先级）
+
+- `run-state.md` 的 `执行模式` 为 `full-auto` 时，apply 完成证据只是中间状态，不是流水线最终回复。
+- apply 实施、验证与阶段 commit（或确认无可提交内容）均正常完成且无未决项时，SHALL 以当前 skill 目录为锚点，读取同级 `lyx-review-code/SKILL.md` 及其 frontmatter 声明的全部 references，再在同一回合继续 review-code 前置校验与审查。
+- 只输出 `@lyx-review-code <change-name>` 或说明“下一步应执行 review-code”SHALL NOT 视为已交接；无法定位同级 bundle 时停止并报告。
+- 只有 review-code 正常清零或出现明确人工介入条件时，才允许结束全自动回合。
+
 实施主体由 `{{LYX_CONFIG_FILE}}` 的 `[host] codingExecutor` 决定（未配置、空白或非法取值等价 `"main"`）：
 
 - **`"main"`（默认）**：主 agent SHALL 在当前会话直接实施——读取该 change 的 `tasks.md` 逐任务实施 + 验证 + 勾选；SHALL NOT spawn 子代理、SHALL NOT 读取 `codingModel` / `codingReasoningEffort`、SHALL NOT 产生 `[回退]` 标记。

@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'smol-toml'
 import { describe, expect, it } from 'vitest'
-import { getSkillEvalCase, REVIEW_CODE_CRITICAL, skillEvalCases } from '../../evals/cases'
+import {
+  DEFAULT_EVAL_CASES,
+  EVAL_CASES,
+  getSkillEvalCase,
+  REVIEW_CODE_CRITICAL,
+  skillEvalCases,
+} from '../../evals/cases'
 import {
   buildCleanupPlan,
   buildFixtureHomeConfig,
@@ -48,9 +54,10 @@ describe('skill behavior eval assets', () => {
   })
 
   it('defines all executable cases with prompts, patterns and fixture checks', () => {
-    expect(skillEvalCases.map(item => item.id)).toEqual([...SKILLS])
+    expect(skillEvalCases.map(item => item.id)).toEqual([...EVAL_CASES])
     for (const item of skillEvalCases) {
       expect(item.prompt.trim()).not.toBe('')
+      expect(item.skillCommands).toContain(item.skillCommand)
       expect(item.passPatterns.length).toBeGreaterThan(0)
       expect(item.passPatterns.every(pattern => pattern instanceof RegExp)).toBe(true)
       expect(item.forbiddenPatterns.every(pattern => pattern instanceof RegExp)).toBe(true)
@@ -74,6 +81,12 @@ describe('skill behavior eval assets', () => {
     const runner = readFileSync(join(ROOT, 'src', 'evals', 'run-skill-evals.ts'), 'utf8')
     expect(runner).not.toMatch(/(?:readFile|writeFile|copy)[^\n]*auth\.json/i)
   })
+
+  it('grants git metadata writes only inside the isolated eval fixture', () => {
+    const runner = readFileSync(join(ROOT, 'src', 'evals', 'run-skill-evals.ts'), 'utf8')
+    expect(runner).toContain('\'--add-dir\'')
+    expect(runner).toContain('join(fixture.repoDir, \'.git\')')
+  })
 })
 
 describe('skill eval runner arguments and outcomes', () => {
@@ -83,6 +96,8 @@ describe('skill eval runner arguments and outcomes', () => {
       '--case',
       'propose,review-code',
       '--case=apply',
+      '--case=propose-full-auto',
+      '--case=propose-self-review-full-auto',
       '--version=current',
       '--baseline-ref',
       'dce2466',
@@ -91,7 +106,13 @@ describe('skill eval runner arguments and outcomes', () => {
       '--keep-temp',
       '--setup-only',
     ])
-    expect(options.caseIds).toEqual(['propose', 'review-code', 'apply'])
+    expect(options.caseIds).toEqual([
+      'propose',
+      'review-code',
+      'apply',
+      'propose-full-auto',
+      'propose-self-review-full-auto',
+    ])
     expect(options.version).toBe('current')
     expect(options.baselineRef).toBe('dce2466')
     expect(options.outputDir).toBe('/tmp/evals')
@@ -101,7 +122,7 @@ describe('skill eval runner arguments and outcomes', () => {
 
   it('defaults to every case and both versions', () => {
     const options = parseCliOptions([])
-    expect(options.caseIds).toEqual([...SKILLS])
+    expect(options.caseIds).toEqual([...DEFAULT_EVAL_CASES])
     expect(options.version).toBe('both')
     expect(versionsFor(options.version)).toEqual(['baseline', 'current'])
   })
@@ -194,6 +215,79 @@ describe('skill eval fixtures and cleanup', () => {
       const referencePath = join(fixture.repoDir, '.agents', 'skills', 'lyx-review-plan', 'references', 'review-contract.md')
       expect(existsSync(referencePath)).toBe(true)
       expect(readFileSync(referencePath, 'utf8')).toContain(`${fixture.homeDir}/.codex/lyx/prompts/codex/plan-reviewer.md`)
+    }
+    finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('installs the multi-skill bundle for the full-auto continuation case', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'lyx-eval-full-auto-install-'))
+    const fixture = { repoDir: join(base, 'repo'), homeDir: join(base, 'home') }
+    try {
+      const evalCase = getSkillEvalCase('propose-full-auto')
+      for (const skillCommand of evalCase.skillCommands)
+        await installEvalSkillBundle(ROOT, fixture, skillCommand)
+      for (const skillCommand of evalCase.skillCommands) {
+        expect(existsSync(join(
+          fixture.repoDir,
+          '.agents',
+          'skills',
+          `lyx-${skillCommand}`,
+          'SKILL.md',
+        ))).toBe(true)
+      }
+    }
+    finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('defines a full-auto case with hard terminal evidence', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'lyx-eval-full-auto-sideeffect-'))
+    const fixture = { repoDir: join(base, 'repo'), homeDir: join(base, 'home') }
+    try {
+      const evalCase = getSkillEvalCase('propose-full-auto')
+      expect(evalCase.skillCommands).toEqual(['review-plan', 'apply', 'review-code'])
+      expect(evalCase.passPatterns.map(pattern => pattern.source)).toEqual(
+        expect.arrayContaining([
+          'review-code',
+          '(?:0\\s*Critical|未发现\\s*Critical|未发现问题)',
+          '(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)',
+        ]),
+      )
+      await evalCase.setup(fixture)
+      const before = await evalCase.verifySideEffects(fixture)
+      expect(before.passed).toBe(false)
+      expect(before.evidence).toContain('applyCommit=(missing)')
+      expect(before.evidence).toContain('runStateNormal=false')
+      expect(before.evidence).toContain('featureImplemented=false')
+    }
+    finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('defines a propose self-review continuation case from an empty repo', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'lyx-eval-self-review-sideeffect-'))
+    const fixture = { repoDir: join(base, 'repo'), homeDir: join(base, 'home') }
+    try {
+      const evalCase = getSkillEvalCase('propose-self-review-full-auto')
+      expect(evalCase.skillCommands).toEqual(['propose', 'review-plan', 'apply', 'review-code'])
+      expect(evalCase.prompt).toContain('留在当前分支；全自动')
+      expect(evalCase.passPatterns.map(pattern => pattern.source)).toEqual(
+        expect.arrayContaining([
+          'review-code',
+          '(?:0\\s*Critical|未发现\\s*Critical|未发现问题)',
+          '(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)',
+        ]),
+      )
+      await evalCase.setup(fixture)
+      const before = await evalCase.verifySideEffects(fixture)
+      expect(before.passed).toBe(false)
+      expect(before.evidence).toContain('contextCreated=false')
+      expect(before.evidence).toContain('proposeCommit=(missing)')
+      expect(before.evidence).toContain('documentCreated=false')
     }
     finally {
       rmSync(base, { recursive: true, force: true })

@@ -441,3 +441,34 @@ apply 在最终模式为 `normal` 时 SHALL 校验 artifacts 与该模式一致�
 #### Scenario: 全自动 propose 结束
 - **WHEN** propose commit 成功
 - **THEN** run-state 的下一步是 review-plan 或 apply，取决于 reviewMode 与自动/手动路径
+
+### Requirement: 全自动阶段交接显式加载下一 skill bundle
+`@lyx-propose` 的全自动流水线在进入 review-plan、apply 或 review-code 前，SHALL 以当前 skill 所在目录为锚点解析同级 `lyx-<next-command>/SKILL.md`，完整读取该主文件及其 frontmatter 声明的全部 references，再按该 bundle 执行。仅输出 `@lyx-<command>`、写出下一阶段名称或等待用户再次触发 SHALL NOT 视为已交接。
+
+#### Scenario: review-plan 正常清零后进入 apply
+- **WHEN** 全自动执行中的 review-plan 以正常清零结束，`run-state.md` 的下一步为 apply
+- **THEN** 当前回合读取同级 `lyx-apply/SKILL.md` 与声明的 references，随后以同一 change 名继续 apply，不在阶段报告后结束
+
+#### Scenario: apply 正常完成后进入 review-code
+- **WHEN** apply 实施、验证与阶段 commit 均正常完成，且 `run-state.md` 的下一步为 review-code
+- **THEN** 当前回合读取同级 `lyx-review-code/SKILL.md` 与声明的 references，随后继续代码审查
+
+#### Scenario: 只输出命令标识不算交接
+- **WHEN** 阶段报告写有“下一步运行 `@lyx-apply <change-name>`”，但没有读取 `lyx-apply` bundle
+- **THEN** 该回合不得声明全自动已推进，恢复时应从 run-state 记录的当前阶段重新执行显式交接
+
+#### Scenario: 人工介入点仍允许结束
+- **WHEN** review-plan 或 apply 因业务决策、失败或审查终止条件需要人工介入
+- **THEN** 不加载下一阶段 bundle，如实报告停止原因并结束全自动回合
+
+#### Scenario: 方案自审后先完成 propose 内部步骤
+- **WHEN** 全自动 propose 输出方案自审逐项结论清单且无待用户决策项
+- **THEN** 同一回合依次产出 context.md、写入 isolation metadata、更新 run-state 并提交 propose 阶段 commit，之后才读取 review-plan bundle
+
+#### Scenario: opsx planning boundary 不终止 lyx 编排
+- **WHEN** 被委托的 opsx:propose 完成 artifacts 并声明 planning boundary 或 “stop after artifacts”
+- **THEN** 当前会话返回 lyx-propose 编排，继续后续步骤；该声明不要求用户再次触发环节，也不把 artifacts 完成作为全自动终态
+
+#### Scenario: 自审中断后从 run-state 恢复
+- **WHEN** 唯一活跃 change 的 run-state 记录 `阶段: propose-self-review`、`执行模式: full-auto` 且 proposal/design/tasks 完整
+- **THEN** 恢复执行沿用原 isolation 与执行模式，从方案自审或 context.md 产出继续，不重复询问隔离方式或全自动/手动
