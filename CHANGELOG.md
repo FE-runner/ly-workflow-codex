@@ -9,7 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.15.0] - 2026-11-18
+
+### Added
+
+- 新增全自动跨阶段交接：同回合推进到 review-plan、apply 与 review-code，并持久化下一阶段运行坐标
+- 新增 `propose-full-auto` 与 `propose-self-review-full-auto` 真实行为评测，覆盖从 review-plan 恢复和从空仓库启动的完整全自动链路
+
+### Fixed
+
+- 修复 propose 自审清单输出后结束回合的问题；自审后继续 context、metadata、run-state 与 propose commit
+- 修复 review-plan / apply 阶段报告后暂停的问题；阶段正常完成且无人工介入项时继续下一流水线阶段
+- 审查结束后独立提交 `review-findings.md` 快照，包括非正常终止场景
 
 ### Changed
 
