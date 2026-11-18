@@ -9,7 +9,7 @@
 1. effective 配置为 `normal` / `off` 时直接使用配置，忽略 change 级决策；
 2. effective 配置为 `ask` 且 run-state 的 `testModeDecision` 为合法值时，使用该持久化决策；
 3. effective 配置为 `ask` 且 run-state 决策缺失或非法、目标 change 属于旧格式时，只读回退 `.openspec.yaml` 的 `lyx.testModeDecision`；
-4. 仍缺失或非法时，询问用户选择 `normal` / `off`，并把选择写入 `run-state.md` 的固定 frontmatter。
+4. 仍缺失、为 `null`，或为不在 `normal` / `off` 中的字符串时，询问用户选择 `normal` / `off`，并把选择写入 `run-state.md` 的固定 frontmatter。
 
 询问 SHALL 明确区分 `normal`（写测试、跑测试）与 `off`（不写测试、不跑测试）。用户未回答、取消或当前环境无法交互时，命令 SHALL 停止，SHALL NOT 以 `normal` / `off` 猜测继续。
 
@@ -45,32 +45,20 @@
 - **WHEN** effective 配置为 `ask`，目标 change 的 run-state 没有新字段，但 `.openspec.yaml` 保存 `lyx.testModeDecision = "off"`
 - **THEN** 命令只读使用 `off`，不修改 `.openspec.yaml`
 
-#### Scenario: run-state 结构非法时停止
-- **WHEN** run-state frontmatter 可解析，但 `testModeDecision` 为 object/list/number
-- **THEN** 命令停止并要求人工修复，不得覆盖结构
-
 #### Scenario: YAML 不可读时停止
-- **WHEN** effective 配置为 `ask`，run-state 缺少决策且需要回退读取旧 `.openspec.yaml`，但该文件不可读或 YAML 解析失败
-- **THEN** 命令在询问、写入或测试动作前停止并要求人工修复，不得覆盖该文件
+- **WHEN** effective 配置为 `ask`，run-state frontmatter 不可读或解析失败，或需要回退读取的旧 `.openspec.yaml` 不可读或 YAML 解析失败
+- **THEN** 命令在询问、写入或测试动作前停止并要求人工修复，不得覆盖对应文件
 
 #### Scenario: YAML 缺失时按缺失决策处理
-- **WHEN** effective 配置为 `ask` 且目标 change 的 run-state 与旧 `.openspec.yaml` 均不存在决策
+- **WHEN** effective 配置为 `ask`，目标 change 没有 YAML frontmatter，且旧 `.openspec.yaml` 也不存在
 - **THEN** 命令把决策视为缺失，允许询问并在 run-state 中持久化
 
 #### Scenario: YAML 结构非法时停止
-- **WHEN** run-state frontmatter 或需要回退读取的旧 `.openspec.yaml` 可解析，但对应 lyx 命名空间不是 mapping，或 `testModeDecision` 为 object/list/number
-- **THEN** 命令停止并要求人工修复，不得覆盖结构
-
-#### Scenario: 旧 YAML 不可读时停止
-- **WHEN** 需要回退读取旧 `.openspec.yaml`，但文件不可读或 YAML 解析失败
-- **THEN** 命令在询问、写入或测试动作前停止并要求人工修复，不得覆盖该文件
-
-#### Scenario: 旧 YAML 结构非法时停止
-- **WHEN** 需要回退读取旧 `.openspec.yaml`，文件可解析，但 `lyx` 不是 mapping，或 `testModeDecision` 为 object/list/number
+- **WHEN** run-state frontmatter 可解析但 `lyx` 缺失、不是 mapping、`schemaVersion` 无效，或 `testModeDecision` 为 object/list/number；或需要回退读取时旧 `.openspec.yaml lyx` 不是 mapping / 字段类型非法
 - **THEN** 命令停止并要求人工修复，不得覆盖结构
 
 #### Scenario: 非法历史决策重新询问
-- **WHEN** effective 配置为 `ask`，run-state 的 `testModeDecision` 为非空非法值
+- **WHEN** effective 配置为 `ask`，run-state 的 `testModeDecision` 为 `null` 或非空但不在 `normal` / `off` 中的字符串
 - **THEN** 命令忽略该值、询问一次并用新选择覆盖 run-state
 
 #### Scenario: 未获得回答时停止

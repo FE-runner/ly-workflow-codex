@@ -83,7 +83,7 @@ For old changes, archive may read legacy `.openspec.yaml lyx:` once. It must nev
 
 ### Decision: compatibility is read-only and precedence is explicit
 
-New writes go only to run-state. Legacy writes are not introduced. If both sources exist, run-state wins. If run-state lacks a field and the change has legacy metadata, the legacy value is used only for that read.
+New writes go only to run-state. Legacy writes are not introduced. Legacy fallback is allowed only when the change has no YAML frontmatter at all. Once a new-format frontmatter exists, missing fields are handled as missing by the new schema and are never filled from `.openspec.yaml`.
 
 Automatic migration is excluded because it would create noisy diffs, rewrite historical evidence, and risk losing unknown fields in `.openspec.yaml`. Removing the legacy read path is a later breaking change.
 

@@ -4,13 +4,13 @@
 
 `@lyx-propose` SHALL 在生成 artifacts 前解析 effective 配置 `testMode` 与 change 级决策。effective 配置为 `ask` 且新 change 尚无 change 级决策时，命令 SHALL 在生成 artifacts 前询问一次 `normal` / `off`，并在当前会话暂存该选择；真实 change 名确定后，SHALL 把选择写入该 change 的 `run-state.md` 固定 frontmatter，随 propose 阶段 commit 提交。若在 run-state 建立前中断，恢复时 MAY 重新询问，SHALL NOT 伪造已持久化的决策。
 
-`@lyx-apply` SHALL 在实施前读取当前 change 的 `run-state.md` `testModeDecision`。新字段缺失且目标 change 属于旧格式时，MAY 只读回退 `.openspec.yaml` 的 `lyx.testModeDecision`。effective 配置为 `ask` 且决策合法时，apply SHALL 使用该决策；决策缺失或非法时，apply SHALL 询问一次并把新选择持久化到 run-state 后再实施。配置为 `normal` / `off` 时，配置 SHALL 覆盖历史决策。
+`@lyx-apply` SHALL 在实施前读取当前 change 的 `run-state.md` `testModeDecision`。目标 change 没有 YAML frontmatter 时，MAY 只读回退 `.openspec.yaml` 的 `lyx.testModeDecision`。effective 配置为 `ask` 且决策为 `normal` / `off` 时，apply SHALL 使用该决策；决策缺失、为 `null` 或为非法枚举字符串时，apply SHALL 询问一次并把新选择持久化到 run-state 后再实施。frontmatter、mapping 或字段类型结构非法时，apply SHALL 停止并要求人工修复。配置为 `normal` / `off` 时，配置 SHALL 覆盖历史决策。
 
 最终决策为 `off` 时，propose/apply SHALL 遵守无测试模式；最终决策为 `normal` 时，SHALL 按 `risk-based-testing-policy` 生成测试任务并在 apply 执行相称测试。apply SHALL 在成功路径把 `run-state.md` 纳入待提交清单，只要本轮新写入决策，或读取了前次遗留且尚未提交的决策；即使没有其他实施改动也不得遗漏该决策修改。
 
 apply 在最终模式为 `normal` 时 SHALL 校验 artifacts 与该模式一致：若历史决策为 `off` 但配置覆盖为 `normal`，或缺失决策补问为 `normal`，而 proposal/tasks 没有测试任务或测试执行计划，apply SHALL 在实施前停止并要求先更新 artifacts 或恢复配置，SHALL NOT 临时添加范围外测试。
 
-新 change 的 `.openspec.yaml` 整体不可读或 YAML 解析失败时，propose/apply SHALL 停止并要求人工修复 OpenSpec 元数据。仅在需要回退读取旧 `lyx` 时，旧 `.openspec.yaml` 不可读或解析失败同样 SHALL 阻断。
+run-state frontmatter 不可读或结构非法时，propose/apply SHALL 停止并要求人工修复。新 change 的 `.openspec.yaml` 整体不可读或 YAML 解析失败时，propose/apply SHALL 停止并要求人工修复 OpenSpec 元数据。仅在需要回退读取旧 `lyx` 时，旧 `.openspec.yaml` 不可读、解析失败或结构非法同样 SHALL 阻断。
 
 #### Scenario: ask 选择 normal 时 propose 生成测试任务
 - **WHEN** effective 配置为 `ask`，用户在 `@lyx-propose` 中选择 `normal`

@@ -2,7 +2,7 @@
 
 ### Requirement: archive 在 ask 模式下使用 change 决策
 
-`@lyx-archive` SHALL 在归档前验证开始前解析 effective 配置 `testMode` 与目标 change 的 run-state `testModeDecision`。effective 配置为 `ask` 且 run-state 决策合法时，归档门禁 SHALL 使用该决策；新字段缺失且目标 change 属于旧格式时，MAY 只读回退 `.openspec.yaml` 的 `lyx.testModeDecision`。决策缺失或非法时，命令 SHALL 询问一次 `normal` / `off` 并持久化到 run-state 后再验证。
+`@lyx-archive` SHALL 在归档前验证开始前解析 effective 配置 `testMode` 与目标 change 的 run-state `testModeDecision`。effective 配置为 `ask` 且决策为 `normal` / `off` 时，归档门禁 SHALL 使用该决策；目标 change 没有 YAML frontmatter 时，MAY 只读回退 `.openspec.yaml` 的 `lyx.testModeDecision`。决策缺失、为 `null` 或为非法枚举字符串时，命令 SHALL 询问一次 `normal` / `off` 并持久化到 run-state 后再验证。结构非法时停止并要求人工修复。
 
 最终决策为 `normal` 时 SHALL 执行测试与类型检查；最终决策为 `off` 时 SHALL 跳过测试并执行类型检查。两种模式 SHALL NOT 执行生产构建。因 `ask` 新写入，或本轮成功消费的前次遗留且尚未提交的 run-state 决策修改，SHALL 随既有 `git add -- openspec/` 进入归档 commit。
 

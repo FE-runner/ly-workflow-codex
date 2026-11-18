@@ -2,7 +2,7 @@
 
 ### Requirement: review 在 ask 模式下使用 change 决策
 
-`@lyx-review-plan` 与 `@lyx-review-code` SHALL 在开始测试相关判级前解析 effective 配置 `testMode` 与目标 change 的 run-state `testModeDecision`。effective 配置为 `ask` 且 run-state 决策合法时，审查 SHALL 使用该决策；新字段缺失且目标 change 属于旧格式时，MAY 只读回退 `.openspec.yaml` 的 `lyx.testModeDecision`。决策缺失或非法时，命令 SHALL 询问一次 `normal` / `off` 并把选择持久化到 run-state 后再审查。
+`@lyx-review-plan` 与 `@lyx-review-code` SHALL 在开始测试相关判级前解析 effective 配置 `testMode` 与目标 change 的 run-state `testModeDecision`。effective 配置为 `ask` 且决策为 `normal` / `off` 时，审查 SHALL 使用该决策；目标 change 没有 YAML frontmatter 时，MAY 只读回退 `.openspec.yaml` 的 `lyx.testModeDecision`。决策缺失、为 `null` 或为非法枚举字符串时，命令 SHALL 询问一次 `normal` / `off` 并把选择持久化到 run-state 后再审查。结构非法时停止并要求人工修复。
 
 最终决策为 `off` 时，审查 SHALL 继续遵守无测试模式例外；最终决策为 `normal` 时，测试风险策略照常适用。任何因 `ask` 写入 `run-state.md` 的审查命令，在正常清零成功路径 SHALL 把该文件纳入统一 commit；若本轮没有审查修复，但决策元数据被新写入，SHALL 为该实际改动创建一次 commit。`--no-commit`、非清零终止或 commit 失败时，决策允许保留为 dirty 并由报告说明，后续同一 change 可复用。
 

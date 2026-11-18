@@ -2,28 +2,28 @@
 lyx:
   schemaVersion: 1
   change: move-lyx-state-to-run-state
-  stage: propose
+  stage: review-plan
   executionMode: full-auto
-  pipelineStage: review-plan
+  pipelineStage: apply
   testModeDecision: null
   isolation:
     mode: none
     sourceBranch: main
     developmentBranch: null
     worktreePath: null
-  lastGoodCommit: 21aaca6
+  lastGoodCommit: afd374b
   completedTasks:
     done: 0
     total: 22
   review:
-    planRounds: 0
+    planRounds: 2
     codeRounds: 0
-    terminationType: null
+    terminationType: normal
   nextSafeAction:
-    command: "@lyx-review-plan"
-    skillPath: "../lyx-review-plan/SKILL.md"
+    command: "@lyx-apply"
+    skillPath: "../lyx-apply/SKILL.md"
     change: move-lyx-state-to-run-state
-    condition: propose commit succeeds and reviewMode is full or plan-only
+    condition: review-plan is normal with no unresolved manual item
 ---
 
 # 运行状态
@@ -59,9 +59,14 @@ lyx:
 
 ## 审查状态
 
-- 尚未进入 review-plan
+- 第 1 轮：1 个 Critical，3 个 Warning，1 个 Info；Critical 与 3 个影响落地 Warning 全部认可并修复
+- 第 2 轮：0 个 Critical，0 个 Warning，0 个 Info；同一 subagent 增量复核确认全部解决
+- 终止类型：normal
 
 ## 验证
 
 - `openspec status --change move-lyx-state-to-run-state`: exit 0，4/4 artifacts complete
 - `openspec validate --changes move-lyx-state-to-run-state`: exit 0，1 passed / 0 failed
+- `openspec validate --changes move-lyx-state-to-run-state`（review-plan 首轮修复后）: exit 0，1 passed / 0 failed
+- review-plan 第 1 轮：1 Critical / 3 Warning / 1 Info；全部认可并修复
+- review-plan 第 2 轮：0 Critical / 0 Warning / 0 Info；正常清零
