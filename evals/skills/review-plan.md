@@ -12,7 +12,7 @@
 
 ## Required Evidence
 
-- 读取 `context.md` 与 `run-state.md`。
+- 读取 `context.md` 与 `run-state.md` frontmatter。
 - 指出 proposal、design 和 tasks 之间的接口缺口。
 - 按实施就绪五项逐项检查文件/锚点、接口、验证命令、预期结果和独立边界。
 - 为发现附 Critical/Warning/Info 级别及两根 Warning 标注轴。
@@ -27,7 +27,7 @@
 
 - 至少发现跨模块接口未定义和任务不可执行问题。
 - 发现位置包含可解析文件路径。
-- 最终报告说明 run-state 已写入轮次和终止类型。
+- 最终报告说明 run-state frontmatter 已写入 `lyx.review.planRounds` 与终止类型。
 
 ## Evidence Record
 
@@ -36,3 +36,7 @@ Baseline: passed — 指出接口契约和可执行验收缺失，在不可自�
 Modified: passed — 指出任务缺少接口路径、验证命令和验收口径，按不可自动修影响项停止。
 
 Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` and `/tmp/lyx-skill-evals-2026-10-31/summary.json`.
+
+Latest baseline: failed — matched 2/3 required patterns because the old run-state format did not satisfy the current recovery expectations.
+
+Latest current: passed — matched 3/3 patterns, found the missing spec Scenario and executable task contract, and stopped at the non-autofixable impact warnings. See `../results/2026-11-18-run-state-metadata.md`.

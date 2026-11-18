@@ -23,19 +23,28 @@ lycx project test-mode --unset              # 移除当前项目覆盖，回退�
 - 安装产物与配置：见下方「宿主」一节
 - OpenSpec 2.x：项目级 skills 统一写入 `.agents/skills/openspec-*`，Claude Code 使用 `.claude/skills/openspec-*` 链接；`/opsx:*` 命令已移除，`lyx` 继续委托同名 `openspec-*` skills。项目级 `.agents/` 与 `.claude/` 是本地生成产物并被忽略，仓库只跟踪 `openspec/`；升级后在每个 OpenSpec 项目运行 `openspec update --dry-run` 与 `openspec update`
 - 审查范围：`[host] reviewMode`（`full` / `plan-only` / `code-only` / `off`，未配置或非法等价 `full`）门控 `@lyx-propose` 编排入口执行哪些审查关卡（`plan-only` 跳过代码审查、`code-only` 跳过方案审查、`off` 两级都跳过；apply 始终执行），不影响被直接调用的 `@lyx-review-plan` / `@lyx-review-code`、`@lyx-apply` 与归档前验证；被跳过的关卡打印显式 `[跳过]` 状态行。交互 `init` 先问 `testMode`，随后在审查配置段开头问 `reviewMode`（`off` 跳过 review 侧提问、既有值保留），`lycx doctor` 展示该字段并对非法取值 / `off` + review 侧字段非空输出 WARN
-- 测试模式：有效配置 `testMode` 按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析，支持 `normal` / `off` / `ask`。配置为 `ask` 时，change 命令按 `normal` / `off` 首次询问一次并写入 change 的 `.openspec.yaml`：
+- 测试模式：有效配置 `testMode` 按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析，支持 `normal` / `off` / `ask`。配置为 `ask` 时，change 命令按 `normal` / `off` 首次询问一次并写入 change 的 `run-state.md` YAML frontmatter：
 
-```yaml
+```md
+---
 lyx:
+  schemaVersion: 1
   testModeDecision: off
+  isolation:
+    mode: none
+    sourceBranch: main
+    developmentBranch: null
+    worktreePath: null
+---
 ```
 
-后续 propose/apply/review/archive 沿用；配置 normal/off 覆盖历史决策。`@lyx-fix` 没有 change 元数据，ask 下每次调用询问。最终 `off` 不新增/修改测试文件、不生成测试任务、不执行测试命令，archive 仍执行 typecheck 且不执行 build。项目路径键按主仓库根归一，linked worktree 能确定主树时共用，无法反推时使用当前 worktree 根。`lycx project test-mode normal|off|ask|--unset` 管理当前项目；`lycx doctor` / `status` 展示配置层有效值与来源。
-- 配置：每宿主一个文件（`~/.codex/lyx/config.toml` / `~/.claude/lyx/config.toml`，文件存在即该宿主已安装；本包私有目录，不做任何自动迁移）。`[host]` 保存宿主默认值与执行者/模型配置，`[projects."<path>"]` 保存路径键项目覆盖；项目仓库内的 `.openspec.yaml` 保存 change 的 `lyx.testModeDecision`。重装、菜单编辑与 update 保留全部项目条目及未知字段。任一所选宿主配置不可读或 TOML 非法时，`lycx init` / update 在写入前停止，避免覆盖既有配置。`[host] spawnableModels`（仅 codex）声明本机实测可 spawn 的模型清单（仅提示参考、不作候选/校验来源；未配置或空白回退内置默认 gpt-6-astra / gpt-5.6-sol / gpt-5.6-terra / gpt-5.6-luna / gpt-5.5）；宿主默认测试模式 / 审查范围 / 执行者 / 模型 / 推理档已有交互入口，项目测试模式用 `lycx project test-mode`
+`run-state.md` frontmatter 是新 change 唯一的 lyx 状态源。新 change 不向 `.openspec.yaml` 写入 `lyx:` 或 `x-lyx:`；该文件只保留 OpenSpec 官方字段。后续 propose/apply/review/archive 沿用 run-state 决策；配置 normal/off 覆盖历史决策。`@lyx-fix` 没有 change 元数据，ask 下每次调用询问。最终 `off` 不新增/修改测试文件、不生成测试任务、不执行测试命令，archive 仍执行 typecheck 且不执行 build。项目路径键按主仓库根归一，linked worktree 能确定主树时共用，无法反推时使用当前 worktree 根。`lycx project test-mode normal|off|ask|--unset` 管理当前项目；`lycx doctor` / `status` 展示配置层有效值与来源。
+- 存量活跃与归档 change 均不迁移。旧 change 没有 run-state frontmatter 时仍可只读 `.openspec.yaml lyx:`；它可能继续产生 OpenSpec unknown-key warning，直到自然归档。删除该兼容读取属于后续 breaking change。
+- 配置：每宿主一个文件（`~/.codex/lyx/config.toml` / `~/.claude/lyx/config.toml`，文件存在即该宿主已安装；本包私有目录，不做任何自动迁移）。`[host]` 保存宿主默认值与执行者/模型配置，`[projects."<path>"]` 保存路径键项目覆盖；每个 change 的 `run-state.md` 保存其 lyx 状态。重装、菜单编辑与 update 保留全部项目条目及未知字段。任一所选宿主配置不可读或 TOML 非法时，`lycx init` / update 在写入前停止，避免覆盖既有配置。`[host] spawnableModels`（仅 codex）声明本机实测可 spawn 的模型清单（仅提示参考、不作候选/校验来源；未配置或空白回退内置默认 gpt-6-astra / gpt-5.6-sol / gpt-5.6-terra / gpt-5.6-luna / gpt-5.5）；宿主默认测试模式 / 审查范围 / 执行者 / 模型 / 推理档已有交互入口，项目测试模式用 `lycx project test-mode`
 - 执行者与推理档：`[host] reviewExecutor` / `codingExecutor`（取值 `main` / `subagent`，未配置等价 `main`）决定审查与实施由谁执行；`reviewReasoningEffort` / `codingReasoningEffort` 分别对应 `reviewModel` / `codingModel`，仅在对应执行者为 `subagent` 且值非空时随 spawn 传入 `reasoning_effort`。执行者为 `main` 时模型与推理档字段不生效，`lycx doctor` 输出 WARN。取值不做枚举强校验；交互 init / 菜单可选择"不覆盖（继承默认）"或覆盖指定档位，非交互 update 保留原值
 - 初始化向导采集流程：语言 → **宿主多选**（默认按已安装宿主与 `~/.codex` / `~/.claude` 是否存在勾选）→ 逐宿主采集：**两个宿主同一采集面 = 测试模式 → 审查范围 → 执行者二连 → 模型二连 → 推理档二连**（模型候选 = **默认继承当前会话模型（留空）** + **自定义输入** + 既有值；推理档候选 = **不覆盖（继承默认）** + 该宿主建议档位 + 自定义输入 + 既有值，codex = minimal/low/medium/high/max、Claude Code = low/medium/high/xhigh/max；不以 provider `/models` 或任何内置/维护清单为候选来源）→ 配置摘要；**Codex 额外前置**：API 提供方（`~/.codex/config.toml` 现有 `[model_providers.*]` / OpenAI 官方 / 自定义）→ **Codex 现状检测（只读**：主会话模型 `~/.codex/config.toml` 顶层 `model` / provider 条目 / `~/.codex/models.json` 注册规模）。Claude Code 侧仍不采集、不写入其自身的 provider / settings 配置
 - 菜单"配置模式、执行者与模型"：按宿主选择后走与 `lycx init` 相同的采集面（测试模式 → 审查范围 → 执行者二连 → 模型二连 → 推理档二连）；未触碰字段保留既有值，写回后按当前配置重渲染产物（Claude Code 同时重渲子代理定义）
-- 流程可靠性：`propose` / `review-plan` / `review-code` 使用主 `SKILL.md` + 按需 `references/`，最终主文件低于 20,000 字节；每个 change 使用 `run-state.md` 记录阶段、任务、审查轮次、验证证据、机械裁决和下一步；核心 skill 行为评测见 [docs/skill-behavior-evals.md](./docs/skill-behavior-evals.md)，可用 `pnpm eval:skills -- --version both --baseline-ref dce2466` 显式运行真实 baseline/current 对照——它是开发工具，不是用户命令，也不进入默认 `pnpm test` 或 CI
+- 流程可靠性：`propose` / `review-plan` / `review-code` 使用主 `SKILL.md` + 按需 `references/`，最终主文件低于 20,000 字节；每个 change 使用 `run-state.md` 的固定 frontmatter 与正文记录阶段、任务、审查轮次、验证证据、机械裁决和下一步；核心 skill 行为评测见 [docs/skill-behavior-evals.md](./docs/skill-behavior-evals.md)，可用 `pnpm eval:skills -- --version both --baseline-ref dce2466` 显式运行真实 baseline/current 对照——它是开发工具，不是用户命令，也不进入默认 `pnpm test` 或 CI
 
 ## 宿主
 
@@ -58,10 +67,10 @@ lyx:
 |------|------|
 | `@lyx-init` | 生成项目 AGENTS.md + 初始化 OpenSpec 目录结构 + 自动 commit |
 | `@lyx-explore` | 想清楚再动手（委托 `@openspec-explore skill`）；委托前扫描 `review-findings.md` 审查未修项快照，有命中则**先询问**再列出；收敛到方案时按规模提示转 `@lyx-fix`（小改动）或 `@lyx-propose` |
-| `@lyx-propose` | 创建方案前问一次隔离方式 + 问"全自动/手动" → 委托 `@openspec-propose skill` → 记录 isolation metadata → 同步会话标题 → 风险测试策略生成 spec/tasks + 五项方案自审 → 创建 run-state → commit；全自动 = review-plan → apply → review-code |
+| `@lyx-propose` | 创建方案前问一次隔离方式 + 问"全自动/手动" → 委托 `@openspec-propose skill` → 在 run-state 记录隔离与测试模式 → 同步会话标题 → 风险测试策略生成 spec/tasks + 五项方案自审 → commit；全自动 = review-plan → apply → review-code |
 | `@lyx-apply` | 启动读取 run-state 并用 git/tasks 核对；按 `codingExecutor` 实施，逐任务记录证据与机械裁决，主会话确认后回写 context/run-state 并统一 commit |
 | `@lyx-fix` | 小需求 / bug 轻量路径：不建 change；bug 分支执行根因调查、单假设验证、3 次失败后质疑架构；最终输出测试 / 类型检查证据，不执行生产构建 |
-| `@lyx-archive` | 启动恢复核对 + 测试 / 类型检查验证（不含生产构建）+ final testMode/证据写入 run-state + 归档 commit + 按 isolation metadata 分支收尾 |
+| `@lyx-archive` | 启动恢复核对 + 测试 / 类型检查验证（不含生产构建）+ final testMode/证据写入 run-state + 归档 commit + 按 run-state isolation 分支收尾 |
 | `@lyx-review-plan` | 读取 run-state 和 references；检查方案完整性及实施就绪（文件/锚点、接口、验证命令、预期结果、独立边界），执行审查/修复循环并写快照与新鲜证据 |
 | `@lyx-review-code` | 读取 run-state 和 references；执行代码审查/修复循环，保留 Critical/Warning/Info、双轴标注和终止条件，写快照与新鲜证据 |
 | `@lyx-release` | GitFlow 四场景发版（feature/release/hotfix/dev-offline），SemVer 自动推导版本号；上线合并二选一（远端 PR 默认 / 本地直接合并）+ 主分支名检测（master/main） |

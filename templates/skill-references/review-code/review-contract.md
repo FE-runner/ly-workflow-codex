@@ -16,7 +16,7 @@
 
 循环执行期间不提交审查修复；仅当循环以"正常清零"结束时，才对审查目标全部文件（`git diff HEAD` 圈定的原始改动 + 循环修复 + `run-state.md` 一并暂存）统一提交一次。`review-findings.md` 快照独立于该统一提交：审查收尾后无论正常清零还是任一非正常终止，均按本文件「快照提交」规则单独提交；传入 `--no-commit` 时，统一提交与快照提交都不执行。
 
-**测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失或无合法 `lyx.testModeDecision` 时询问一次 `normal` / `off` 并写回，保留其他字段；`lyx` 非 mapping，或 decision 存在且既不是 string 也不是 null、文件不可读/解析失败时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `.openspec.yaml`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
+**测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 run-state frontmatter `lyx.testModeDecision`，目标 change 没有 YAML frontmatter 时 MAY 只读回退旧 `.openspec.yaml lyx.testModeDecision`。决策为 `normal` / `off` 时沿用；缺失、为 `null` 或为非法枚举字符串时询问一次并写入 run-state；frontmatter、mapping、`schemaVersion` 或字段类型结构非法时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `run-state.md`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
 
 ## 判级标准（先定级，再写条目）
 

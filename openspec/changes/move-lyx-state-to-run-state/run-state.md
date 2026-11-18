@@ -2,9 +2,9 @@
 lyx:
   schemaVersion: 1
   change: move-lyx-state-to-run-state
-  stage: review-plan
+  stage: apply
   executionMode: full-auto
-  pipelineStage: apply
+  pipelineStage: review-code
   testModeDecision: null
   isolation:
     mode: none
@@ -13,24 +13,31 @@ lyx:
     worktreePath: null
   lastGoodCommit: afd374b
   completedTasks:
-    done: 0
+    done: 22
     total: 22
   review:
     planRounds: 2
     codeRounds: 0
     terminationType: normal
   nextSafeAction:
-    command: "@lyx-apply"
-    skillPath: "../lyx-apply/SKILL.md"
+    command: "@lyx-review-code"
+    skillPath: "../lyx-review-code/SKILL.md"
     change: move-lyx-state-to-run-state
-    condition: review-plan is normal with no unresolved manual item
+    condition: apply commit succeeds and equals the latest Change-Stage: apply commit
 ---
 
 # 运行状态
 
 ## 任务证据
 
-- 已完成任务: 0/22
+- 已完成任务: 22/22
+- 1.1–1.4: propose run-state frontmatter、ask 时序、写入与恢复模板已完成
+- 2.1–2.4: apply/review readers 已切换到 run-state，并保留旧格式只读回退
+- 3.1–3.3: archive 测试模式、分支收尾与 worktree 文档已完成
+- 4.1–4.4: run-state、模板断言、只读兼容回归与 `apply-legacy-compat` eval fixture 已完成
+- 5.1–5.3: 双语 README、项目指令、CHANGELOG、eval 文档与场景说明已完成
+- 5.4: baseline/current 真实行为评测完成，9/10 passed；唯一失败为预期 baseline review-plan
+- 6.1–6.3: 最终 OpenSpec、lint、typecheck、全量测试与 diff check 已完成
 
 ## 方案自审
 
@@ -70,3 +77,12 @@ lyx:
 - `openspec validate --changes move-lyx-state-to-run-state`（review-plan 首轮修复后）: exit 0，1 passed / 0 failed
 - review-plan 第 1 轮：1 Critical / 3 Warning / 1 Info；全部认可并修复
 - review-plan 第 2 轮：0 Critical / 0 Warning / 0 Info；正常清零
+- `pnpm exec vitest run src/utils/__tests__/run-state.test.ts src/utils/__tests__/host-adapters.test.ts`：exit 0，89 tests passed
+- `pnpm exec vitest run src/utils/__tests__/skill-evals.test.ts`：exit 0，26 tests passed
+- `pnpm eval:skills -- --case propose --case apply --case apply-legacy-compat --case review-plan --case review-code --version both --baseline-ref dce2466 --output /tmp/lyx-run-state-eval`：exit 1（9/10 passed；baseline review-plan failed，current 5/5 passed）
+- `openspec validate --changes move-lyx-state-to-run-state`：exit 0，1 passed / 0 failed
+- `pnpm lint`：exit 0
+- `pnpm typecheck`：exit 0
+- `pnpm test`：exit 0，26 files / 467 tests passed
+- `git diff --check`：exit 0
+- `git status --porcelain` 的 archive 路径检查：无输出，未修改任何归档 change

@@ -14,26 +14,26 @@ argument-hint: '[<change-name>]'
 
 ## 启动恢复（SHALL）
 
-归档前先读取目标 change 的 `run-state.md`，获取当前阶段、最后成功 commit、审查终止类型和未决项；再以 `git status --porcelain`、`git log`、`tasks.md` 与实际文件核对。账本与 git/files 冲突时以可核验事实为准，并把冲突记录为新的恢复事件；`run-state.md` 缺失时容错继续并注明。
+归档前先读取目标 change 的 `run-state.md` frontmatter，获取 `lyx.stage`、`lyx.lastGoodCommit`、`lyx.review` 和未决项；再以 `git status --porcelain`、`git log`、`tasks.md` 与实际文件核对。账本与 git/files 冲突时以可核验事实为准，并把冲突记录为新的恢复事件；旧 change 没有 YAML frontmatter 时按旧格式容错；frontmatter 损坏时停止，不得静默回退。
 
 ## 归档前验证（SHALL，先于任何归档动作）
 
 在委托 OpenSpec 归档流程**之前**，读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时 SHALL 停止归档并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
 
-配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时读取目标 change 的 `.openspec.yaml`：文件缺失视为决策缺失；`lyx` 非 mapping，或 `testModeDecision` 存在且既不是 string 也不是 null 时结构非法并停止；`null`、空白或非法字符串视为缺失；合法 `normal` / `off` 直接沿用。决策缺失时询问一次并写入 `lyx.testModeDecision`，保留其他字段；用户取消或环境无法交互时停止，不执行验证或归档。
+配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时读取目标 change 的 run-state frontmatter `lyx.testModeDecision`；目标 change 没有 YAML frontmatter 时 MAY 只读回退旧 `.openspec.yaml lyx.testModeDecision`。`normal` / `off` 直接沿用；决策缺失、为 `null` 或为非法枚举字符串时询问一次并写入 run-state；frontmatter、mapping、`schemaVersion` 或字段类型结构非法，或需要回退的旧 `.openspec.yaml` 结构非法时停止。用户取消或环境无法交互时停止，不执行验证或归档。
 
-确定最终模式后，SHALL 把 `final testMode` 及来源（项目配置 / 宿主默认 / change 元数据）写入 `run-state.md`，并把阶段更新为 `verifying`。写入时沿用 `run-state.md` 现有语言，不得无理由切换为英文。
+确定最终模式后，SHALL 把 `final testMode` 及来源（项目配置 / 宿主默认 / change 元数据）写入 `run-state.md` 正文，并把 `lyx.stage` 更新为 `verifying`。写入时沿用 `run-state.md` 现有语言，不得无理由切换为英文。
 
 - 最终模式为 `normal`：对当前工作区执行一次项目验证，覆盖测试 / 类型检查两类。
 - 最终模式为 `testMode = "off"`：跳过测试类别，仍执行类型检查，并在报告中明确注明“testMode=off，测试已跳过”；来源为配置时注明宿主默认或项目配置来源，来源为 `ask` 决策时注明“最终决策来自 change 元数据”。
 - SHALL NOT 执行 `build` / 生产构建；项目提供 `scripts.build` 时也跳过并在报告中注明生产构建不在归档门禁范围。
 
-因 `ask` 新写入，或本轮实际消费的继承 dirty `.openspec.yaml` 决策，SHALL 随既有 `git add -- openspec/` 进入归档 commit；若门禁失败，决策可保留为 dirty 并如实报告。
+因 `ask` 新写入，或本轮实际消费的继承 dirty run-state 决策，`run-state.md` SHALL 随既有 `git add -- openspec/` 进入归档 commit；若门禁失败，决策可保留为 dirty 并如实报告。
 
 - 按项目实际提供的脚本选择（例如 `package.json` 的 `scripts.test` / `scripts.typecheck`，或项目 README/AGENTS.md 声明的等价命令）。
 - 项目未提供的类别 SHALL 跳过并在报告中注明（例如"未提供 typecheck 脚本"），SHALL NOT 因缺失判定失败。
 - 全部通过才继续；任一类别失败 SHALL 停止归档，**不移动** `openspec/changes/<change-name>/`，并在 run-state 记录失败命令、退出码、关键错误摘要和 `archive-blocked` 阶段，如实报告原始错误输出。
-- 全部通过后 SHALL 在 run-state 逐类记录“命令 + 退出码 + 结果摘要”，并把阶段更新为 `archive-ready`。
+- 全部通过后 SHALL 在 run-state 正文逐类记录“命令 + 退出码 + 结果摘要”，并把 `lyx.stage` 更新为 `archive-ready`。
 
 该验证是慢验证的**唯一执行点**：审查关卡（`@lyx-review-plan` / `@lyx-review-code`）SHALL NOT 重复执行测试 / 类型检查（`openspec validate` 仍由 review-plan 每轮执行，不属于本步范围）。生产构建不属于归档门禁，由上线或发布流程负责。
 
@@ -94,21 +94,22 @@ message 采用 Conventional Commits 前缀 + 正文 + trailer 结构：先用 `g
 
 ## 归档后分支收尾（archive commit 成功后）
 
-archive 阶段 commit 成功后，读取归档后 change 目录下 `.openspec.yaml` 的 `lyx:` metadata，并执行分支收尾：
+archive 阶段 commit 成功后，读取归档后 change 目录下 `run-state.md` frontmatter 的 `lyx.isolation`，并执行分支收尾。旧 change 没有 YAML frontmatter 时 MAY 只读回退归档后 `.openspec.yaml` 的 `lyx:` metadata；不得改写旧文件。
 
 ```yaml
 lyx:
-  isolation: worktree | branch | none
-  sourceBranch: main | null
-  developmentBranch: feature/xxx | null
-  worktreePath: /abs/path | null
+  isolation:
+    mode: worktree | branch | none
+    sourceBranch: main | null
+    developmentBranch: feature/xxx | null
+    worktreePath: /abs/path | null
 ```
 
 ### 1. 解析 metadata 与决定目标分支
 
-- `isolation: none`：不提示，直接结束收尾流程。
-- `isolation: branch` / `worktree` 且 `sourceBranch` 有值：把该值作为 `targetBranch`。
-- 完全缺少 isolation metadata，或 `isolation != none` 且 `sourceBranch` 为 `null` / 空：进入保守路径，提示用户选择目标分支或跳过；SHALL NOT 默认猜 `main` / `master`。用户选择目标分支后，把该分支作为 `targetBranch`。
+- `mode: none`：不提示，直接结束收尾流程。
+- `mode: branch` / `worktree` 且 `sourceBranch` 有值：把该值作为 `targetBranch`。
+- run-state 与旧 `.openspec.yaml` 都缺少 isolation metadata，或 `mode != none` 且 `sourceBranch` 为 `null` / 空：进入保守路径，提示用户选择目标分支或跳过；SHALL NOT 默认猜 `main` / `master`。用户选择目标分支后，把该分支作为 `targetBranch`。
 - 保守路径可推导 `developmentBranch = 当前分支`、`worktreePath = 当前 linked worktree（若存在）`；无法唯一判定当前分支或 worktree 时，跳过收尾并保留现场。
 
 ### 2. 展示确认前完成一致性校验
@@ -117,8 +118,8 @@ lyx:
 
 - `targetBranch` SHALL NOT 等于 `developmentBranch`；相等时判定 metadata/目标选择异常并停止。
 - `targetBranch` 与 `developmentBranch` 必须存在。
-- `isolation: branch` 时，当前分支必须等于 `developmentBranch`。
-- `isolation: worktree` 时，`worktreePath` 必须仍是注册的 linked worktree，且该 worktree checkout `developmentBranch`。
+- `mode: branch` 时，当前分支必须等于 `developmentBranch`。
+- `mode: worktree` 时，`worktreePath` 必须仍是注册的 linked worktree，且该 worktree checkout `developmentBranch`。
 - 必须能用 `git worktree list --porcelain` 定位 `targetBranch` 所在 worktree；若该分支未被任何 worktree checkout，则令 `targetWorktree` 为主 worktree，并确认可 checkout `targetBranch`。
 - 开发 worktree 与 `targetWorktree` 都必须干净。
 
@@ -139,7 +140,7 @@ lyx:
 
 1. 在已定位的 `targetWorktree` 中确认已 checkout `"<targetBranch>"`；需要时执行 `git -C "<targetWorktree>" checkout "<targetBranch>"`。
 2. 执行 `git -C "<targetWorktree>" merge --no-ff "<developmentBranch>"`。
-3. merge 成功后，若 `isolation: worktree`，执行 `git -C "<targetWorktree>" worktree remove "<worktreePath>"`。
+3. merge 成功后，若 `mode: worktree`，执行 `git -C "<targetWorktree>" worktree remove "<worktreePath>"`。
 4. worktree 删除成功后（或本就不需要删除 worktree），执行 `git -C "<targetWorktree>" branch -d "<developmentBranch>"`。
 5. SHALL NOT 自动 `git push`；报告中明确“仅本地合并，未 push”。
 

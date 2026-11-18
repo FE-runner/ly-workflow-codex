@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- 新 change 使用 `run-state.md` 固定 YAML frontmatter 保存测试模式、隔离方式、阶段、commit、审查状态与下一步续跑坐标
+- 新增 `apply-legacy-compat` 行为评测场景，验证旧 `.openspec.yaml lyx:` 仅读回退且不被改写
+
+### Changed
+
+- `.openspec.yaml` 只保留 OpenSpec 官方字段；新 change 不再写入 `lyx:` 或 `x-lyx:`
+- propose、apply、review-plan、review-code、archive 与恢复流程统一优先读取 run-state frontmatter
+- 同步主 spec、skill 模板、双语文档、模板断言与 run-state 生命周期测试
+
+### Compatibility
+
+- 存量活跃与归档 change 不迁移、不改写；旧 change 无 YAML frontmatter 时可只读兼容 `.openspec.yaml lyx:`
+- 删除旧字段读取属于后续 breaking change；旧活跃 change 可能继续产生 OpenSpec unknown-key warning，直到自然归档
+
 ## [0.15.0] - 2026-11-18
 
 ### Added

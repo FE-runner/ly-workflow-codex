@@ -8,7 +8,11 @@ export const EVAL_SKILLS = ['propose', 'apply', 'review-plan', 'review-code'] as
 export type EvalSkill = typeof EVAL_SKILLS[number]
 export const DEFAULT_EVAL_CASES = EVAL_SKILLS
 export const EVAL_CASES = [
-  ...DEFAULT_EVAL_CASES,
+  'propose',
+  'apply',
+  'apply-legacy-compat',
+  'review-plan',
+  'review-code',
   'propose-full-auto',
   'propose-self-review-full-auto',
 ] as const
@@ -30,6 +34,7 @@ export interface SkillEvalCase {
   skillCommands: EvalSkill[]
   hostConfig?: {
     reviewExecutor?: 'main' | 'subagent'
+    testMode?: 'normal' | 'off' | 'ask'
   }
   prompt: string
   passPatterns: RegExp[]
@@ -49,7 +54,46 @@ const APPLY_TASKS_CHECKED = [
   '- [ ] 1.3 补充验证。',
   '',
 ].join('\n')
-const APPLY_RUN_STATE_CHECKED = '# Run State\n\n- Completed tasks: 1/3\n'
+const APPLY_RUN_STATE_CHECKED = [
+  '---',
+  'lyx:',
+  '  schemaVersion: 1',
+  '  change: eval-change',
+  '  stage: apply',
+  '  executionMode: manual',
+  '  pipelineStage: review-code',
+  '  testModeDecision: null',
+  '  isolation:',
+  '    mode: none',
+  '    sourceBranch: main',
+  '    developmentBranch: null',
+  '    worktreePath: null',
+  '  lastGoodCommit: null',
+  '  completedTasks:',
+  '    done: 1',
+  '    total: 3',
+  '  review:',
+  '    planRounds: 1',
+  '    codeRounds: 0',
+  '    terminationType: normal',
+  '  nextSafeAction:',
+  '    command: "@lyx-review-code"',
+  '    skillPath: "../lyx-review-code/SKILL.md"',
+  '    change: eval-change',
+  '    condition: partial apply resolves before review-code',
+  '---',
+  '',
+  '# Run State',
+  '',
+  '## Task evidence',
+  '',
+  '- Completed tasks: 1/3',
+  '',
+].join('\n')
+const APPLY_RUN_STATE_EMPTY = APPLY_RUN_STATE_CHECKED
+  .replace('  stage: apply', '  stage: apply')
+  .replace('    done: 1', '    done: 0')
+  .replace('- Completed tasks: 1/3', '- Completed tasks: 0/3')
 export const REVIEW_CODE_CRITICAL = '[src/worker.ts:2] — executeTask 缺少异常捕获。'
 const REVIEW_CODE_WORKER = [
   'export async function executeTask(): Promise<void> {',
@@ -115,14 +159,35 @@ const FULL_AUTO_TASKS = [
 ].join('\n')
 
 const FULL_AUTO_RUN_STATE = [
-  '# 运行状态',
+  '---',
+  'lyx:',
+  '  schemaVersion: 1',
+  '  change: eval-change',
+  '  stage: review-plan',
+  '  executionMode: full-auto',
+  '  pipelineStage: review-plan',
+  '  testModeDecision: null',
+  '  isolation:',
+  '    mode: none',
+  '    sourceBranch: main',
+  '    developmentBranch: null',
+  '    worktreePath: null',
+  '  lastGoodCommit: 待本次阶段提交归属',
+  '  completedTasks:',
+  '    done: 0',
+  '    total: 1',
+  '  review:',
+  '    planRounds: 0',
+  '    codeRounds: 0',
+  '    terminationType: null',
+  '  nextSafeAction:',
+  '    command: "@lyx-apply"',
+  '    skillPath: "../lyx-apply/SKILL.md"',
+  '    change: eval-change',
+  '    condition: review-plan normal then continue review-code after apply',
+  '---',
   '',
-  '- 变更名: eval-change',
-  '- 阶段: review-plan',
-  '- 执行模式: full-auto',
-  '- 流水线阶段: review-plan',
-  '- 最后成功 commit: 待本次阶段提交归属',
-  '- 下一步安全动作: review-plan 正常清零后读取同级 `lyx-apply/SKILL.md` 及其 references，以 `eval-change` 继续 apply；apply 完成后读取同级 `lyx-review-code/SKILL.md` 继续代码审查。',
+  '# 运行状态',
   '',
   '## 审查状态',
   '',
@@ -248,7 +313,7 @@ export const skillEvalCases: SkillEvalCase[] = [
           '',
         ].join('\n'),
       )
-      await writeFile(fixture.repoDir, 'openspec/changes/eval-change/run-state.md', '# Run State\n\n- Completed tasks: 0/3\n')
+      await writeFile(fixture.repoDir, 'openspec/changes/eval-change/run-state.md', APPLY_RUN_STATE_EMPTY)
       await writeFile(fixture.repoDir, 'src/feature.ts', APPLY_SOURCE)
       commitAll(fixture.repoDir, 'fixture: seed eval change')
 
@@ -275,6 +340,75 @@ export const skillEvalCases: SkillEvalCase[] = [
           && runState.startsWith(APPLY_RUN_STATE_CHECKED)
           && unexpectedPaths.length === 0,
         evidence: `sourceUnchanged=${source === APPLY_SOURCE}; tasksExact=${tasks === APPLY_TASKS_CHECKED}; runStatePrefix=${runState.startsWith(APPLY_RUN_STATE_CHECKED)}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
+      }
+    },
+  },
+  {
+    id: 'apply-legacy-compat',
+    skillCommand: 'apply',
+    skillCommands: ['apply'],
+    hostConfig: { reviewExecutor: 'main', testMode: 'ask' },
+    prompt: '@lyx-apply eval-change',
+    passPatterns: [/legacy|旧|兼容/i, /(testMode.*off|无测试|测试.*跳过)/i],
+    forbiddenPatterns: [/修改.*\.openspec\.yaml/i, /写入.*\.openspec\.yaml/i],
+    notApplicableReason: null,
+    async setup(fixture) {
+      const legacyMetadata = [
+        'schema: spec-driven',
+        'created: 2026-11-16',
+        'lyx:',
+        '  testModeDecision: off',
+        '',
+      ].join('\n')
+      await initRepo(fixture.repoDir)
+      await writeFile(fixture.repoDir, 'openspec/changes/eval-change/.openspec.yaml', legacyMetadata)
+      await writeFile(fixture.repoDir, 'openspec/changes/eval-change/proposal.md', '## Why\n\n验证旧 change 的只读测试模式兼容。\n')
+      await writeFile(fixture.repoDir, 'openspec/changes/eval-change/design.md', '## Context\n\n沿用旧格式元数据，不迁移。\n')
+      await writeFile(
+        fixture.repoDir,
+        'openspec/changes/eval-change/tasks.md',
+        [
+          '# Tasks',
+          '',
+          '## 1. 实施',
+          '',
+          '- [ ] 1.1 创建 `src/legacy.mjs` 并导出 `legacy()`，运行 `node -e "import(\'./src/legacy.mjs\').then(m => process.exit(m.legacy() === \'ok\' ? 0 : 1))"` 验证退出码为 0。',
+          '- [ ] 1.2 按测试模式决定是否新增 `test/legacy.test.ts`；testMode=off 时跳过并记录。',
+          '',
+        ].join('\n'),
+      )
+      await writeFile(
+        fixture.repoDir,
+        'openspec/changes/eval-change/run-state.md',
+        '# Run State\n\n- Completed tasks: 0/2\n',
+      )
+      await writeFile(
+        fixture.repoDir,
+        'openspec/changes/eval-change/context.md',
+        '# Context\n\n旧 change 没有 YAML frontmatter；`.openspec.yaml lyx.testModeDecision=off` 只读兼容，不得改写。\n',
+      )
+      commitAll(
+        fixture.repoDir,
+        'docs(evals): seed legacy compatible change\n\nChange-Stage: propose\nChange-Name: eval-change',
+      )
+    },
+    async verifySideEffects(fixture) {
+      const metadata = readRepoFile(fixture.repoDir, 'openspec/changes/eval-change/.openspec.yaml')
+      const source = readOptionalRepoFile(fixture.repoDir, 'src/legacy.mjs')
+      const testFile = readOptionalRepoFile(fixture.repoDir, 'test/legacy.test.ts')
+      const metadataUnchanged = metadata === [
+        'schema: spec-driven',
+        'created: 2026-11-16',
+        'lyx:',
+        '  testModeDecision: off',
+        '',
+      ].join('\n')
+      return {
+        passed: metadataUnchanged
+          && source.includes('legacy')
+          && source.includes('ok')
+          && testFile === '',
+        evidence: `metadataUnchanged=${metadataUnchanged}; source=${source.includes('ok')}; testFile=${testFile ? 'present' : 'absent'}`,
       }
     },
   },
@@ -324,7 +458,46 @@ export const skillEvalCases: SkillEvalCase[] = [
         '## ADDED Requirements\n\n### Requirement: 查询用户\n系统 SHALL 支持用户查询。\n',
       )
       await writeFile(fixture.repoDir, 'openspec/changes/eval-change/context.md', '# Context\n\n页面需要查询用户。\n')
-      await writeFile(fixture.repoDir, 'openspec/changes/eval-change/run-state.md', '# Run State\n\n- Stage: review-plan\n')
+      await writeFile(
+        fixture.repoDir,
+        'openspec/changes/eval-change/run-state.md',
+        [
+          '---',
+          'lyx:',
+          '  schemaVersion: 1',
+          '  change: eval-change',
+          '  stage: review-plan',
+          '  executionMode: manual',
+          '  pipelineStage: review-plan',
+          '  testModeDecision: null',
+          '  isolation:',
+          '    mode: none',
+          '    sourceBranch: main',
+          '    developmentBranch: null',
+          '    worktreePath: null',
+          '  lastGoodCommit: null',
+          '  completedTasks:',
+          '    done: 0',
+          '    total: 1',
+          '  review:',
+          '    planRounds: 0',
+          '    codeRounds: 0',
+          '    terminationType: in-progress',
+          '  nextSafeAction:',
+          '    command: "@lyx-review-plan"',
+          '    skillPath: "../lyx-review-plan/SKILL.md"',
+          '    change: eval-change',
+          '    condition: review pending',
+          '---',
+          '',
+          '# Run State',
+          '',
+          '## Review state',
+          '',
+          '- Round 1: not started',
+          '',
+        ].join('\n'),
+      )
       const commit = commitAll(
         fixture.repoDir,
         'docs(evals): propose eval change\n\nChange-Stage: propose\nChange-Name: eval-change',
@@ -363,14 +536,40 @@ export const skillEvalCases: SkillEvalCase[] = [
         fixture.repoDir,
         'openspec/changes/eval-change/run-state.md',
         [
+          '---',
+          'lyx:',
+          '  schemaVersion: 1',
+          '  change: eval-change',
+          '  stage: review-code',
+          '  executionMode: manual',
+          '  pipelineStage: review-code',
+          '  testModeDecision: null',
+          '  isolation:',
+          '    mode: none',
+          '    sourceBranch: main',
+          '    developmentBranch: null',
+          '    worktreePath: null',
+          '  lastGoodCommit: null',
+          '  completedTasks:',
+          '    done: 1',
+          '    total: 1',
+          '  review:',
+          '    planRounds: 1',
+          '    codeRounds: 1',
+          '    terminationType: in-progress',
+          '  nextSafeAction:',
+          '    command: "@lyx-review-code"',
+          '    skillPath: "../lyx-review-code/SKILL.md"',
+          '    change: eval-change',
+          '    condition: adjudicate round 2',
+          '---',
+          '',
           '# Run State',
           '',
-          '- Change: eval-change',
-          '- Stage: review-code',
-          '- Review rounds: 1',
+          '## Review state',
+          '',
           `- Round 1 Critical: ${REVIEW_CODE_CRITICAL}`,
           '- Ruling: 不认可；依据：`src/runner.ts:5` 在调用链上层统一捕获并转换该异常。',
-          '- Termination type: in-progress',
           '',
         ].join('\n'),
       )
@@ -424,7 +623,7 @@ export const skillEvalCases: SkillEvalCase[] = [
       /(?:0\s*Critical|未发现\s*Critical|未发现问题)/,
       /(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)/,
     ],
-    forbiddenPatterns: [/请回复.*继续/i, /等待用户.*触发/i],
+    forbiddenPatterns: [/请回复.*继续/, /等待用户.*触发/],
     notApplicableReason: null,
     async setup(fixture) {
       await initRepo(fixture.repoDir)
@@ -485,7 +684,7 @@ export const skillEvalCases: SkillEvalCase[] = [
       const paths = statusPaths(fixture.repoDir)
       const unexpectedPaths = paths.filter(path => !path.startsWith('openspec/changes/eval-change/'))
       const tasksChecked = !tasks.includes('- [ ]')
-      const runStateNormal = /终止类型[：:]\s*normal/.test(runState)
+      const runStateNormal = /terminationType:\s*normal|终止类型[：:]\s*normal/.test(runState)
       const applyCommitted = applyCommit.length > 0
       const featureImplemented = source.includes('feature') && source.includes('ok')
       const testImplemented = testFile.includes('node:test') && testFile.includes('feature')
@@ -514,7 +713,7 @@ export const skillEvalCases: SkillEvalCase[] = [
       /(?:0\s*Critical|未发现\s*Critical|未发现问题)/,
       /(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)/,
     ],
-    forbiddenPatterns: [/请回复.*(?:隔离|全自动|手动)/i, /等待用户.*触发/i],
+    forbiddenPatterns: [/请回复.*(?:隔离|全自动|手动)/, /等待用户.*触发/],
     notApplicableReason: null,
     async setup(fixture) {
       await initRepo(fixture.repoDir)
@@ -565,7 +764,7 @@ export const skillEvalCases: SkillEvalCase[] = [
       )
       const contextCreated = context.trim().length > 0
       const tasksChecked = tasks.length > 0 && !tasks.includes('- [ ]')
-      const runStateNormal = /终止类型[：:]\s*normal/.test(runState)
+      const runStateNormal = /terminationType:\s*normal|终止类型[：:]\s*normal/.test(runState)
       const proposeCommitted = proposeCommit.length > 0
       const reviewCodeCommitted = reviewCodeCommit.length > 0
       const documentCreated = document.includes('propose-self-review continued')

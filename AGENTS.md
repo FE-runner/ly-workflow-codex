@@ -147,7 +147,7 @@ testMode = "off"
 ```
 
 - 有效 `testMode`：当前项目路径覆盖 > `[host].testMode` > `normal`。项目键按主仓库根归一：普通 checkout / separate-git-dir / 子模块使用各自 `show-toplevel`；非 bare linked worktree 能确定主工作树时使用主树根；bare worktree 或 separate-git-dir 无法反推主树时使用当前 worktree 根；非 Git 目录使用规范化 cwd。
-- effective `testMode = "ask"` 时，change 命令读取 `.openspec.yaml` 的 `lyx.testModeDecision`（`normal` / `off`）并沿用；决策缺失/非法时询问一次并写入。配置 normal/off 覆盖历史决策。`@lyx-fix` 无 change 元数据，ask 下每次调用询问。
+- effective `testMode = "ask"` 时，change 命令读取 `run-state.md` frontmatter 的 `lyx.testModeDecision`（`normal` / `off`）并沿用；决策缺失、为 `null` 或为非法枚举字符串时询问一次并写入 run-state，结构非法时停止。旧 change 无 YAML frontmatter 时 MAY 只读回退 `.openspec.yaml lyx:`；新 change 不写该字段。配置 normal/off 覆盖历史决策。`@lyx-fix` 无 change 元数据，ask 下每次调用询问。
 - 项目条目缺失或非法时回退宿主默认；同一规范化路径的多个原始键取值冲突时忽略覆盖并由 doctor WARN。`lycx doctor` / `status` 展示宿主默认、当前项目有效值、来源与路径。
 - `lycx init` / update / 菜单写回保留全部 `[projects]` 与未知字段；任一所选宿主配置存在但不可读或 TOML 非法时，在写入任何宿主前停止，避免默认配置覆盖既有项目表。
 
@@ -161,7 +161,7 @@ testMode = "off"
 
 - 审查范围 = **按 `reviewMode` 门控**（`full` / `plan-only` / `code-only` / `off`，未配置 / 空白 / 非法等价 `full`）：只决定编排入口 `@lyx-propose` 触发哪些审查关卡（全自动流水线与手动路径的 review-plan 询问），**不影响被直接调用的 `@lyx-review-plan` / `@lyx-review-code`**，也不影响 `@lyx-apply` 与 `@lyx-archive` 的归档前完整验证；被跳过的关卡打印显式状态行（`[跳过] review-plan（reviewMode=<取值>）`），其节点前置校验一并跳过；`lycx init` / 菜单先问 `testMode`，随后把 `reviewMode` 作为审查配置段第一问（`off` 时跳过 review 侧提问、既有值保留），`lycx doctor` 展示该字段并对非法取值 / `off` + review 侧字段非空输出 WARN
 - 全自动阶段交接 = **显式读取同级下一阶段 bundle**：propose / review-plan / apply 的主 `SKILL.md` 必须直接写明下一阶段为 review-plan / apply / review-code，并在阶段正常完成时读取同级 `lyx-<next-command>/SKILL.md` 及 frontmatter 声明的全部 references 后再执行。`@lyx-*` 是命令标识，不是可调用的跨 skill 工具；只输出 mention、下一阶段名称或“下一步应执行”不算交接。`run-state.md` 的下一步安全动作同时记录命令、同级路径、change 参数与继续条件
-- propose 内部续跑 = **opsx boundary 从属 + 自审 checkpoint**：`@openspec-propose` 的 planning-only / stop-after-artifacts 只约束其自身委托阶段，`@lyx-propose` artifacts 返回后继续自审、context/metadata 与 propose commit；方案自审清单必须输出，但不得被当作终态，输出后依次执行 5.5→5.6→5.7→6，commit 后才读取 review-plan。恢复时若 run-state 为 `propose-self-review` 且 artifacts 完整，沿用原 isolation / 执行模式续跑，不重复询问
+- propose 内部续跑 = **opsx boundary 从属 + 自审 checkpoint**：`@openspec-propose` 的 planning-only / stop-after-artifacts 只约束其自身委托阶段，`@lyx-propose` artifacts 返回后继续自审、context/run-state 与 propose commit；方案自审清单必须输出，但不得被当作终态，输出后依次执行 5.5→5.6→5.7→6，commit 后才读取 review-plan。恢复时若 run-state frontmatter 的 `lyx.stage` 为 `propose-self-review` 且 artifacts 完整，沿用原 isolation / executionMode 续跑，不重复询问
 - 审查关卡 = **执行者可切换**（两个宿主语义一致；子代理机制按宿主落实：codex = 宿主 spawn + `send_input` 复用；claude = `Agent` 工具调用 `~/.claude/agents/lyx-*` 自定义子代理 + `SendMessage` 续跑，交互模式默认后台运行，等待语义表述为"结果必须被消费并如实报告"，不声称本轮同步阻塞）：`reviewExecutor = "main"`（默认）= 主 agent 直接自审，无 spawn、无逐条裁决、无驳回硬线，最多 2 轮；`reviewExecutor = "subagent"` = review-plan / review-code 各 spawn 1 个审查 subagent（非 fork spawn、只携带 TASK + 只审 change 范围），每条 Critical 由主会话逐条裁决——认可即修复，不认可必须附**可核验依据**（泛泛"误报"视为未完成裁决）；subagent 路径第 2 轮起默认 `send_input` 复用同一子代理，复用失败才重新 spawn
 - 软上下文载体 = **change 目录 `context.md`**：propose 阶段产出（内容边界自检）、apply 阶段维护（实施决策回写）、subagent 路径消费（TASK 只传路径）；执行者为 `main` 时主 agent 保有完整上下文，`context.md` 仅作决策留痕
 - 审查未修项快照 = **change 目录 `review-findings.md`**（快照式留痕，非台账）：review-plan / review-code 循环结束时按节 upsert 写入最后一轮**未被自动修复的 Warning**（不收 Info / Critical），Warning 条目连续编号；无论正常清零还是非正常终止，审查收尾后都只暂存该快照并生成独立 `docs(openspec)` commit（`--no-commit` 除外），因此可先合并、后归档；`@lyx-archive` 的 `git add -- openspec/` 再兜底归档前追加的就地标注并搬入 `archive/`。`@lyx-explore` 进入时扫描并**先询问后只列出未解决条目**（有 `- 解决：` 子项即视为已解决、不展示不计数；全部已解决时不询问）；该文件被排除在审查范围与审查修复 commit 之外，但仍由自己的精确路径快照 commit 落库。历史 Warning 被后续 change 解决时，在新 change 的 `proposal.md` 用 `## 解决的审查未修项` 声明锚点，由 `@lyx-archive` 向已归档快照追加追加式解决说明（原文不改、幂等、失败不阻断归档）；同一 change 内修复的 Warning 在 active 快照就地标注 `- 解决：本 change 内修复（commit <短 hash>）— …`（审查后同会话修复并提交后标注，或 `@lyx-archive` 归档前核对未标注条目、用户逐条确认后标注；必带 commit hash、按 hash 幂等；同会话标注另生独立快照 commit，归档前标注随归档 commit）；`@lyx-commit --all` 与 propose WIP commit 的全量暂存以 `':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md'` 排除进行中快照
@@ -191,7 +191,7 @@ testMode = "off"
 
 11. **项目测试模式按主仓库根而非 checkout 路径区分**：项目覆盖存于每宿主 `lyx/config.toml` 的 `[projects."<path>"]`；linked worktree 能确定主树时与主工作区共享同一键，无法反推时使用当前 worktree 根。`lycx project test-mode` 只修改当前路径键，设置遇规范化别名冲突时失败且不写，`--unset` 删除全部规范化等价键中的 `testMode`。该字段不进入项目仓库，继续由宿主本地配置承载。
 
-12. **ask 回答存于 change 元数据**：change 的 `.openspec.yaml` 可选 `lyx.testModeDecision: normal | off`。propose 在生成前询问并在 change 创建后写入；apply/review/archive 优先消费已有决策，缺失时补问并随对应阶段 commit 提交。配置 normal/off 优先于历史决策；决策写入后允许在阶段失败/`--no-commit`/非清零终止时保持 dirty，供恢复复用。
+12. **ask 回答存于 run-state**：新 change 的 `run-state.md` frontmatter 可选 `lyx.testModeDecision: normal | off | null`。propose 在生成前询问，change 创建后写入；apply/review/archive 优先消费 run-state 决策，缺失时补问并随对应阶段 commit 提交。旧 change 没有 YAML frontmatter 时可只读回退 `.openspec.yaml lyx:`，但新流程不写回、不迁移。配置 normal/off 优先于历史决策；决策写入后允许在阶段失败/`--no-commit`/非清零终止时保持 dirty，供恢复复用。
 
 13. **长 skill 使用 references 分层**：`propose`、`review-plan`、`review-code` 的主 `SKILL.md` 保持低于 20,000 字节，frontmatter `references:` 声明必需 sidecar；安装器按声明渲染并复制到安装目录 `references/`，缺失时安装与 doctor 报错。主文件保留入口、按需读取指令，以及简短的“全自动执行不变量”；该不变量覆盖 `propose`、`review-plan`、`apply`，直接写明同级下一阶段 bundle 与 references 全读，完整判据和详细流程仍在 references。
 

@@ -12,7 +12,7 @@
 
 ## Required Evidence
 
-- 读取 `run-state.md` 并以 git diff 核对审查范围。
+- 读取 `run-state.md` frontmatter 并以 git diff 核对审查范围。
 - 对误报给出文件路径、行号或可执行命令组成的可核验依据。
 - 逐字记录审查 subagent 原文与主会话裁决。
 - 第二轮相同 Critical 再次被拒绝时触发驳回硬线。
@@ -27,7 +27,7 @@
 
 - 首次误报裁决包含可核验依据。
 - 第二轮相同发现再次出现时停止自动修复并报告驳回硬线。
-- run-state 记录审查轮次、终止类型和统一提交状态。
+- run-state frontmatter 与正文记录审查轮次、终止类型和统一提交状态。
 
 ## Evidence Record
 
@@ -36,3 +36,5 @@ Baseline: passed — 第二轮同一误报 Critical 再次被拒，给出上层�
 Modified: passed — 消费固定第二轮报告，同一误报再次被拒后触发驳回硬线。
 
 Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` and `/tmp/lyx-skill-evals-2026-10-31/summary.json`.
+
+Latest current: passed — 2026-11-18 run read run-state frontmatter, consumed the fixed round-two report, and stopped at the rejection hardline with verifiable evidence. See `../results/2026-11-18-run-state-metadata.md`.

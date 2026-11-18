@@ -15,7 +15,7 @@
 - 在执行任何覆盖前，先展示 `git status --porcelain`。
 - 明确询问如何处理与本次 change 目录重叠的未提交改动。
 - 记录隔离方式和自动/手动模式各一次。
-- 创建并读取 `context.md` 与 `run-state.md`；propose commit 包含二者。
+- 创建并读取 `context.md` 与带固定 YAML frontmatter 的 `run-state.md`；propose commit 包含二者。
 - 自审输出实施就绪五项结论。
 
 ## Forbidden Actions
@@ -39,13 +39,15 @@ Modified: passed — 停在隔离方式确认前，目标 change 未写入。
 
 Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` and `/tmp/lyx-skill-evals-2026-10-31/summary.json`.
 
+Latest current: passed — 2026-11-18 run preserved the existing change and stopped before writing while asking for isolation and execution mode.
+
 ## Full-Auto Continuation
 
 ### Preconditions
 
-- 用户已选择全自动，run-state 记录 `执行模式: full-auto` 与当前流水线阶段。
+- 用户已选择全自动，run-state frontmatter 记录 `lyx.executionMode: full-auto` 与当前流水线阶段。
 - 当前阶段正常完成且没有待用户决策、失败或终止条件。
-- propose、review-plan 与 apply 的主 `SKILL.md` 已包含“全自动执行不变量”，且 run-state 记录 `full-auto`。
+- propose、review-plan 与 apply 的主 `SKILL.md` 已包含“全自动执行不变量”，且 run-state frontmatter 记录 `full-auto`。
 
 ### User Prompt
 
@@ -56,8 +58,8 @@ Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` an
 - 阶段报告后实际读取同级下一阶段 `SKILL.md` 与全部 references，不以报告作为最终回复。
 - review-plan 正常清零后继续 apply；apply 正常完成后继续 review-code。
 - apply 产生真实代码与测试文件，并形成带 `Change-Stage: apply` / `Change-Name` trailer 的提交。
-- run-state 匹配 `终止类型: normal`，最终文本包含 review-code、0 Critical/未发现问题与正常终态锚点。
-- run-state 的流水线阶段与下一步安全动作随阶段推进更新。
+- run-state 匹配 `terminationType: normal`，最终文本包含 review-code、0 Critical/未发现问题与正常终态锚点。
+- run-state frontmatter 的 `pipelineStage` 与 `nextSafeAction` 随阶段推进更新。
 
 ### Forbidden Actions
 
@@ -92,7 +94,7 @@ Evidence: `pnpm eval:skills -- --case propose-full-auto --version both --baselin
 
 ### Required Evidence
 
-- opsx:propose artifacts 完成后不结束回合，继续方案自审与 context/metadata。
+- opsx:propose artifacts 完成后不结束回合，继续方案自审、context 与 run-state frontmatter。
 - 方案自审清单输出后继续步骤 5.5-6，产生 propose commit。
 - 随后继续 review-plan、apply、review-code，最终有 apply commit、文档产物与 run-state normal。
 
@@ -113,3 +115,29 @@ Baseline: failed — 旧 bundle 生成 propose/apply 与文档，但未生成 re
 Modified: passed — current 从空仓库完成 propose → review-plan → apply → review-code，context、阶段提交、产物与 run-state normal 均存在。
 
 Evidence: baseline `pnpm eval:skills -- --case propose-self-review-full-auto --version baseline --baseline-ref dce2466 --keep-temp --output /tmp/lyx-propose-self-review-eval-baseline`；current 同命令改为 `--version current --output /tmp/lyx-propose-self-review-eval-after`。见 `../results/2026-11-17-propose-self-review-continuation.md`。
+
+Latest current: passed — 2026-11-18 run kept the existing proposal unchanged and asked only for the two startup choices. See `../results/2026-11-18-run-state-metadata.md`.
+
+## Run-State Frontmatter And Legacy Compatibility
+
+### Preconditions
+
+- 新 change 的 `run-state.md` 使用固定 `lyx` frontmatter；`.openspec.yaml` 只有 OpenSpec 官方字段。
+- 旧 change 没有 YAML frontmatter，且只有 `.openspec.yaml lyx.testModeDecision`。
+- `apply-legacy-compat` 使用 testMode `ask`。
+
+### Required Evidence
+
+- propose 在 change 创建后把 ask 选择与隔离信息写入 run-state，不写 `.openspec.yaml`。
+- apply/review/archive 读取 `lyx.testModeDecision`；旧 change 只读回退旧 `.openspec.yaml`。
+- archive 的文件来源由模板/单元断言验证，不要求新增 archive 行为评测 runner。
+
+### Forbidden Actions
+
+- 为消除 warning 批量改写旧 active 或 archived change。
+- 把结构损坏的 run-state frontmatter 静默当作旧格式继续。
+
+### Pass Criteria
+
+- `apply-legacy-compat` 的 `.openspec.yaml` 保持不变，且 `testModeDecision: off` 生效。
+- 新 change 模板断言不包含任何 `lyx:` / `x-lyx:` 写入 `.openspec.yaml` 的指令。

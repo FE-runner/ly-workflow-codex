@@ -2,13 +2,13 @@
 
 ## Recovery
 
-开始审查和每轮循环前读取 `openspec/changes/<change-name>/run-state.md`，获取阶段、执行模式、流水线阶段、基线 commit、轮次和未决项；再用 `git status`、`git log`、`tasks.md` 与目标文件核对。冲突时以可核验 git 和文件内容为准，并记录新的恢复事件。
+开始审查和每轮循环前读取 `openspec/changes/<change-name>/run-state.md` frontmatter，获取 `lyx.stage`、`lyx.executionMode`、`lyx.pipelineStage`、`lyx.lastGoodCommit`、`lyx.review` 与未决项；再用 `git status`、`git log`、`tasks.md` 与目标文件核对。冲突时以可核验 git 和文件内容为准，并记录新的恢复事件。旧 change 无 YAML frontmatter 时按旧格式容错；frontmatter 损坏时停止，不得静默回退。
 
 把 run-state 作为恢复与证据输入，不得把它当作方案源码挑错或修复对象。
 
 ## Review State
 
-每轮结束更新 run-state，续写时沿用 `run-state.md` 现有语言：
+每轮结束更新 run-state frontmatter 的 `lyx.review`，并在正文续写时沿用 `run-state.md` 现有语言：
 
 ```text
 第 <n> 轮：<Critical 数> 个 Critical，<Warning 数> 个 Warning；<认可/驳回摘要>

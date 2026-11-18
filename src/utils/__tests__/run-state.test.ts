@@ -1,9 +1,14 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = join(import.meta.dirname, '..', '..', '..')
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf-8')
+const ACTIVE_CHANGE = 'openspec/changes/move-lyx-state-to-run-state'
+function readSpec(id: string): string {
+  const active = `${ACTIVE_CHANGE}/specs/${id}/spec.md`
+  return read(existsSync(join(ROOT, active)) ? active : `openspec/specs/${id}/spec.md`)
+}
 
 describe('run-state lifecycle contract', () => {
   it('separates semantic context from execution state and records completed work', () => {
@@ -14,6 +19,12 @@ describe('run-state lifecycle contract', () => {
     expect(propose).toContain('已完成任务: <done>/<total>')
     expect(propose).toContain('## 基线评测')
     expect(propose).toContain('## 修改后评测（最终）')
+    expect(propose).toContain('schemaVersion: 1')
+    expect(propose).toContain('testModeDecision: normal | off | null')
+    expect(propose).toContain('isolation:')
+    expect(propose).toContain('completedTasks:')
+    expect(propose).toContain('review:')
+    expect(propose).toContain('nextSafeAction:')
   })
 
   it('recovers from git/files, backfills commit SHA, and forbids secrets', () => {
@@ -32,11 +43,13 @@ describe('run-state lifecycle contract', () => {
     const apply = read('templates/skills/apply.md')
     const reviewPlan = read('templates/skill-references/review-plan/review-contract.md')
     const recovery = read('templates/skill-references/propose/recovery-and-evidence.md')
-    const runStateSpec = read('openspec/specs/execution-run-state/spec.md')
+    const runStateSpec = readSpec('execution-run-state')
     const proposeSpec = read('openspec/specs/ly-propose-flow/spec.md')
 
-    expect(recovery).toContain('- 执行模式: full-auto | manual')
-    expect(recovery).toContain('- 流水线阶段:')
+    expect(recovery).toContain('executionMode: full-auto | manual')
+    expect(recovery).toContain('pipelineStage: review-plan | apply | review-code | none')
+    expect(recovery).toContain('testModeDecision: normal | off | null')
+    expect(recovery).toContain('nextSafeAction:')
     expect(propose).toContain('`EXECUTION_MODE=full-auto`')
     expect(propose).toContain('阶段报告非终态')
     expect(propose).toContain('SHALL NOT 在此结束回合')
@@ -44,7 +57,8 @@ describe('run-state lifecycle contract', () => {
     expect(reviewPlan).toContain('SHALL NOT 等待用户再次触发')
     expect(apply).toContain('阶段报告非终态')
     expect(runStateSpec).toContain('执行模式（`full-auto` / `manual`）')
-    expect(runStateSpec).toContain('阶段报告非终态')
+    expect(runStateSpec).toContain('frontmatter 字段名 SHALL 使用本能力定义的稳定英文标识')
+    expect(read('openspec/specs/execution-run-state/spec.md')).toContain('阶段报告非终态')
     expect(proposeSpec).toContain('阶段报告非终态')
   })
 
@@ -80,7 +94,7 @@ describe('run-state lifecycle contract', () => {
     expect(proposeContract).toContain('### 0. 启动恢复（创建方案前）')
     expect(proposeContract).toContain('Planning boundary 从属规则（SHALL）')
     expect(proposeContract).toContain('propose 内部 checkpoint')
-    expect(proposeContract).toContain('阶段: propose-self-review')
+    expect(proposeContract).toContain('lyx.stage: propose-self-review')
     expect(proposeContract.indexOf('### 4.5 初始化 run-state.md（方案自审前）'))
       .toBeLessThan(proposeContract.indexOf('### 5. 方案自审'))
   })
@@ -118,5 +132,52 @@ describe('run-state lifecycle contract', () => {
     ]) {
       expect(read(path), path).toContain('沿用 `run-state.md` 现有语言')
     }
+  })
+
+  it('treats run-state frontmatter as the only new lyx state source', () => {
+    const templates = [
+      'templates/skill-references/propose/propose-contract.md',
+      'templates/skill-references/propose/recovery-and-evidence.md',
+      'templates/skills/propose.md',
+      'templates/skills/apply.md',
+      'templates/skills/archive.md',
+      'templates/skill-references/review-plan/review-contract.md',
+      'templates/skill-references/review-plan/recovery-and-evidence.md',
+      'templates/skill-references/review-code/review-contract.md',
+      'templates/skill-references/review-code/recovery-and-evidence.md',
+      'templates/skills/worktree.md',
+    ]
+
+    for (const path of templates) {
+      const content = read(path)
+      expect(content, path).toContain('run-state.md')
+      const forbiddenWrites = content.split('\n').filter(line =>
+        /写入|写回/.test(line)
+        && /\.openspec\.yaml/.test(line)
+        && /lyx|x-lyx|testModeDecision|isolation/.test(line)
+        && !/SHALL NOT|不得|只读|旧/.test(line),
+      )
+      expect(forbiddenWrites, path).toEqual([])
+    }
+  })
+
+  it('stops on malformed state while prompting only for recoverable decisions', () => {
+    const testMode = readSpec('test-mode')
+    const runState = readSpec('execution-run-state')
+
+    for (const marker of [
+      'frontmatter 不可读',
+      '`testModeDecision` 为 object/list/number',
+      '缺失、为 `null`，或为不在 `normal` / `off` 中的字符串',
+      '旧 `.openspec.yaml`',
+    ]) {
+      expect(testMode, marker).toContain(marker)
+    }
+
+    expect(runState).toContain('目标 change 没有 YAML frontmatter')
+    expect(runState).toContain('`schemaVersion` 缺失或不受支持')
+    expect(runState).toContain('损坏并停止')
+    expect(runState).toContain('SHALL NOT 静默回退旧元数据或覆盖该文件')
+    expect(runState).toContain('正文 SHALL NOT 作为上述机器字段的第二权威来源')
   })
 })

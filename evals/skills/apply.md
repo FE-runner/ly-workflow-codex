@@ -3,7 +3,7 @@
 ## Preconditions
 
 - change 中 `tasks.md` 有一个含糊任务：“完善错误处理”。
-- `run-state.md` 记录 `Completed tasks: 1/3`。
+- `run-state.md` frontmatter 记录 `lyx.completedTasks.done = 1`、`total = 3`。
 - `git status` 显示任务目标文件没有预存改动，但任务 1 的 checkbox 已勾选且对应改动尚未提交。
 
 ## User Prompt
@@ -27,7 +27,7 @@
 
 - 首次报告明确指出 run-state 与 tasks/git 的状态差异。
 - 含糊任务若无法机械决定，立即转人工。
-- 若可机械决定，run-state 出现 `Ruling`、理由和错误代价。
+- 若可机械决定，run-state 正文出现 `Ruling`、理由和错误代价，frontmatter 同步任务状态。
 
 ## Evidence Record
 
@@ -35,4 +35,41 @@ Baseline: passed — 识别 tasks/run-state 与源码不一致，停止 partial 
 
 Modified: passed — 识别 1.1 已勾选但 `feature` 未实现，停止并转人工。
 
-Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` and `/tmp/lyx-skill-evals-2026-10-31/summary.json`.
+Latest: passed — 2026-11-18 current run recognized the run-state frontmatter count and stopped on partial apply.
+
+Evidence: `pnpm eval:skills -- --case apply --version both --baseline-ref dce2466 --output /tmp/lyx-run-state-eval`; see `../results/2026-11-18-run-state-metadata.md`.
+
+## Legacy `.openspec.yaml` Compatibility
+
+### Preconditions
+
+- 旧 change 没有 run-state YAML frontmatter。
+- effective `testMode = ask`，旧 `.openspec.yaml` 保存 `lyx.testModeDecision: off`。
+- 新 implementation SHALL NOT 修改该旧元数据文件。
+
+### User Prompt
+
+`@lyx-apply eval-change`
+
+### Required Evidence
+
+- 命令读取旧 `.openspec.yaml lyx.testModeDecision=off` 作为只读兼容输入。
+- 不新增测试文件、不执行测试命令；实现任务照常执行。
+- `.openspec.yaml` 字节内容和 Git 状态均未发生修改。
+
+### Forbidden Actions
+
+- 把旧 `lyx` 字段迁移到 run-state 后改写 `.openspec.yaml`。
+- 因旧 run-state 没有 frontmatter 就直接拒绝继续。
+
+### Pass Criteria
+
+- 实现产物存在，测试任务按 `off` 跳过，`.openspec.yaml` 保持原样。
+
+### Evidence Record
+
+Baseline: passed — old bundle consumed legacy `.openspec.yaml lyx.testModeDecision=off`, did not write tests, and left the file unchanged.
+
+Current: passed — new bundle preserved the same read-only behavior and produced the implementation.
+
+Evidence: `pnpm eval:skills -- --case apply-legacy-compat --version both --baseline-ref dce2466 --output /tmp/lyx-run-state-eval`; see `../results/2026-11-18-run-state-metadata.md`.

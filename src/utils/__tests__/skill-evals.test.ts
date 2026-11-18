@@ -202,6 +202,8 @@ describe('skill eval fixtures and cleanup', () => {
     })
     const subagentConfig = parse(buildFixtureHomeConfig({ reviewExecutor: 'subagent' })) as { host: Record<string, string> }
     expect(subagentConfig.host.reviewExecutor).toBe('subagent')
+    const askConfig = parse(buildFixtureHomeConfig({ testMode: 'ask' })) as { host: Record<string, string> }
+    expect(askConfig.host.testMode).toBe('ask')
   })
 
   it('installs current references with fixture HOME role paths', async () => {

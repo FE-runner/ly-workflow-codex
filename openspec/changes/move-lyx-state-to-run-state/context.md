@@ -26,3 +26,5 @@
 - legacy `.openspec.yaml` 只适用于“完全没有 YAML frontmatter”的旧 run-state；新 change 缺少字段时应按缺失处理并写 run-state。
 - run-state 会被后续 apply/review/archive 增量更新，修改时必须保留 frontmatter 与既有证据，不能整文件重写。
 - 归档后 run-state 的路径位于 `openspec/changes/archive/<date>-<change>/run-state.md`，分支收尾要读取新路径。
+- 实施时为让 lint 聚焦代码，`eslint.config.mjs` 新增忽略 `openspec/**`；OpenSpec 规范文件由 `openspec validate` 校验。未修改任何存量 active 或 archive change。
+- 真实行为评测新增 `apply-legacy-compat`；baseline/current 共 10 单元，9 passed，唯一失败是预期 baseline `review-plan`，current 5/5 全部通过。

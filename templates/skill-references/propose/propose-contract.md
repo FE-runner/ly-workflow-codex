@@ -8,7 +8,7 @@
 
 ### 0. 启动恢复（创建方案前）
 
-若 `参数` 显式包含一个活跃 change 名，或 `openspec/changes/` 下恰好只有一个活跃 change，且其 `run-state.md` 记录 `阶段: propose-self-review`、`执行模式: full-auto`，同时 proposal/design/tasks（及已声明的 delta spec）完整：SHALL 视为恢复未完成的 propose 阶段。此时沿用 run-state 中的文件名、isolation 与执行模式，跳过步骤 1-4 的隔离/模式询问和 artifact 重生成，核对 git/files 后从步骤 5 继续；若自审清单已在上一回合输出但尚无 `context.md` 或 propose 阶段 commit，则从步骤 5.5 继续。不得再次询问隔离方式或全自动/手动，也不得新建第二个 change。
+若 `参数` 显式包含一个活跃 change 名，或 `openspec/changes/` 下恰好只有一个活跃 change，且其 `run-state.md` 的 `lyx.stage` 为 `propose-self-review`、`lyx.executionMode` 为 `full-auto`，同时 proposal/design/tasks（及已声明的 delta spec）完整：SHALL 视为恢复未完成的 propose 阶段。此时沿用 run-state frontmatter 中的 change、isolation 与 `executionMode`，跳过步骤 1-4 的隔离/模式询问和 artifact 重生成，核对 git/files 后从步骤 5 继续；若自审清单已在上一回合输出但尚无 `context.md` 或 propose 阶段 commit，则从步骤 5.5 继续。不得再次询问隔离方式或全自动/手动，也不得新建第二个 change。旧 change 没有 YAML frontmatter 时 MAY 只读回退旧 `.openspec.yaml lyx`；frontmatter 损坏时停止，不得静默回退。
 
 ### 1. 是否已在 worktree 内 + 隔离方式询问（创建方案前，全局只问一次）
 
@@ -85,7 +85,7 @@
 
 **测试模式与风险策略适配（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时停止并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
 
-配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时，新 change 尚无 `.openspec.yaml`，SHALL 在生成 artifacts 前询问一次：`normal` 表示写测试、跑测试；`off` 表示不写测试、不跑测试。用户取消或环境无法交互时停止，不生成 artifacts。选择 SHALL 在步骤 4 确定真实 change 名后写入 `openspec/changes/<change-name>/.openspec.yaml` 的 `lyx.testModeDecision`，随 propose commit 落库。
+配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时，SHALL 在生成 artifacts 前询问一次：`normal` 表示写测试、跑测试；`off` 表示不写测试、不跑测试。用户取消或环境无法交互时停止，不生成 artifacts。该选择在当前会话暂存为 `TEST_MODE_DECISION`；步骤 4 确认真实 change 名后，SHALL 在步骤 4.5 创建 run-state 时写入 `lyx.testModeDecision`。若在这之前中断，恢复时重新询问，不得声称决策已持久化。新 change SHALL NOT 把该值写入 `.openspec.yaml`。
 
 最终模式为 `testMode = "off"` 时 SHALL NOT 生成测试文件、测试修改或测试命令任务；行为或契约所需 spec 仍照常生成，tasks 的验证限定为 typecheck、build、视觉检查或其他非测试检查。来源为项目覆盖时，状态行写为 `[跳过] ...（testMode=off，项目配置）`。
 
@@ -109,13 +109,17 @@
 
 ### 4.5 初始化 run-state.md（方案自审前）
 
-真实 change 名确认后、进入步骤 5 之前，SHALL 按 `references/recovery-and-evidence.md` 的骨架立即创建 `run-state.md`，不得等到自审或 context.md 完成后再创建。初始状态至少写入：
+真实 change 名确认后、进入步骤 5 之前，SHALL 按 `references/recovery-and-evidence.md` 的骨架立即创建 `run-state.md`，不得等到自审或 context.md 完成后再创建。初始 frontmatter 至少写入：
 
-- `阶段: propose-self-review`
-- `执行模式: <EXECUTION_MODE>`
-- `流水线阶段: review-plan | apply | review-code | none`（按 `reviewMode` 与执行模式确定）
-- `最后成功 commit: propose 基线或待本次阶段提交归属`
-- `下一步安全动作`：全自动时写明“完成方案自审、context 与阶段 commit 后立即进入下一阶段”；手动时写明等待用户选择是否审查
+- `lyx.schemaVersion: 1`
+- `lyx.change: <change-name>`
+- `lyx.stage: propose-self-review`
+- `lyx.executionMode: <EXECUTION_MODE>`
+- `lyx.pipelineStage: review-plan | apply | review-code | none`（按 `reviewMode` 与执行模式确定）
+- `lyx.testModeDecision: normal | off | null`（effective `ask` 且已选择时写所选值）
+- `lyx.isolation`：`mode`、`sourceBranch`、`developmentBranch`、`worktreePath`
+- `lyx.lastGoodCommit: <propose 基线或 null>`
+- `lyx.completedTasks`、`lyx.review` 与 `lyx.nextSafeAction`
 
 `run-state.md` 无法创建或写入时 SHALL 立即停止并报告原始错误，SHALL NOT 进入方案自审。该文件后续由步骤 5.7 增量更新并随步骤 6 一起提交。
 
@@ -152,33 +156,29 @@
 2. **内容边界自检（产出质量关卡）**：产出时完成一次自检——(a) 无与 artifact 重复的整段内容；(b) 每条决策/否决理由可溯源到本 change 讨论或基线 artifact 对应条目；(c) 行数 ≤ 100 行（它是每次 subagent spawn 的固定读取成本）。自检不通过 → 修订后重检，SHALL NOT 带病产出。
 3. **无实质内容时**：仍产出仅含标题与一行说明的最小骨架文件，SHALL NOT 省略文件——审查/实施 subagent 的 TASK 引用固定路径，文件缺失会造成断链。
 
-### 5.6 写入 isolation metadata（commit 前）
+### 5.6 完成 run-state metadata（commit 前）
 
-在确定真实 change 名之后、步骤 6 commit 之前，把步骤 1 捕获的隔离信息写入 `openspec/changes/<change-name>/.openspec.yaml` 的 `lyx:` 命名空间：
+步骤 4.5 已创建 run-state；在本步骤确认并补全 `lyx.isolation`：
 
-```yaml
-lyx:
-  isolation: worktree | branch | none
-  sourceBranch: <ISOLATION_SOURCE_BRANCH 或 null>
-  developmentBranch: <DEVELOPMENT_BRANCH 或 null>
-  worktreePath: <WORKTREE_PATH；仅 worktree 模式>
-  testModeDecision: normal | off # 仅 effective testMode = ask 且用户已选择时写入
-```
+- `mode: worktree | branch | none`
+- `sourceBranch: <ISOLATION_SOURCE_BRANCH 或 null>`
+- `developmentBranch: <DEVELOPMENT_BRANCH 或 null>`
+- `worktreePath: <WORKTREE_PATH 或 null>`
 
-`isolation: none` 时 `sourceBranch` 仍记录当前分支，`developmentBranch` / `worktreePath` 为 `null`。`sourceBranch` 缺失时写 `null`，不得猜测。`ask` 选择只写入 `testModeDecision`，保留 `.openspec.yaml` 其他字段。该 metadata 属于 propose 提交单元，随步骤 6 的 `git add -- openspec/changes/<change-name>/` 一起提交。若 propose commit 在决策写入后、提交前中断，允许决策保留为 dirty 并如实报告，后续恢复可复用。
+`mode: none` 时 `sourceBranch` 仍记录当前分支，`developmentBranch` / `worktreePath` 为 `null`。`sourceBranch` 缺失时写 `null`，不得猜测。effective `testMode = ask` 且已有选择时，同一 frontmatter 的 `testModeDecision` SHALL 已写入所选值。
 
-写入 metadata 后 SHALL 再运行一次 `openspec validate --changes <change-name>`；若验证失败，停止在 commit 前并报告原始错误。
+新 change SHALL NOT 在 `.openspec.yaml` 写入 `lyx:` 或 `x-lyx:`。run-state 属于 propose 提交单元，随步骤 6 的 `git add -- openspec/changes/<change-name>/` 一起提交。写入后 SHALL 再运行一次 `openspec validate --changes <change-name>`；若验证失败，停止在 commit 前并报告原始错误。
 
 ### 5.7 更新 run-state.md（commit 前）
 
-在方案自审、context.md 与 metadata 完成后、步骤 6 commit 前，SHALL 增量更新步骤 4.5 已创建的 `run-state.md`，至少写入：
+在方案自审、context.md 与 metadata 完成后、步骤 6 commit 前，SHALL 增量更新步骤 4.5 已创建的 `run-state.md`，至少更新：
 
-- `阶段: propose`
-- `执行模式: <EXECUTION_MODE>`
-- `流水线阶段: review-plan | apply | review-code | none`（按 `reviewMode` 与执行模式确定）
-- propose 基线或最后成功 commit
-- 方案自审结论摘要
-- `下一步安全动作`：全自动时写明同一回合要进入的下一阶段；手动时写明等待用户选择是否审查
+- `lyx.stage: propose`
+- `lyx.executionMode: <EXECUTION_MODE>`
+- `lyx.pipelineStage: review-plan | apply | review-code | none`（按 `reviewMode` 与执行模式确定）
+- `lyx.lastGoodCommit`：propose 基线
+- `lyx.nextSafeAction`：全自动时写明下一命令、同级 `SKILL.md` 路径、change 参数与继续条件；手动时写明等待用户选择是否审查
+- 正文中的方案自审结论摘要与验证证据
 
 `run-state.md` 不存在、不可读或无法写入时 SHALL 停止在 commit 前并如实报告，SHALL NOT 跳过后继续 commit。该文件 SHALL 随步骤 6 的 propose 阶段 commit 一并提交。
 
@@ -223,7 +223,7 @@ lyx:
 - apply 完成、提交并输出完成证据后，立即执行步骤 4 的节点校验，再执行步骤 5 review-code。
 - 只有 review-code 正常清零并输出最终报告后，才允许结束全自动回合。
 
-各阶段命令 SHALL 从 `run-state.md` 读取 `执行模式`、`流水线阶段` 与 `下一步安全动作`，并在阶段结束时更新；SHALL NOT 只依赖会话记忆判断是否自动续跑。阶段报告不是人工确认点，SHALL NOT 等待用户再次触发下一阶段。
+各阶段命令 SHALL 从 `run-state.md` frontmatter 读取 `lyx.executionMode`、`lyx.pipelineStage` 与 `lyx.nextSafeAction`，并在阶段结束时更新；SHALL NOT 只依赖会话记忆判断是否自动续跑。阶段报告不是人工确认点，SHALL NOT 等待用户再次触发下一阶段。
 
 **下一阶段 bundle 读取协议（SHALL）**：进入任何下一阶段前，以当前已加载 skill 所在目录为锚点解析同级 `lyx-<next-command>/SKILL.md`，完整读取该主文件及 frontmatter `references:` 声明的全部 sidecar，再按该 bundle 执行。`@lyx-*` 在本流程中是命令标识；只输出命令标识、写出下一阶段名称或说明“下一步应执行”SHALL NOT 触发 skill。同级 bundle 缺失或无法定位时停止并报告缺失路径，SHALL NOT 猜测绝对路径后继续。
 

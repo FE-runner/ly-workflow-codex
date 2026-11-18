@@ -18,9 +18,9 @@ references:
 
 ## 全自动执行不变量（最高优先级）
 
-- `run-state.md` 的 `执行模式` 为 `full-auto` 时，正常清零报告是中间状态，不是流水线最终回复。
+- `run-state.md` frontmatter 的 `lyx.executionMode` 为 `full-auto` 时，正常清零报告是中间状态，不是流水线最终回复。
 - 正常清零且无待用户决策、失败或终止条件时，SHALL 以当前 skill 目录为锚点，读取同级 `lyx-apply/SKILL.md` 及其 frontmatter 声明的全部 references，再在同一回合继续 apply 前置校验与 apply，SHALL NOT 等待用户再次触发。
 - 只输出 `@lyx-apply <change-name>` 或说明“下一步应执行 apply”SHALL NOT 视为已交接；无法定位同级 bundle 时停止并报告。
-- 准备结束全自动回合前 SHALL 核对 run-state 的下一流水线阶段；仅正常终态或明确人工介入条件允许结束。
+- 准备结束全自动回合前 SHALL 核对 run-state frontmatter 的 `lyx.pipelineStage` 与 `lyx.nextSafeAction`；仅正常终态或明确人工介入条件允许结束。
 
 除上述 references 与全自动执行不变量外，本文件只负责入口和路由。不得只读 description 或主文件后就开始审查。

@@ -300,12 +300,12 @@ export function sanitizeEvalText(text: string, sensitivePaths: string[] = []): s
     .replace(/\b(sk|ak)-[\w-]{8,}\b/g, '<redacted-key>')
 }
 
-export function buildFixtureHomeConfig(overrides: { reviewExecutor?: 'main' | 'subagent' } = {}): string {
+export function buildFixtureHomeConfig(overrides: { reviewExecutor?: 'main' | 'subagent', testMode?: 'normal' | 'off' | 'ask' } = {}): string {
   return [
     '[host]',
     `reviewExecutor = "${overrides.reviewExecutor ?? 'main'}"`,
     'codingExecutor = "main"',
-    'testMode = "normal"',
+    `testMode = "${overrides.testMode ?? 'normal'}"`,
     '',
   ].join('\n')
 }
@@ -586,7 +586,7 @@ async function runUnit(options: RunUnitOptions): Promise<EvalUnitResult> {
     await installEvalSkillBundle(sourceRoot, fixture, skillCommand, {
       reviewExecutor: evalCase.hostConfig?.reviewExecutor ?? 'main',
       codingExecutor: 'main',
-      testMode: 'normal',
+      testMode: evalCase.hostConfig?.testMode ?? 'normal',
     })
   }
 
