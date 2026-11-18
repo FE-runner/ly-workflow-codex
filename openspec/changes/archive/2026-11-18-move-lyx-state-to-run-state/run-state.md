@@ -2,7 +2,7 @@
 lyx:
   schemaVersion: 1
   change: move-lyx-state-to-run-state
-  stage: review-code
+  stage: archived
   executionMode: full-auto
   pipelineStage: none
   testModeDecision: null
@@ -20,10 +20,10 @@ lyx:
     codeRounds: 2
     terminationType: normal
   nextSafeAction:
-    command: "@lyx-archive"
-    skillPath: "../lyx-archive/SKILL.md"
+    command: "git push origin main"
+    skillPath: null
     change: move-lyx-state-to-run-state
-    condition: review-code normal and user explicitly chooses archive
+    condition: archive commit succeeds; isolation none requires no merge or worktree cleanup
 ---
 
 # 运行状态
@@ -78,6 +78,8 @@ lyx:
 
 ## 验证
 
+- final testMode: normal
+- final testMode source: 项目配置
 - `openspec status --change move-lyx-state-to-run-state`: exit 0，4/4 artifacts complete
 - `openspec validate --changes move-lyx-state-to-run-state`: exit 0，1 passed / 0 failed
 - `openspec validate --changes move-lyx-state-to-run-state`（review-plan 首轮修复后）: exit 0，1 passed / 0 failed
@@ -93,3 +95,9 @@ lyx:
 - `git diff --check`：exit 0
 - `git status --porcelain` 的 archive 路径检查：无输出，未修改任何归档 change
 - apply 阶段 commit：`0f65c6e`（33 files；文件集合与预期一致，且不含 archive 路径）
+- archive gate `pnpm test`：exit 0，26 files / 467 tests passed
+- archive gate `pnpm typecheck`：exit 0
+- archive gate build：未执行（生产构建不属于归档门禁）
+- OpenSpec archive：exit 0，specs added 4 / modified 12 / removed 0 / renamed 0
+- 归档路径：`openspec/changes/archive/2026-11-18-move-lyx-state-to-run-state`
+- 分支收尾：`isolation.mode=none`，无需合并或清理；当前已在 `main`
