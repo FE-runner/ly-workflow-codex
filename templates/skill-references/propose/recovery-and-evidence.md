@@ -61,7 +61,7 @@ lyx:
 - YAML frontmatter 是阶段、执行模式、测试模式、隔离、commit、任务计数、审查状态和下一步安全动作的唯一机器状态来源；Markdown 正文不得作为这些字段的第二权威来源。正文与 frontmatter 冲突时以 frontmatter 为准，并在报告中记录不一致。
 - `context.md` 记录“为什么这样做”，run-state 记录“做到哪、证据是什么、下一步做什么”。
 - run-state 作为 change artifact 纳入 propose 阶段 commit，不得用它替代 proposal/design/tasks。
-- 任务、阶段和验证后增量更新；尚未归属统一 commit 时写“待本次阶段提交归属”，不得填不存在的 SHA。
+- 任务、阶段和验证后增量更新；尚未归属统一 commit 时，frontmatter `lastGoodCommit` 保持 `null`，Markdown 正文写“待本次阶段提交归属”，不得填不存在的 SHA。
 - 执行模式在用户完成全自动/手动选择且 run-state 创建后立即写入 frontmatter；恢复时直接沿用该值，SHALL NOT 重复询问。
 - 全自动模式下，`lyx.pipelineStage` 与 `lyx.nextSafeAction` 是阶段报告后的续跑依据。`nextSafeAction` SHALL 写明下一阶段命令、同级 skill 路径、change 参数和继续条件；坐标模糊时，SHALL 从当前阶段和 `reviewMode` 重建后再执行。
 - 新 change 的 lyx 状态 SHALL NOT 写入 `.openspec.yaml`。旧 change 没有 YAML frontmatter 时 MAY 只读回退旧 `.openspec.yaml lyx`；frontmatter 存在但损坏、`lyx` 缺失或不是 mapping、`schemaVersion` 缺失或不受支持时 SHALL 停止，不得静默回退。

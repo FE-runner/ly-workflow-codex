@@ -2,28 +2,28 @@
 lyx:
   schemaVersion: 1
   change: move-lyx-state-to-run-state
-  stage: apply
+  stage: review-code
   executionMode: full-auto
-  pipelineStage: review-code
+  pipelineStage: none
   testModeDecision: null
   isolation:
     mode: none
     sourceBranch: main
     developmentBranch: null
     worktreePath: null
-  lastGoodCommit: afd374b
+  lastGoodCommit: 0f65c6e
   completedTasks:
     done: 22
     total: 22
   review:
     planRounds: 2
-    codeRounds: 0
+    codeRounds: 2
     terminationType: normal
   nextSafeAction:
-    command: "@lyx-review-code"
-    skillPath: "../lyx-review-code/SKILL.md"
+    command: "@lyx-archive"
+    skillPath: "../lyx-archive/SKILL.md"
     change: move-lyx-state-to-run-state
-    condition: apply commit succeeds and equals the latest Change-Stage: apply commit
+    condition: review-code normal and user explicitly chooses archive
 ---
 
 # 运行状态
@@ -51,10 +51,10 @@ lyx:
 
 ## 基线评测
 
-- propose: not-executed — 尚未进入 apply
-- apply: not-executed — 尚未进入 apply
-- review-plan: not-executed — 尚未进入 apply
-- review-code: not-executed — 尚未进入 apply
+- propose: passed — baseline preserved the existing proposal and stopped before writing.
+- apply: passed — baseline recognized partial apply and did not mutate source.
+- review-plan: failed — matched 2/3 required patterns.
+- review-code: passed — baseline stopped at the rejection hardline with verifiable evidence.
 
 ## 修改后评测（中间）
 
@@ -62,12 +62,18 @@ lyx:
 
 ## 修改后评测（最终）
 
-- 待实施与归档前验证后更新
+- propose: passed — current preserved the existing proposal and stopped before writing.
+- apply: passed — current recognized frontmatter partial apply and did not mutate source.
+- apply-legacy-compat: passed — current consumed legacy testMode=off without rewriting `.openspec.yaml`.
+- review-plan: passed — current matched 3/3 patterns and stopped at non-autofixable impact warnings.
+- review-code: passed — current stopped at the rejection hardline and recorded frontmatter state.
 
 ## 审查状态
 
 - 第 1 轮：1 个 Critical，3 个 Warning，1 个 Info；Critical 与 3 个影响落地 Warning 全部认可并修复
 - 第 2 轮：0 个 Critical，0 个 Warning，0 个 Info；同一 subagent 增量复核确认全部解决
+- 代码审查第 1 轮：0 个 Critical，2 个 Warning；两条影响落地 Warning 均已认可并修复
+- 代码审查第 2 轮：0 个 Critical，0 个 Warning，0 个 Info；同一 subagent 增量复核确认全部解决
 - 终止类型：normal
 
 ## 验证
@@ -86,3 +92,4 @@ lyx:
 - `pnpm test`：exit 0，26 files / 467 tests passed
 - `git diff --check`：exit 0
 - `git status --porcelain` 的 archive 路径检查：无输出，未修改任何归档 change
+- apply 阶段 commit：`0f65c6e`（33 files；文件集合与预期一致，且不含 archive 路径）

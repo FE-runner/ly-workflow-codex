@@ -172,7 +172,7 @@ const FULL_AUTO_RUN_STATE = [
   '    sourceBranch: main',
   '    developmentBranch: null',
   '    worktreePath: null',
-  '  lastGoodCommit: 待本次阶段提交归属',
+  '  lastGoodCommit: null',
   '  completedTasks:',
   '    done: 0',
   '    total: 1',
@@ -664,7 +664,7 @@ export const skillEvalCases: SkillEvalCase[] = [
       await writeFile(
         fixture.repoDir,
         'openspec/changes/eval-change/run-state.md',
-        FULL_AUTO_RUN_STATE.replace('待本次阶段提交归属', proposeCommit),
+        FULL_AUTO_RUN_STATE.replace('  lastGoodCommit: null', `  lastGoodCommit: ${proposeCommit}`),
       )
       await writeFile(fixture.homeDir, 'eval-metadata.txt', `propose=${proposeCommit}\n`)
     },

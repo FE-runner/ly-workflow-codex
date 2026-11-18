@@ -170,12 +170,14 @@ describe('run-state lifecycle contract', () => {
       '`testModeDecision` 为 object/list/number',
       '缺失、为 `null`，或为不在 `normal` / `off` 中的字符串',
       '旧 `.openspec.yaml`',
+      '旧 `lyx` 不是 mapping，或其中的 `testModeDecision` 存在且既不是 string 也不是 null',
     ]) {
       expect(testMode, marker).toContain(marker)
     }
 
     expect(runState).toContain('目标 change 没有 YAML frontmatter')
     expect(runState).toContain('`schemaVersion` 缺失或不受支持')
+    expect(runState).toContain('`lyx` 缺失或不是 mapping')
     expect(runState).toContain('损坏并停止')
     expect(runState).toContain('SHALL NOT 静默回退旧元数据或覆盖该文件')
     expect(runState).toContain('正文 SHALL NOT 作为上述机器字段的第二权威来源')
