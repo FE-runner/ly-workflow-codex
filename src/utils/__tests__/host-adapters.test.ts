@@ -80,20 +80,21 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     }
   })
 
-  it('long core skills keep a compact main file and declare readable references', () => {
+  it('core workflow skills are self-contained and do not install references', () => {
     for (const command of ['propose', 'review-plan', 'review-code']) {
       const main = readMain(`${command}.md`)
-      expect(Buffer.byteLength(main, 'utf-8'), command).toBeLessThan(20_000)
-      const refs = parseSkillReferences(main)
-      expect(refs.length, command).toBeGreaterThanOrEqual(2)
-      for (const reference of refs) {
-        expect(reference, command).toMatch(/^references\/.+\.md$/)
-        expect(fs.existsSync(join(PACKAGE_ROOT, 'templates', 'skill-references', command, reference.replace(/^references\//, ''))), `${command}/${reference}`).toBe(true)
-      }
+      expect(Buffer.byteLength(main, 'utf-8'), command).toBeGreaterThan(30_000)
+      expect(parseSkillReferences(main), command).toEqual([])
     }
+
+    const propose = readMain('propose.md')
+    expect(propose).toContain('### 0. 启动恢复（创建方案前）')
+    expect(propose).toContain('## 运行账本与证据')
+    expect(propose).toContain('方案自审逐项结论 MUST 写入')
+    expect(propose).toContain('SHALL NOT 作为独立 assistant 消息输出')
   })
 
-  it('full-auto stage handoff stays visible in main skills and references', () => {
+  it('full-auto stage handoff stays visible in self-contained main skills', () => {
     const proposeMain = readMain('propose')
     const reviewPlanMain = readMain('review-plan')
     const applyMain = readMain('apply')
@@ -101,18 +102,19 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(proposeMain).toContain('lyx-review-plan/SKILL.md')
     expect(proposeMain).toContain('lyx-apply/SKILL.md')
     expect(proposeMain).toContain('lyx-review-code/SKILL.md')
-    expect(proposeMain).toContain('frontmatter 声明的全部 references')
+    expect(proposeMain).toContain('完整读取同级 `lyx-review-plan/SKILL.md`')
     expect(proposeMain).toContain('SHALL NOT 视为已进入下一阶段')
     expect(proposeMain).toContain('Planning boundary')
-    expect(proposeMain).toContain('propose 内部 checkpoint')
+    expect(proposeMain).toContain('自审收口非终态')
+    expect(proposeMain).toContain('## 方案自审')
     expect(proposeMain).toContain('propose-self-review')
 
     expect(reviewPlanMain).toContain('lyx-apply/SKILL.md')
-    expect(reviewPlanMain).toContain('frontmatter 声明的全部 references')
+    expect(reviewPlanMain).toContain('完整读取同级 `lyx-apply/SKILL.md`')
     expect(reviewPlanMain).toContain('SHALL NOT 视为已交接')
 
     expect(applyMain).toContain('lyx-review-code/SKILL.md')
-    expect(applyMain).toContain('frontmatter 声明的全部 references')
+    expect(applyMain).toContain('完整读取同级 `lyx-review-code/SKILL.md`')
     expect(applyMain).toContain('SHALL NOT 视为已交接')
 
     expect(read('propose')).toContain('**下一阶段 bundle 读取协议（SHALL）**')

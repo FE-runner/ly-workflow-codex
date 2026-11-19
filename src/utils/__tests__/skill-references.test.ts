@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import fs from 'fs-extra'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { installWorkflows } from '../installer'
 import { listMissingSkillReferences, parseSkillReferences } from '../installer-template'
 
 const base = mkdtempSync(join(tmpdir(), 'ly-skill-references-'))
@@ -39,6 +38,19 @@ describe('skill reference declarations', () => {
   })
 
   it('installs rendered references for both hosts and removes stale reference files on force update', async () => {
+    const fakeRoot = join(base, 'reference-package')
+    await fs.copy(join(import.meta.dirname, '..', '..', '..', 'templates'), join(fakeRoot, 'templates'))
+    const mainPath = join(fakeRoot, 'templates', 'skills', 'review-code.md')
+    const main = readFileSync(mainPath, 'utf-8')
+    writeFileSync(mainPath, main.replace('argument-hint:', [
+      'references:',
+      '  - references/test-contract.md',
+      'argument-hint:',
+    ].join('\n')))
+    const referenceDir = join(fakeRoot, 'templates', 'skill-references', 'review-code')
+    await fs.ensureDir(referenceDir)
+    writeFileSync(join(referenceDir, 'test-contract.md'), 'config={{LYX_CONFIG_FILE}}\nhost={{HOST_ID}}\n')
+
     const paths = {
       codex: {
         skillsDir: join(base, 'codex-skills'),
@@ -52,7 +64,13 @@ describe('skill reference declarations', () => {
         lyDir: join(base, 'claude-lyx'),
       },
     }
-    const result = await installWorkflows(['review-code'], '', true, {
+    vi.resetModules()
+    vi.doMock('../installer-template', async (importOriginal) => {
+      const mod = await importOriginal<typeof import('../installer-template')>()
+      return { ...mod, PACKAGE_ROOT: fakeRoot }
+    })
+    const { installWorkflows: installWithReferences } = await import('../installer')
+    const result = await installWithReferences(['review-code'], '', true, {
       hosts: ['codex', 'claude'],
       hostPaths: paths,
     })
@@ -63,23 +81,33 @@ describe('skill reference declarations', () => {
     expect(await listMissingSkillReferences(codexSkill)).toEqual([])
     expect(await listMissingSkillReferences(claudeSkill)).toEqual([])
 
-    const codexContract = readFileSync(join(codexSkill, 'references', 'review-contract.md'), 'utf-8')
-    const claudeContract = readFileSync(join(claudeSkill, 'references', 'review-contract.md'), 'utf-8')
-    expect(codexContract).toContain('/.codex/lyx/prompts/codex/reviewer.md')
-    expect(claudeContract).not.toContain('prompts/codex')
+    const codexContract = readFileSync(join(codexSkill, 'references', 'test-contract.md'), 'utf-8')
+    const claudeContract = readFileSync(join(claudeSkill, 'references', 'test-contract.md'), 'utf-8')
+    expect(codexContract).toContain('/.codex/lyx/config.toml')
+    expect(codexContract).toContain('host=codex')
+    expect(claudeContract).toContain('/.claude/lyx/config.toml')
+    expect(claudeContract).toContain('host=claude')
 
     const stale = join(codexSkill, 'references', 'stale.md')
     writeFileSync(stale, '# stale\n')
-    await installWorkflows(['review-code'], '', true, {
+    await installWithReferences(['review-code'], '', true, {
       hosts: ['codex'],
       hostPaths: paths,
     })
     expect(fs.existsSync(stale)).toBe(false)
+    vi.doUnmock('../installer-template')
   })
 
   it('fails loudly when a declared reference is absent from the package', async () => {
     const fakeRoot = join(base, 'fake-package')
     await fs.copy(join(import.meta.dirname, '..', '..', '..', 'templates'), join(fakeRoot, 'templates'))
+    const mainPath = join(fakeRoot, 'templates', 'skills', 'review-code.md')
+    const main = readFileSync(mainPath, 'utf-8')
+    writeFileSync(mainPath, main.replace('argument-hint:', [
+      'references:',
+      '  - references/review-contract.md',
+      'argument-hint:',
+    ].join('\n')))
     await fs.remove(join(fakeRoot, 'templates', 'skill-references', 'review-code', 'review-contract.md'))
 
     vi.resetModules()

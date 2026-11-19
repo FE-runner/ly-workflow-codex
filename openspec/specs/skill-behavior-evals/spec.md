@@ -92,4 +92,4 @@
 
 #### Scenario: propose 自审后继续外部流水线
 - **WHEN** 空仓库中用户一次确认“留在当前分支 + 全自动”，运行 propose 自审连续性场景
-- **THEN** opsx artifacts 与方案自审清单均不作为终态，current 在同一回合产生 context、propose commit 并继续 review-plan、apply、review-code 到 run-state normal
+- **THEN** opsx artifacts 不作为终态；方案自审逐项结论写入 `run-state.md` 的 `## 方案自审` 且不发送独立自审消息，current 在同一回合产生 context、propose commit 并继续 review-plan、apply、review-code 到 run-state normal

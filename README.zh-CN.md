@@ -45,7 +45,7 @@ lyx:
 - 执行者与推理档：`[host] reviewExecutor` / `codingExecutor`（取值 `main` / `subagent`，未配置等价 `main`）决定审查与实施由谁执行；`reviewReasoningEffort` / `codingReasoningEffort` 分别对应 `reviewModel` / `codingModel`，仅在对应执行者为 `subagent` 且值非空时随 spawn 传入 `reasoning_effort`。执行者为 `main` 时模型与推理档字段不生效，`lycx doctor` 输出 WARN。取值不做枚举强校验；交互 init / 菜单可选择"不覆盖（继承默认）"或覆盖指定档位，非交互 update 保留原值
 - 初始化向导采集流程：语言 → **宿主多选**（默认按已安装宿主与 `~/.codex` / `~/.claude` 是否存在勾选）→ 逐宿主采集：**两个宿主同一采集面 = 测试模式 → 审查范围 → 执行者二连 → 模型二连 → 推理档二连**（模型候选 = **默认继承当前会话模型（留空）** + **自定义输入** + 既有值；推理档候选 = **不覆盖（继承默认）** + 该宿主建议档位 + 自定义输入 + 既有值，codex = minimal/low/medium/high/max、Claude Code = low/medium/high/xhigh/max；不以 provider `/models` 或任何内置/维护清单为候选来源）→ 配置摘要；**Codex 额外前置**：API 提供方（`~/.codex/config.toml` 现有 `[model_providers.*]` / OpenAI 官方 / 自定义）→ **Codex 现状检测（只读**：主会话模型 `~/.codex/config.toml` 顶层 `model` / provider 条目 / `~/.codex/models.json` 注册规模）。Claude Code 侧仍不采集、不写入其自身的 provider / settings 配置
 - 菜单"配置模式、执行者与模型"：按宿主选择后走与 `lycx init` 相同的采集面（测试模式 → 审查范围 → 执行者二连 → 模型二连 → 推理档二连）；未触碰字段保留既有值，写回后按当前配置重渲染产物（Claude Code 同时重渲子代理定义）
-- 流程可靠性：`propose` / `review-plan` / `review-code` 使用主 `SKILL.md` + 按需 `references/`，最终主文件低于 20,000 字节；每个 change 使用 `run-state.md` 的固定 frontmatter 与正文记录阶段、任务、审查轮次、验证证据、机械裁决和下一步；核心 skill 行为评测见 [docs/skill-behavior-evals.md](./docs/skill-behavior-evals.md)，可用 `pnpm eval:skills -- --version both --baseline-ref dce2466` 显式运行真实 baseline/current 对照——它是开发工具，不是用户命令，也不进入默认 `pnpm test` 或 CI
+- 流程可靠性：`propose`、`review-plan`、`review-code` 都使用自包含主 `SKILL.md`，不依赖 sidecar 才能续跑；方案自审逐项结论写入 `run-state.md` 的 `## 方案自审`。每个 change 使用 `run-state.md` 的固定 frontmatter 与正文记录阶段、任务、审查轮次、验证证据、机械裁决和下一步；核心 skill 行为评测见 [docs/skill-behavior-evals.md](./docs/skill-behavior-evals.md)，可用 `pnpm eval:skills -- --version both --baseline-ref dce2466` 显式运行真实 baseline/current 对照——它是开发工具，不是用户命令，也不进入默认 `pnpm test` 或 CI
 
 ## 宿主
 
@@ -72,8 +72,8 @@ lyx:
 | `@lyx-apply` | 启动读取 run-state 并用 git/tasks 核对；按 `codingExecutor` 实施，逐任务记录证据与机械裁决，主会话确认后回写 context/run-state 并统一 commit |
 | `@lyx-fix` | 小需求 / bug 轻量路径：不建 change；bug 分支执行根因调查、单假设验证、3 次失败后质疑架构；最终输出测试 / 类型检查证据，不执行生产构建 |
 | `@lyx-archive` | 启动恢复核对 + 测试 / 类型检查验证（不含生产构建）+ final testMode/证据写入 run-state + 归档 commit + 按 run-state isolation 分支收尾 |
-| `@lyx-review-plan` | 读取 run-state 和 references；检查方案完整性及实施就绪（文件/锚点、接口、验证命令、预期结果、独立边界），执行审查/修复循环并写快照与新鲜证据 |
-| `@lyx-review-code` | 读取 run-state 和 references；执行代码审查/修复循环，保留 Critical/Warning/Info、双轴标注和终止条件，写快照与新鲜证据 |
+| `@lyx-review-plan` | 读取 run-state；检查方案完整性及实施就绪（文件/锚点、接口、验证命令、预期结果、独立边界），执行审查/修复循环并写快照与新鲜证据 |
+| `@lyx-review-code` | 读取 run-state；执行代码审查/修复循环，保留 Critical/Warning/Info、双轴标注和终止条件，写快照与新鲜证据 |
 | `@lyx-release` | GitFlow 四场景发版（feature/release/hotfix/dev-offline），SemVer 自动推导版本号；上线合并二选一（远端 PR 默认 / 本地直接合并）+ 主分支名检测（master/main） |
 | `@lyx-changelog` | 按 commit 前缀分组生成/更新 Keep a Changelog 格式的 CHANGELOG.md |
 | `@lyx-publish` | npm 包发布四场景（bmc 私域 Nexus / GitHub Packages / npmjs + GitHub Release / CI 自动发布），前置检查→版本号推导→构建→发布→验证 |

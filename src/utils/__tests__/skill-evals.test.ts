@@ -206,17 +206,17 @@ describe('skill eval fixtures and cleanup', () => {
     expect(askConfig.host.testMode).toBe('ask')
   })
 
-  it('installs current references with fixture HOME role paths', async () => {
+  it('installs self-contained core skills with fixture HOME role paths', async () => {
     const base = mkdtempSync(join(tmpdir(), 'lyx-eval-install-'))
     const fixture = { repoDir: join(base, 'repo'), homeDir: join(base, 'home') }
     try {
       await installEvalSkillBundle(ROOT, fixture, 'review-plan')
       const skillPath = join(fixture.repoDir, '.agents', 'skills', 'lyx-review-plan', 'SKILL.md')
       const skillContent = readFileSync(skillPath, 'utf8')
-      expect(skillContent).toContain('references/review-contract.md')
+      expect(skillContent).not.toContain('references/review-contract.md')
+      expect(skillContent).toContain(`${fixture.homeDir}/.codex/lyx/prompts/codex/plan-reviewer.md`)
       const referencePath = join(fixture.repoDir, '.agents', 'skills', 'lyx-review-plan', 'references', 'review-contract.md')
-      expect(existsSync(referencePath)).toBe(true)
-      expect(readFileSync(referencePath, 'utf8')).toContain(`${fixture.homeDir}/.codex/lyx/prompts/codex/plan-reviewer.md`)
+      expect(existsSync(referencePath)).toBe(false)
     }
     finally {
       rmSync(base, { recursive: true, force: true })
@@ -290,6 +290,7 @@ describe('skill eval fixtures and cleanup', () => {
       const before = await evalCase.verifySideEffects(fixture)
       expect(before.passed).toBe(false)
       expect(before.evidence).toContain('contextCreated=false')
+      expect(before.evidence).toContain('selfReviewRecorded=false')
       expect(before.evidence).toContain('proposeCommit=(missing)')
       expect(before.evidence).toContain('documentCreated=false')
     }

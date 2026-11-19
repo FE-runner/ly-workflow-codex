@@ -8,7 +8,7 @@
 
 ## 目录总览
 
-模板**正文单源共享**，宿主差异收敛到 `hosts/<id>/`，安装期由各宿主适配器（`src/hosts/<id>/adapter.ts`）渲染。长 skill 的主 `SKILL.md` 通过 frontmatter `references:` 声明同目录 `references/`，安装器从 `skill-references/` 渲染并复制。模板不随 TS 宿主包迁入 `src/`：`PACKAGE_ROOT` 解析要求包根存在顶层 `templates/`，`package.json` 的 `files` 收录 `templates/hosts/`、`templates/skill-references/` 与 `templates/skills/`。
+模板**正文单源共享**，宿主差异收敛到 `hosts/<id>/`，安装期由各宿主适配器（`src/hosts/<id>/adapter.ts`）渲染。当前 `propose` / `review-plan` / `review-code` 都是单文件自包含 skill；安装器仅对未来显式声明 `references:` 的 skill 提供可选 sidecar 渲染与复制。模板不随 TS 宿主包迁入 `src/`：`PACKAGE_ROOT` 解析要求包根存在顶层 `templates/`，当前 `package.json` 的 `files` 收录 `templates/hosts/` 与 `templates/skills/`；未来重新引入 sidecar 时再增加对应发布条目。
 
 模板行为评测使用 `pnpm eval:skills`，位于 `src/evals/`；它不在本目录安装，也不是用户可调用的第 16 个 `lyx-*` skill。
 
@@ -16,7 +16,6 @@
 |------|------|----------|
 | `skills/` | 15 个 SKILL.md 共享正文（`name`/`description`/`argument-hint` frontmatter）。宿主差异处以 `{{HOST_FRAGMENT:<片段>}}` 占位，另有 `{{LYX_CONFIG_FILE}}` / `{{HOST_SKILLS_DIR}}` / `{{HOST_ID}}` 三个宿主变量；正文中的 `@lyx-<command>` 是**命令标识**（codex 原样保留，claude 渲染为 `/lyx-<command>`，`@openspec-<skill>` 渲染为 `openspec-<skill>`） | codex：`~/.agents/skills/lyx-*/SKILL.md`；claude：`~/.claude/skills/lyx-*/SKILL.md` |
 | `bundled-skills/` | 2 个 lyx 内部包装 skill（`lyx-ponytail` / `lyx-code-simplification`）。随包发布，不注册为生命周期命令；`lycx init` 缺失补齐，`--force` 刷新，已有非 force 保留 | `<skillsDir>/lyx-ponytail/`、`<skillsDir>/lyx-code-simplification/` |
-| `skill-references/<command>/` | 长 skill 的按需 references（完整编排、恢复/证据规则）。主文件 frontmatter 的 `references:` 列表是唯一 required-reference 契约；不进入命令注册表 | `<skillsDir>/lyx-<command>/references/` |
 | `hosts/codex/fragments/<命令>/` | codex 宿主片段（审查 / 实施子代理的 spawn、`send_input` 复用、模型与推理档、ROLE_FILE 角色词路径、`codex "…"` 兜底续接命令等） | 渲染进 codex 产物 |
 | `hosts/codex/prompts/` | 2 个审查角色提示词（plan-reviewer / reviewer），codex 审查命令 ROLE_FILE 以绝对路径引用 | `~/.codex/lyx/prompts/codex/` |
 | `hosts/claude/fragments/<命令>/` | claude 宿主片段（`Agent` 工具调用自定义子代理、`SendMessage` 续跑、等待语义如实标注、模型经子代理定义落实、`claude "…"` 兜底续接命令、`@lyx-init` 额外产出 `CLAUDE.md`） | 渲染进 claude 产物 |
@@ -30,12 +29,12 @@
 |------|------|------|
 | `init.md` | 真逻辑 | 生成 AGENTS.md（claude 宿主额外产出导入它的 `CLAUDE.md`）+ `lycx openspec ensure --host <当前宿主>` + 自动 commit |
 | `explore.md` | 薄壳委托 | 直接调用 `@openspec-explore skill`，收敛到方案时按规模提示转 `@lyx-fix` / `@lyx-propose` |
-| `propose.md` | 主文件 + references | 主文件保留入口、按需读取指令和简短“全自动执行不变量”，含同级下一阶段 bundle、opsx planning-boundary 从属规则与方案自审内部 checkpoint；`propose-contract.md` 承载隔离、恢复、提交、流水线与方案自审细节，`recovery-and-evidence.md` 承载 run-state frontmatter、机械裁决和证据规则；新 change 不向 `.openspec.yaml` 写 lyx 扩展字段 |
-| `apply.md` | 真逻辑 | 启动先读 run-state 并核对 git/tasks；按 `codingExecutor` 实施、逐任务记录证据与机械裁决，主会话确认后回写 context/run-state 并统一提交 apply 阶段 commit；全自动下主文件保留读取同级 `lyx-review-code/SKILL.md` 与 references 的交接锚点 |
+| `propose.md` | 自包含主文件 | 单文件承载隔离、恢复、artifacts、run-state、方案自审、context、metadata、propose commit、全自动流水线和机械裁决；方案自审逐项结论写入 `run-state.md` 的 `## 方案自审`，不得作为独立 assistant 消息发送；新 change 不向 `.openspec.yaml` 写 lyx 扩展字段 |
+| `apply.md` | 真逻辑 | 启动先读 run-state 并核对 git/tasks；按 `codingExecutor` 实施、逐任务记录证据与机械裁决，主会话确认后回写 context/run-state 并统一提交 apply 阶段 commit；全自动下主文件保留完整读取同级 `lyx-review-code/SKILL.md` 的交接锚点 |
 | `fix.md` | 真逻辑 | 小需求 / bug 轻量路径：不建 change；bug 分支执行根因调查、单假设验证、3 次失败后质疑架构；最终输出测试 / 类型检查证据，不执行生产构建 |
 | `archive.md` | 真逻辑 | 启动恢复核对 + archive 前测试 / 类型检查（不含生产构建）+ final testMode/证据写入 run-state + 归档 commit + 分支收尾 |
-| `review-plan.md` | 主文件 + references | 主文件保留入口和简短“全自动执行不变量”，含读取同级 `lyx-apply/SKILL.md` 与 references 的交接锚点；完整审查契约与恢复/证据规则在 references，含实施可执行性检查 |
-| `review-code.md` | 主文件 + references | 主文件只保留入口；完整审查契约与恢复/证据规则在 references，含 run-state 与新鲜证据要求 |
+| `review-plan.md` | 自包含主文件 | 单文件承载审查判级、修复循环、提交、快照、恢复与新鲜证据，并保留读取同级 `lyx-apply/SKILL.md` 的全自动交接锚点 |
+| `review-code.md` | 自包含主文件 | 单文件承载审查判级、修复循环、提交、快照、恢复与新鲜证据；不要求下一阶段 sidecar |
 | `commit.md` `rollback.md` `clean-branches.md` | Git 工具 | 不变 |
 | `worktree.md` | Git 工具 | 默认 `~/.ly/worktrees/<项目名>/` 单层平铺；`switch` 子命令已移除，隔离切换由 `@lyx-propose` 触发；propose 创建隔离时把 metadata 写入 run-state |
 | `release.md` | 真逻辑 | GitFlow 四场景（feature/release/hotfix/dev-offline），SemVer + Conventional Commits 自动推导版本号 |

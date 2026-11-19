@@ -84,16 +84,22 @@
 - **WHEN** 自审列出业务判断类开放问题并用 AskUserQuestion 询问，用户拒绝/取消回答
 - **THEN** 命令停止后续编排（不执行 index 检查、不 commit、全自动流水线不启动），方案 artifacts 留在工作区，报告已有结论清单与未决问题，转人工处理
 
-### Requirement: 自审必须产出逐项结论清单，禁止一句带过
-方案自审 SHALL 产出可见的**逐项结论清单**，对四项检查中的每一子项（每条 What Change 的闭环情况、每个 Modified Capability 的基线波及情况、每个通用维度）分别标注结论：通过 / 不适用（含理由）/ 已修复（含改动说明）/ 待用户决策（含问题）。SHALL NOT 以"自审通过，无问题"之类的一句总结代替逐项清单；存在"待用户决策"项时 SHALL 在清单中列出完整问题再询问。
+### Requirement: 自审逐项结论写入 run-state，禁止一句带过或独立消息停住
+方案自审 SHALL 把**逐项结论**写入 `openspec/changes/<change-name>/run-state.md` 的 `## 方案自审` 正文，对每项检查的每一子项（每条 What Change 的闭环情况、每个 Modified Capability 的基线波及情况、每个通用维度、每个核心 task 的实施就绪情况）分别标注结论：通过 / 不适用（含理由）/ 已修复（含改动说明）/ 待用户决策（含问题）。SHALL NOT 以"自审通过，无问题"之类的一句总结代替逐项结论；存在"待用户决策"项时 SHALL 从 run-state 提炼完整问题再询问。
 
-#### Scenario: 全部通过时仍需逐项列出
-- **WHEN** 自审四项检查全部通过、无需修复、无开放问题
-- **THEN** 报告仍逐项列出每条 What Change/每个基线 Requirement/每个通用维度的"通过"结论，而非一句"自审通过"
+方案自审结论 SHALL NOT 作为独立的 assistant 消息输出。自审判定完成后 SHALL 直接通过文件工具更新 run-state，并在无待用户决策、失败或终止条件时继续 context、metadata 与 propose commit；不得用“下一步将...”等文字代替工具动作。
+
+#### Scenario: 全部通过时仍需逐项写入
+- **WHEN** 自审全部通过、无需修复、无开放问题
+- **THEN** `run-state.md` 的 `## 方案自审` 仍逐项记录每条 What Change、每个基线 Requirement、每个通用维度和每个核心 task 的"通过"结论，而非一句"自审通过"
+
+#### Scenario: 自审完成后不输出独立消息
+- **WHEN** 自审判定完成且无待用户决策项
+- **THEN** 当前回合通过文件工具写入 `## 方案自审`，随后直接产出 context.md、更新 run-state 并提交 propose 阶段 commit，不先发送独立自审清单消息
 
 #### Scenario: 不适用维度必须写明理由
 - **WHEN** 某通用维度（如并发）判定为不适用
-- **THEN** 逐项结论清单中该维度标注"不适用"+ 具体理由；未写理由的 silent skip 视为自审未执行该项
+- **THEN** run-state 的逐项结论中该维度标注"不适用"+ 具体理由；未写理由的 silent skip 视为自审未执行该项
 
 ### Requirement: propose 产物按风险测试策略生成
 
@@ -440,7 +446,7 @@ run-state frontmatter 不可读或结构非法时，propose/apply SHALL 停止�
 - **THEN** propose 自审把该问题列为待用户决策，不自行补默认行为
 
 ### Requirement: propose 初始化 change 运行账本
-`@lyx-propose` SHALL 在真实 change 名确认后、方案自审开始前创建 `run-state.md`，以固定 YAML frontmatter 初始记录 isolation metadata、执行模式、`stage: propose-self-review`、流水线阶段、propose 基线、`testModeDecision`（如有）和下一步安全动作；自审与 context.md 完成后再增量写入自审结论摘要。该文件 SHALL 作为 change artifact 与 context.md 一同纳入 propose 阶段提交，但不得替代 proposal/design/tasks。
+`@lyx-propose` SHALL 在真实 change 名确认后、方案自审开始前创建 `run-state.md`，以固定 YAML frontmatter 初始记录 isolation metadata、执行模式、`stage: propose-self-review`、流水线阶段、propose 基线、`testModeDecision`（如有）和下一步安全动作；自审完成后 SHALL 把完整逐项结论写入正文 `## 方案自审`，再继续 context.md 与 propose commit。该文件 SHALL 作为 change artifact 与 context.md 一同纳入 propose 阶段提交，但不得替代 proposal/design/tasks。
 
 propose SHALL NOT 为新建 change 向 `.openspec.yaml` 写入 `lyx:` 或 `x-lyx:`；隔离、测试模式和运行坐标只写入 run-state。
 
@@ -457,15 +463,15 @@ propose SHALL NOT 为新建 change 向 `.openspec.yaml` 写入 `lyx:` 或 `x-lyx
 - **THEN** `.openspec.yaml` 只包含 OpenSpec 官方字段，不包含 `lyx:` 或 `x-lyx:`
 
 ### Requirement: 全自动阶段交接显式加载下一 skill bundle
-`@lyx-propose` 的全自动流水线在进入 review-plan、apply 或 review-code 前，SHALL 以当前 skill 所在目录为锚点解析同级 `lyx-<next-command>/SKILL.md`，完整读取该主文件及其 frontmatter 声明的全部 references，再按该 bundle 执行。仅输出 `@lyx-<command>`、写出下一阶段名称或等待用户再次触发 SHALL NOT 视为已交接。
+`@lyx-propose` 的全自动流水线在进入 review-plan、apply 或 review-code 前，SHALL 以当前 skill 所在目录为锚点解析并完整读取同级 `lyx-<next-command>/SKILL.md`，再按该 skill 执行。仅输出 `@lyx-<command>`、写出下一阶段名称或等待用户再次触发 SHALL NOT 视为已交接。
 
 #### Scenario: review-plan 正常清零后进入 apply
 - **WHEN** 全自动执行中的 review-plan 以正常清零结束，`run-state.md` 的下一步为 apply
-- **THEN** 当前回合读取同级 `lyx-apply/SKILL.md` 与声明的 references，随后以同一 change 名继续 apply，不在阶段报告后结束
+- **THEN** 当前回合完整读取同级 `lyx-apply/SKILL.md`，随后以同一 change 名继续 apply，不在阶段报告后结束
 
 #### Scenario: apply 正常完成后进入 review-code
 - **WHEN** apply 实施、验证与阶段 commit 均正常完成，且 `run-state.md` 的下一步为 review-code
-- **THEN** 当前回合读取同级 `lyx-review-code/SKILL.md` 与声明的 references，随后继续代码审查
+- **THEN** 当前回合完整读取同级 `lyx-review-code/SKILL.md`，随后继续代码审查
 
 #### Scenario: 只输出命令标识不算交接
 - **WHEN** 阶段报告写有“下一步运行 `@lyx-apply <change-name>`”，但没有读取 `lyx-apply` bundle
@@ -476,8 +482,8 @@ propose SHALL NOT 为新建 change 向 `.openspec.yaml` 写入 `lyx:` 或 `x-lyx
 - **THEN** 不加载下一阶段 bundle，如实报告停止原因并结束全自动回合
 
 #### Scenario: 方案自审后先完成 propose 内部步骤
-- **WHEN** 全自动 propose 输出方案自审逐项结论清单且无待用户决策项
-- **THEN** 同一回合依次产出 context.md、更新包含 isolation metadata 的 run-state，并提交 propose 阶段 commit，之后才读取 review-plan bundle
+- **WHEN** 全自动 propose 完成方案自审且无待用户决策项
+- **THEN** 同一回合先把逐项结论写入 run-state 的 `## 方案自审`，再产出 context.md、更新 isolation metadata，并提交 propose 阶段 commit，之后才读取 review-plan bundle
 
 #### Scenario: opsx planning boundary 不终止 lyx 编排
 - **WHEN** 被委托的 opsx:propose 完成 artifacts 并声明 planning boundary 或 “stop after artifacts”

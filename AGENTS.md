@@ -12,7 +12,7 @@
 
 ## 项目定位
 
-**ly-workflow-codex** 是 ly-workflow 的单 Agent 独立版，支持 **codex** 与 **claude**（Claude Code）两个宿主：无 wrapper、无 Web UI、无 routing/implementer 概念。单 Agent 模式 = 同一会话内自己 propose/review/apply；审查与实施主体由当前宿主配置的 `[host] reviewExecutor`/`codingExecutor` 决定（未配置等价 `main` = 主 agent 直接执行；`subagent` = 独立子代理，非 fork + 范围点名，软上下文经 change 目录 `context.md` 到达），模型字段 `reviewModel`/`codingModel` 仅在对应执行者为 `subagent` 时生效。长 skill 使用主 `SKILL.md` + `references/` 分层；change 使用 `run-state.md` 保存可恢复执行状态和验证证据。命令模板 / 宿主片段 / 子代理定义 / sidecar references 结构见 [templates/CLAUDE.md](./templates/CLAUDE.md)。
+**ly-workflow-codex** 是 ly-workflow 的单 Agent 独立版，支持 **codex** 与 **claude**（Claude Code）两个宿主：无 wrapper、无 Web UI、无 routing/implementer 概念。单 Agent 模式 = 同一会话内自己 propose/review/apply；审查与实施主体由当前宿主配置的 `[host] reviewExecutor`/`codingExecutor` 决定（未配置等价 `main` = 主 agent 直接执行；`subagent` = 独立子代理，非 fork + 范围点名，软上下文经 change 目录 `context.md` 到达），模型字段 `reviewModel`/`codingModel` 仅在对应执行者为 `subagent` 时生效。`propose`、`review-plan`、`review-code` 都使用自包含主 `SKILL.md`；change 使用 `run-state.md` 保存可恢复执行状态、方案自审逐项结论和验证证据。命令模板 / 宿主片段 / 子代理定义结构见 [templates/CLAUDE.md](./templates/CLAUDE.md)。
 
 **宿主边界**：共享层（`src/utils/` 的安装、配置读写、前置检查）只认适配器接口与宿主注册表，不出现任何宿主名与宿主路径；宿主专属知识（路径、模板渲染、附加产物、体检项、卸载清单）全部在 `src/hosts/<id>/`。新增宿主 = 新增宿主包 + 模板片段 + 注册表登记。
 
@@ -92,7 +92,7 @@ src/types/                   LyConfig（host 节）/ WorkflowConfig / CLI 类型
 
 templates/skills/            15 个 SKILL.md 共享正文
 templates/bundled-skills/   2 个 lyx 内部包装 skill：lyx-ponytail / lyx-code-simplification
-templates/skill-references/ 长 skill 按需 references（propose / review-plan / review-code）
+templates/skill-references/ 未来 skill 的可选 references；当前核心 skill 不声明
 templates/hosts/codex/       codex 片段 + 角色词（→ ~/.codex/lyx/prompts/codex/）
 templates/hosts/claude/      claude 片段 + 子代理定义（→ ~/.claude/agents/lyx-*.md）
 docs/codex-exec-contract.md  审查子会话调用契约（DEPRECATED，历史参考）
@@ -163,8 +163,8 @@ testMode = "off"
 ## 审查执行模型（核心）
 
 - 审查范围 = **按 `reviewMode` 门控**（`full` / `plan-only` / `code-only` / `off`，未配置 / 空白 / 非法等价 `full`）：只决定编排入口 `@lyx-propose` 触发哪些审查关卡（全自动流水线与手动路径的 review-plan 询问），**不影响被直接调用的 `@lyx-review-plan` / `@lyx-review-code`**，也不影响 `@lyx-apply` 与 `@lyx-archive` 的归档前完整验证；被跳过的关卡打印显式状态行（`[跳过] review-plan（reviewMode=<取值>）`），其节点前置校验一并跳过；`lycx init` / 菜单先问 `testMode`，随后把 `reviewMode` 作为审查配置段第一问（`off` 时跳过 review 侧提问、既有值保留），`lycx doctor` 展示该字段并对非法取值 / `off` + review 侧字段非空输出 WARN
-- 全自动阶段交接 = **显式读取同级下一阶段 bundle**：propose / review-plan / apply 的主 `SKILL.md` 必须直接写明下一阶段为 review-plan / apply / review-code，并在阶段正常完成时读取同级 `lyx-<next-command>/SKILL.md` 及 frontmatter 声明的全部 references 后再执行。`@lyx-*` 是命令标识，不是可调用的跨 skill 工具；只输出 mention、下一阶段名称或“下一步应执行”不算交接。`run-state.md` 的下一步安全动作同时记录命令、同级路径、change 参数与继续条件
-- propose 内部续跑 = **opsx boundary 从属 + 自审 checkpoint**：`@openspec-propose` 的 planning-only / stop-after-artifacts 只约束其自身委托阶段，`@lyx-propose` artifacts 返回后继续自审、context/run-state 与 propose commit；方案自审清单必须输出，但不得被当作终态，输出后依次执行 5.5→5.6→5.7→6，commit 后才读取 review-plan。恢复时若 run-state frontmatter 的 `lyx.stage` 为 `propose-self-review` 且 artifacts 完整，沿用原 isolation / executionMode 续跑，不重复询问
+- 全自动阶段交接 = **显式读取同级下一阶段 bundle**：propose / review-plan / apply 的主 `SKILL.md` 必须直接写明下一阶段为 review-plan / apply / review-code，并在阶段正常完成时完整读取同级 `lyx-<next-command>/SKILL.md` 后再执行。`@lyx-*` 是命令标识，不是可调用的跨 skill 工具；只输出 mention、下一阶段名称或“下一步应执行”不算交接。`run-state.md` 的下一步安全动作同时记录命令、同级路径、change 参数与继续条件
+- propose 内部续跑 = **opsx boundary 从属 + 自审写账本**：`@openspec-propose` 的 planning-only / stop-after-artifacts 只约束其自身委托阶段，`@lyx-propose` artifacts 返回后继续自审、context/run-state 与 propose commit；方案自审逐项结论 SHALL 写入 `run-state.md` 的 `## 方案自审`，SHALL NOT 作为独立 assistant 消息输出，写账本后依次执行 5.5→5.6→5.7→6，commit 后才读取 review-plan。恢复时若 run-state frontmatter 的 `lyx.stage` 为 `propose-self-review` 且 artifacts 完整，沿用原 isolation / executionMode 续跑，不重复询问
 - 审查关卡 = **执行者可切换**（两个宿主语义一致；子代理机制按宿主落实：codex = 宿主 spawn + `send_input` 复用；claude = `Agent` 工具调用 `~/.claude/agents/lyx-*` 自定义子代理 + `SendMessage` 续跑，交互模式默认后台运行，等待语义表述为"结果必须被消费并如实报告"，不声称本轮同步阻塞）：`reviewExecutor = "main"`（默认）= 主 agent 直接自审，无 spawn、无逐条裁决、无驳回硬线，最多 2 轮；`reviewExecutor = "subagent"` = review-plan / review-code 各 spawn 1 个审查 subagent（非 fork spawn、只携带 TASK + 只审 change 范围），每条 Critical 由主会话逐条裁决——认可即修复，不认可必须附**可核验依据**（泛泛"误报"视为未完成裁决）；subagent 路径第 2 轮起默认 `send_input` 复用同一子代理，复用失败才重新 spawn
 - 软上下文载体 = **change 目录 `context.md`**：propose 阶段产出（内容边界自检）、apply 阶段维护（实施决策回写）、subagent 路径消费（TASK 只传路径）；执行者为 `main` 时主 agent 保有完整上下文，`context.md` 仅作决策留痕
 - 审查未修项快照 = **change 目录 `review-findings.md`**（快照式留痕，非台账）：review-plan / review-code 循环结束时按节 upsert 写入最后一轮**未被自动修复的 Warning**（不收 Info / Critical），Warning 条目连续编号；无论正常清零还是非正常终止，审查收尾后都只暂存该快照并生成独立 `docs(openspec)` commit（`--no-commit` 除外），因此可先合并、后归档；`@lyx-archive` 的 `git add -- openspec/` 再兜底归档前追加的就地标注并搬入 `archive/`。`@lyx-explore` 进入时扫描并**先询问后只列出未解决条目**（有 `- 解决：` 子项即视为已解决、不展示不计数；全部已解决时不询问）；该文件被排除在审查范围与审查修复 commit 之外，但仍由自己的精确路径快照 commit 落库。历史 Warning 被后续 change 解决时，在新 change 的 `proposal.md` 用 `## 解决的审查未修项` 声明锚点，由 `@lyx-archive` 向已归档快照追加追加式解决说明（原文不改、幂等、失败不阻断归档）；同一 change 内修复的 Warning 在 active 快照就地标注 `- 解决：本 change 内修复（commit <短 hash>）— …`（审查后同会话修复并提交后标注，或 `@lyx-archive` 归档前核对未标注条目、用户逐条确认后标注；必带 commit hash、按 hash 幂等；同会话标注另生独立快照 commit，归档前标注随归档 commit）；`@lyx-commit --all` 与 propose WIP commit 的全量暂存以 `':/' ':(top,exclude,glob)openspec/changes/*/review-findings.md'` 排除进行中快照
@@ -179,7 +179,7 @@ testMode = "off"
 
 ## 关键设计决策
 
-1. **`propose` 是编排入口，`apply`/`archive` 各带自动 commit，`explore` 是纯薄壳**：`propose.md` 包含创建方案前的隔离方式三选一询问（隔离 worktree【不在 worktree 内才问，从当前分支 HEAD 用 `git worktree add` 切出，切后同会话 cd 进 worktree 续跑——会话不断链，cd 校验失败即停，续接命令降级为异常兜底】/ 本项目切新分支【`git checkout -b`，无 baseline/无 cd/无兜底】/ 留在当前分支）、全自动/手动询问、真实 change 名（需求名）确认后立即同步当前会话标题（Codex 调 `set_thread_title`；Claude Code 当前版本提示 `/rename <change-name>`，失败如实报告但不阻断）、commit 前的方案自审（五项检查 + 逐项结论清单，机械断链直接修、业务判断类 AskUserQuestion 问用户）、每步 commit（`propose: <change-name>`）、全自动流水线（review-plan → apply → review-code）。`apply.md` 由 coding subagent 实施 + 主会话统一提交，`archive.md` 委托 opsx 技能后 commit，`explore.md` 只做参数转发 + 一句按规模分流的转向提示（小改动 → `@lyx-fix`，其余 → `@lyx-propose`）。
+1. **`propose` 是编排入口，`apply`/`archive` 各带自动 commit，`explore` 是纯薄壳**：`propose.md` 包含创建方案前的隔离方式三选一询问（隔离 worktree【不在 worktree 内才问，从当前分支 HEAD 用 `git worktree add` 切出，切后同会话 cd 进 worktree 续跑——会话不断链，cd 校验失败即停，续接命令降级为异常兜底】/ 本项目切新分支【`git checkout -b`，无 baseline/无 cd/无兜底】/ 留在当前分支）、全自动/手动询问、真实 change 名（需求名）确认后立即同步当前会话标题（Codex 调 `set_thread_title`；Claude Code 当前版本提示 `/rename <change-name>`，失败如实报告但不阻断）、commit 前的方案自审（五项检查；逐项结论写入 `run-state.md` 的 `## 方案自审`，不发送独立自审消息；机械断链直接修、业务判断类 AskUserQuestion 问用户）、每步 commit（`propose: <change-name>`）、全自动流水线（review-plan → apply → review-code）。`apply.md` 由 coding subagent 实施 + 主会话统一提交，`archive.md` 委托 opsx 技能后 commit，`explore.md` 只做参数转发 + 一句按规模分流的转向提示（小改动 → `@lyx-fix`，其余 → `@lyx-propose`）。
 2. **审查走单审查 subagent（非 fork）而非 wrapper/API/`codex exec` 子会话**：无 ly-wrapper、无 Go 二进制、无 Web UI、无 exec 契约维护面。非 fork spawn（宿主 V1 `fork_context` 默认 false / V2 `fork_turns: none`）不携带对话历史，token 成本约为双审 fork 模型的 1/4~1/6；软上下文经 change 目录 `context.md` 显式到达（可审计、随 commit 留痕），主会话逐条裁决（不认可须附可核验依据）+ 驳回硬线双口径补偿裁决质量；执行约定内联进模板，不随 codex CLI 版本漂移。
 3. **实施走 coding subagent 而非本会话自实施**：不存在 routing 概念与外部实施后端；coding subagent 非 fork spawn、只实施 change 范围、可指定模型、经 context.md 获取软上下文，改动回传主会话，由主会话确认后回写 context.md 并统一提交（提交权收归主会话）。
 4. **每宿主一个自包含配置文件**：`~/.codex/lyx/config.toml` 与 `~/.claude/lyx/config.toml`，配置文件存在即已安装（部分卸载 = 删该宿主配置与产物），`general.version` 按宿主记录；宿主配置节归一为 `[host]`（历史 `[codexHost]` 兼容读取）；执行者字段决定审查与实施主体（未配置等价 `main`），模型与推理档仅在对应执行者为 `subagent` 时生效；交互 init / 菜单可选择"不覆盖（清除字段）"或覆盖指定档位，非交互 update 与未触碰字段保留原值。
@@ -197,7 +197,7 @@ testMode = "off"
 
 12. **ask 回答存于 run-state**：新 change 的 `run-state.md` frontmatter 可选 `lyx.testModeDecision: normal | off | null`。propose 在生成前询问，change 创建后写入；apply/review/archive 优先消费 run-state 决策，缺失时补问并随对应阶段 commit 提交。旧 change 没有 YAML frontmatter 时可只读回退 `.openspec.yaml lyx:`，但新流程不写回、不迁移。配置 normal/off 优先于历史决策；决策写入后允许在阶段失败/`--no-commit`/非清零终止时保持 dirty，供恢复复用。
 
-13. **长 skill 使用 references 分层**：`propose`、`review-plan`、`review-code` 的主 `SKILL.md` 保持低于 20,000 字节，frontmatter `references:` 声明必需 sidecar；安装器按声明渲染并复制到安装目录 `references/`，缺失时安装与 doctor 报错。主文件保留入口、按需读取指令，以及简短的“全自动执行不变量”；该不变量覆盖 `propose`、`review-plan`、`apply`，直接写明同级下一阶段 bundle 与 references 全读，完整判据和详细流程仍在 references。
+13. **核心 skill 全部单文件自包含**：`propose`、`review-plan`、`review-code` SHALL 在各自主 `SKILL.md` 内承载完整流程、判级、修复循环、提交、恢复与恢复证据规则，SHALL NOT 声明 `references:`。安装器继续保留对未来 skill 可选 sidecar references 的通用支持，但当前核心流程不得依赖它们。需要交接的阶段直接写明完整读取同级下一阶段 `SKILL.md`。
 
 14. **change 使用 run-state.md 恢复**：每个活跃 change 由 propose 创建 `run-state.md`，记录阶段、commit、任务进度、审查轮次/终止类型、验证证据、机械裁决和下一步。它随各阶段 commit 管理，与 `context.md` 分责；恢复时以 run-state + git + tasks 相互核对，冲突以可核验事实为准。
 

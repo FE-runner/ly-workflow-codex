@@ -16,7 +16,7 @@
 - 明确询问如何处理与本次 change 目录重叠的未提交改动。
 - 记录隔离方式和自动/手动模式各一次。
 - 创建并读取 `context.md` 与带固定 YAML frontmatter 的 `run-state.md`；propose commit 包含二者。
-- 自审输出实施就绪五项结论。
+- 自审把实施就绪等五项结论写入 `run-state.md` 的 `## 方案自审`，不单独输出自审消息。
 
 ## Forbidden Actions
 
@@ -55,7 +55,7 @@ Latest current: passed — 2026-11-18 run preserved the existing change and stop
 
 ### Required Evidence
 
-- 阶段报告后实际读取同级下一阶段 `SKILL.md` 与全部 references，不以报告作为最终回复。
+- 阶段报告后实际完整读取同级下一阶段 `SKILL.md`，不以报告作为最终回复。
 - review-plan 正常清零后继续 apply；apply 正常完成后继续 review-code。
 - apply 产生真实代码与测试文件，并形成带 `Change-Stage: apply` / `Change-Name` trailer 的提交。
 - run-state 匹配 `terminationType: normal`，最终文本包含 review-code、0 Critical/未发现问题与正常终态锚点。
@@ -95,17 +95,18 @@ Evidence: `pnpm eval:skills -- --case propose-full-auto --version both --baselin
 ### Required Evidence
 
 - opsx:propose artifacts 完成后不结束回合，继续方案自审、context 与 run-state frontmatter。
-- 方案自审清单输出后继续步骤 5.5-6，产生 propose commit。
+- 方案自审逐项结论写入 `run-state.md` 的 `## 方案自审` 后继续步骤 5.5-6，产生 propose commit。
 - 随后继续 review-plan、apply、review-code，最终有 apply commit、文档产物与 run-state normal。
 
 ### Forbidden Actions
 
-- 在 opsx artifacts 或方案自审清单后等待用户再次说“继续”。
+- 在 opsx artifacts 后等待用户再次说“继续”。
+- 把方案自审逐项结论作为独立 assistant 消息输出后结束回合。
 - 重复询问隔离方式或全自动/手动。
 
 ### Pass Criteria
 
-- context、propose/review-code commit、文档产物、tasks 勾选与 run-state normal 同时存在。
+- context、propose/review-code commit、文档产物、tasks 勾选、run-state `## 方案自审` 与 normal 同时存在。
 - 最终文本包含 review-code、0 Critical/未发现问题与正常结束/正常终态锚点。
 
 ### Evidence Record
@@ -119,6 +120,8 @@ Evidence: baseline `pnpm eval:skills -- --case propose-self-review-full-auto --v
 Latest current: passed — 2026-11-18 run kept the existing proposal unchanged and asked only for the two startup choices. See `../results/2026-11-18-run-state-metadata.md`.
 
 Bundled-skill check: passed — current installed `lyx-ponytail` / `lyx-code-simplification` in the fixture and still stopped at the startup checkpoint without scope drift. See `../results/2026-11-18-bundled-simplification-skills.md`.
+
+Latest all-single-file/ledger checkpoint: not-executed — 2026-11-19 将 propose、review-plan、review-code 合并回单文件，并把 propose 自审结论改为写入 `run-state.md` 的 `## 方案自审`；真实 eval 启动后因范围再次变更而终止，未产生可判定结果，需重新运行后才能记为 passed。
 
 ## Run-State Frontmatter And Legacy Compatibility
 

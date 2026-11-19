@@ -13,7 +13,7 @@ function readSpec(id: string): string {
 describe('run-state lifecycle contract', () => {
   it('separates semantic context from execution state and records completed work', () => {
     const spec = read('openspec/specs/execution-run-state/spec.md')
-    const propose = read('templates/skill-references/propose/recovery-and-evidence.md')
+    const propose = read('templates/skills/propose.md')
     expect(spec).toContain('`context.md` 保存讨论语义和取舍背景')
     expect(spec).toContain('`run-state.md` 只保存可恢复执行状态')
     expect(propose).toContain('已完成任务: <done>/<total>')
@@ -39,20 +39,19 @@ describe('run-state lifecycle contract', () => {
   })
 
   it('persists full-auto mode and keeps intermediate stage reports non-terminal', () => {
-    const propose = read('templates/skill-references/propose/propose-contract.md')
+    const propose = read('templates/skills/propose.md')
     const apply = read('templates/skills/apply.md')
-    const reviewPlan = read('templates/skill-references/review-plan/review-contract.md')
-    const recovery = read('templates/skill-references/propose/recovery-and-evidence.md')
+    const reviewPlan = read('templates/skills/review-plan.md')
     const runStateSpec = readSpec('execution-run-state')
     const proposeSpec = read('openspec/specs/ly-propose-flow/spec.md')
 
-    expect(recovery).toContain('executionMode: full-auto | manual')
-    expect(recovery).toContain('pipelineStage: review-plan | apply | review-code | none')
-    expect(recovery).toContain('testModeDecision: normal | off | null')
-    expect(recovery).toContain('nextSafeAction:')
+    expect(propose).toContain('executionMode: full-auto | manual')
+    expect(propose).toContain('pipelineStage: review-plan | apply | review-code | none')
+    expect(propose).toContain('testModeDecision: normal | off | null')
+    expect(propose).toContain('nextSafeAction:')
     expect(propose).toContain('`EXECUTION_MODE=full-auto`')
-    expect(propose).toContain('阶段报告非终态')
-    expect(propose).toContain('SHALL NOT 在此结束回合')
+    expect(propose).toContain('自审收口非终态')
+    expect(propose).toContain('SHALL NOT 先输出独立自审消息')
     expect(reviewPlan).toContain('阶段报告非终态')
     expect(reviewPlan).toContain('SHALL NOT 等待用户再次触发')
     expect(apply).toContain('阶段报告非终态')
@@ -66,9 +65,6 @@ describe('run-state lifecycle contract', () => {
     const proposeMain = read('templates/skills/propose.md')
     const reviewPlanMain = read('templates/skills/review-plan.md')
     const applyMain = read('templates/skills/apply.md')
-    const proposeContract = read('templates/skill-references/propose/propose-contract.md')
-    const recovery = read('templates/skill-references/propose/recovery-and-evidence.md')
-
     expect(proposeMain).toContain('全自动执行不变量（最高优先级）')
     expect(proposeMain).toContain('不得结束当前回合')
     expect(proposeMain).toContain('run-state.md')
@@ -77,34 +73,34 @@ describe('run-state lifecycle contract', () => {
     expect(proposeMain).toContain('lyx-review-code/SKILL.md')
     expect(proposeMain).toContain('SHALL NOT 视为已进入下一阶段')
     expect(proposeMain).toContain('Planning boundary')
-    expect(proposeMain).toContain('方案自审清单 MUST 输出')
-    expect(proposeMain).toContain('propose 内部 checkpoint')
+    expect(proposeMain).toContain('方案自审逐项结论 MUST 写入')
+    expect(proposeMain).toContain('SHALL NOT 作为独立 assistant 消息输出')
     expect(proposeMain).toContain('propose-self-review')
     expect(reviewPlanMain).toContain('全自动执行不变量（最高优先级）')
     expect(reviewPlanMain).toContain('正常清零')
     expect(reviewPlanMain).toContain('lyx-apply/SKILL.md')
-    expect(reviewPlanMain).toContain('frontmatter 声明的全部 references')
+    expect(reviewPlanMain).toContain('阶段报告非终态')
     expect(applyMain).toContain('全自动执行不变量（最高优先级）')
     expect(applyMain).toContain('lyx-review-code/SKILL.md')
-    expect(applyMain).toContain('frontmatter 声明的全部 references')
-    expect(recovery).toContain('下一阶段命令、同级 skill 路径、change 参数和继续条件')
-    expect(recovery).toContain('lyx-<next-command>/SKILL.md')
+    expect(applyMain).toContain('阶段报告非终态')
+    expect(proposeMain).toContain('下一阶段命令、同级 skill 路径、change 参数和继续条件')
+    expect(proposeMain).toContain('lyx-<next-command>/SKILL.md')
 
-    expect(proposeContract).toContain('### 4.5 初始化 run-state.md（方案自审前）')
-    expect(proposeContract).toContain('### 0. 启动恢复（创建方案前）')
-    expect(proposeContract).toContain('Planning boundary 从属规则（SHALL）')
-    expect(proposeContract).toContain('propose 内部 checkpoint')
-    expect(proposeContract).toContain('lyx.stage: propose-self-review')
-    expect(proposeContract.indexOf('### 4.5 初始化 run-state.md（方案自审前）'))
-      .toBeLessThan(proposeContract.indexOf('### 5. 方案自审'))
+    expect(proposeMain).toContain('### 4.5 初始化 run-state.md（方案自审前）')
+    expect(proposeMain).toContain('### 0. 启动恢复（创建方案前）')
+    expect(proposeMain).toContain('Planning boundary 从属规则（SHALL）')
+    expect(proposeMain).toContain('## 方案自审')
+    expect(proposeMain).toContain('lyx.stage: propose-self-review')
+    expect(proposeMain.indexOf('### 4.5 初始化 run-state.md（方案自审前）'))
+      .toBeLessThan(proposeMain.indexOf('### 5. 方案自审'))
   })
 
   it('requires fresh command evidence before completion claims', () => {
     for (const path of [
       'templates/skills/apply.md',
       'templates/skills/fix.md',
-      'templates/skill-references/review-plan/recovery-and-evidence.md',
-      'templates/skill-references/review-code/recovery-and-evidence.md',
+      'templates/skills/review-plan.md',
+      'templates/skills/review-code.md',
       'templates/skills/archive.md',
     ]) {
       expect(read(path), path).toMatch(/命令.*退出码.*结果摘要/)
@@ -112,23 +108,22 @@ describe('run-state lifecycle contract', () => {
   })
 
   it('keeps propose artifacts and run-state in the configured language', () => {
-    const propose = read('templates/skill-references/propose/propose-contract.md')
-    const recovery = read('templates/skill-references/propose/recovery-and-evidence.md')
+    const propose = read('templates/skills/propose.md')
     const spec = read('openspec/specs/execution-run-state/spec.md')
     const proposeSpec = read('openspec/specs/ly-propose-flow/spec.md')
 
     expect(propose).toContain('`[general].language`')
     expect(propose).toContain('proposal.md、design.md、tasks.md、delta spec、context.md 与 run-state.md')
-    expect(recovery).toContain('# 运行状态')
-    expect(recovery).toContain('## 任务证据')
+    expect(propose).toContain('# 运行状态')
+    expect(propose).toContain('## 任务证据')
     expect(spec).toContain('自然语言')
     expect(proposeSpec).toContain('change artifacts 的自然语言跟随宿主配置语言')
 
     for (const path of [
       'templates/skills/apply.md',
       'templates/skills/archive.md',
-      'templates/skill-references/review-plan/recovery-and-evidence.md',
-      'templates/skill-references/review-code/recovery-and-evidence.md',
+      'templates/skills/review-plan.md',
+      'templates/skills/review-code.md',
     ]) {
       expect(read(path), path).toContain('沿用 `run-state.md` 现有语言')
     }
@@ -136,15 +131,11 @@ describe('run-state lifecycle contract', () => {
 
   it('treats run-state frontmatter as the only new lyx state source', () => {
     const templates = [
-      'templates/skill-references/propose/propose-contract.md',
-      'templates/skill-references/propose/recovery-and-evidence.md',
       'templates/skills/propose.md',
       'templates/skills/apply.md',
       'templates/skills/archive.md',
-      'templates/skill-references/review-plan/review-contract.md',
-      'templates/skill-references/review-plan/recovery-and-evidence.md',
-      'templates/skill-references/review-code/review-contract.md',
-      'templates/skill-references/review-code/recovery-and-evidence.md',
+      'templates/skills/review-plan.md',
+      'templates/skills/review-code.md',
       'templates/skills/worktree.md',
     ]
 

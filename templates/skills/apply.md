@@ -11,7 +11,7 @@ argument-hint: '[<change-name>]'
 ## 全自动执行不变量（最高优先级）
 
 - `run-state.md` frontmatter 的 `lyx.executionMode` 为 `full-auto` 时，apply 完成证据只是中间状态，不是流水线最终回复。
-- apply 实施、验证与阶段 commit（或确认无可提交内容）均正常完成且无未决项时，SHALL 以当前 skill 目录为锚点，读取同级 `lyx-review-code/SKILL.md` 及其 frontmatter 声明的全部 references，再在同一回合继续 review-code 前置校验与审查。
+- apply 实施、验证与阶段 commit（或确认无可提交内容）均正常完成且无未决项时，SHALL 以当前 skill 目录为锚点完整读取同级 `lyx-review-code/SKILL.md`，再在同一回合继续 review-code 前置校验与审查。
 - 只输出 `@lyx-review-code <change-name>` 或说明“下一步应执行 review-code”SHALL NOT 视为已交接；无法定位同级 bundle 时停止并报告。
 - 只有 review-code 正常清零或出现明确人工介入条件时，才允许结束全自动回合。
 

@@ -764,6 +764,7 @@ export const skillEvalCases: SkillEvalCase[] = [
       )
       const contextCreated = context.trim().length > 0
       const tasksChecked = tasks.length > 0 && !tasks.includes('- [ ]')
+      const selfReviewRecorded = /## 方案自审/.test(runState)
       const runStateNormal = /terminationType:\s*normal|终止类型[：:]\s*normal/.test(runState)
       const proposeCommitted = proposeCommit.length > 0
       const reviewCodeCommitted = reviewCodeCommit.length > 0
@@ -771,12 +772,13 @@ export const skillEvalCases: SkillEvalCase[] = [
       return {
         passed: contextCreated
           && tasksChecked
+          && selfReviewRecorded
           && runStateNormal
           && proposeCommitted
           && reviewCodeCommitted
           && documentCreated
           && unexpectedPaths.length === 0,
-        evidence: `contextCreated=${contextCreated}; tasksChecked=${tasksChecked}; runStateNormal=${runStateNormal}; proposeCommit=${proposeCommit || '(missing)'}; reviewCodeCommit=${reviewCodeCommit || '(missing)'}; documentCreated=${documentCreated}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
+        evidence: `contextCreated=${contextCreated}; tasksChecked=${tasksChecked}; selfReviewRecorded=${selfReviewRecorded}; runStateNormal=${runStateNormal}; proposeCommit=${proposeCommit || '(missing)'}; reviewCodeCommit=${reviewCodeCommit || '(missing)'}; documentCreated=${documentCreated}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
       }
     },
   },

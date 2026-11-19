@@ -7,11 +7,15 @@
 ## Requirements
 
 ### Requirement: 每个活跃 change 维护 run-state.md
-`@lyx-propose` SHALL 在真实 change 名确认后、方案自审开始前立即在 change 目录下创建 `run-state.md`，不得等到自审完成、`context.md` 产出或 propose 阶段 commit 时才首次创建。文件 SHALL 至少记录 change 名、执行模式（`full-auto` / `manual`）、当前阶段与流水线阶段、基线或最后成功 commit、已完成任务比例、最近审查轮次与终止类型、验证证据、机械裁决和下一步安全动作。新建 run-state 的 frontmatter 字段名 SHALL 使用本能力定义的稳定英文标识；标题、正文说明、状态描述和证据摘要 SHALL 使用当前宿主配置中 `[general].language` 对应的自然语言（缺失、空白或非法时按 `zh-CN`）。`@lyx-apply`、review-plan、review-code 与 archive 续写时 SHALL 沿用正文现有语言。`run-state.md` SHALL 与 `context.md` 分离：`context.md` 保存讨论语义和取舍背景，`run-state.md` 只保存可恢复执行状态。
+`@lyx-propose` SHALL 在真实 change 名确认后、方案自审开始前立即在 change 目录下创建 `run-state.md`，不得等到自审完成、`context.md` 产出或 propose 阶段 commit 时才首次创建。文件 SHALL 至少记录 change 名、执行模式（`full-auto` / `manual`）、当前阶段与流水线阶段、基线或最后成功 commit、已完成任务比例、最近审查轮次与终止类型、验证证据、机械裁决、方案自审逐项结论和下一步安全动作。新建 run-state 的 frontmatter 字段名 SHALL 使用本能力定义的稳定英文标识；标题、正文说明、状态描述和证据摘要 SHALL 使用当前宿主配置中 `[general].language` 对应的自然语言（缺失、空白或非法时按 `zh-CN`）。`@lyx-apply`、review-plan、review-code 与 archive 续写时 SHALL 沿用正文现有语言。`run-state.md` SHALL 与 `context.md` 分离：`context.md` 保存讨论语义和取舍背景，`run-state.md` 只保存可恢复执行状态。
 
 #### Scenario: 方案自审前初始化
 - **WHEN** 真实 change 名确认，propose 即将进入方案自审
 - **THEN** `run-state.md` 已存在，记录执行模式、`stage: propose-self-review`、流水线阶段和下一步安全动作
+
+#### Scenario: 自审结论写入运行账本
+- **WHEN** propose 完成方案自审
+- **THEN** `run-state.md` 正文包含 `## 方案自审`，逐项记录所有检查结论；该清单不作为独立 assistant 消息输出
 
 #### Scenario: propose 完成
 - **WHEN** change artifacts、context.md 与方案自审完成
@@ -64,11 +68,11 @@ run-state SHALL NOT 写入凭据、token、完整环境变量、私密 URL、用
 
 #### Scenario: review-plan 完成后记录 apply 坐标
 - **WHEN** review-plan 正常清零并准备进入 apply
-- **THEN** `下一步安全动作` 写明读取同级 `lyx-apply/SKILL.md` 及 references、以目标 change 名执行 apply，且无未决人工介入项
+- **THEN** `下一步安全动作` 写明完整读取同级 `lyx-apply/SKILL.md`、以目标 change 名执行 apply，且无未决人工介入项
 
 #### Scenario: apply 完成后记录 review-code 坐标
 - **WHEN** apply 正常提交并准备进入 review-code
-- **THEN** `下一步安全动作` 写明读取同级 `lyx-review-code/SKILL.md` 及 references、使用本次 apply commit SHA 继续审查
+- **THEN** `下一步安全动作` 写明完整读取同级 `lyx-review-code/SKILL.md`、使用本次 apply commit SHA 继续审查
 
 #### Scenario: 模糊状态触发重建
 - **WHEN** 全自动 run-state 只有“继续下一阶段”而没有命令、bundle 路径或参数
