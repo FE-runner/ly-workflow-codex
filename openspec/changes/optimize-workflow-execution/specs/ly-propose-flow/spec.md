@@ -1,3 +1,12 @@
+## MODIFIED Requirements
+
+### Requirement: change artifacts 的自然语言跟随宿主配置语言
+`@lyx-propose` 在生成 change artifacts 前 SHALL 读取当前宿主 `[general].language`（缺失、空白或非法时按 `zh-CN`），并让 proposal.md、design.md、tasks.md、delta spec 与 context.md 的标题、说明、决策、任务、场景和验收描述使用对应自然语言。OpenSpec schema 要求的栏目结构 SHALL 保留，但栏目标题和自然语言内容 SHALL 按配置语言表达；代码标识符、命令、路径、错误原文和必要技术术语 MAY 保留英文。该规则 SHALL NOT 因 OpenSpec 默认模板为英文而生成全英文正文。
+
+#### Scenario: zh-CN 宿主生成中文方案
+- **WHEN** 当前宿主 `[general].language` 为 `zh-CN`，用户运行 `@lyx-propose`
+- **THEN** proposal/design/tasks/delta spec/context 的标题与自然语言正文均为中文，技术标识符和命令可保留英文
+
 ## REMOVED Requirements
 
 ### Requirement: 自审逐项结论写入 run-state，禁止一句带过或独立消息停住
@@ -15,6 +24,10 @@
 ### Requirement: 全自动阶段交接显式加载下一 skill bundle
 **Reason**: 原要求把下一阶段坐标写入 run-state，需替换。
 **Migration**: 同一回合交接仍必须完整读取下一 bundle，但坐标只来自当前会话和固定命令顺序。
+
+### Requirement: 全自动流水线按执行者语义衔接
+**Reason**: 该要求仍把 `executionMode` 写入 run-state。
+**Migration**: 执行模式与阶段事实只在同一未中断全自动回合的当前会话中保存，并由现有 Git/tasks/commit 事实校验。
 
 ## ADDED Requirements
 
@@ -45,7 +58,7 @@
 - **THEN** 命令立即输出终止条件、相关 Critical 和可核验依据，不等待最终汇总
 
 ### Requirement: propose 与 apply 的 ask 决策只在会话内复用
-`@lyx-propose` SHALL 在 effective `testMode = "ask"` 时于生成 artifacts 前询问一次 `normal` / `off`，并在同一会话的 propose、后续审查和 apply 中复用该选择。`@lyx-apply` 在新的直接调用开始时 SHALL 重新解析 effective 配置；若仍为 `ask` 且当前会话没有可复用选择，SHALL 重新询问。命令 SHALL NOT 把决策写入 run-state 或其他专用状态文件；`context.md` MAY 记录人读说明但不作为持久机器决策。
+`@lyx-propose` SHALL 在 effective `testMode = "ask"` 时于生成 artifacts 前询问一次 `normal` / `off`，并在同一未中断全自动回合的 propose、后续审查和 apply 中复用该选择。`@lyx-apply` 在新的直接调用或新用户回合开始时 SHALL 重新解析 effective 配置；若仍为 `ask` 且没有可复用的同回合选择，SHALL 重新询问。命令 SHALL NOT 把决策写入 run-state 或其他专用状态文件；`context.md` MAY 记录人读说明但不作为持久机器决策。
 
 #### Scenario: 全自动同回合复用
 - **WHEN** 用户在 propose 选择 `normal`
@@ -69,3 +82,22 @@
 #### Scenario: 只写下一步命令不算交接
 - **WHEN** 当前阶段只输出 `@lyx-apply <change-name>` 而没有读取 bundle
 - **THEN** 不得声明全自动已推进
+
+### Requirement: 全自动流水线保持执行者与同步续跑语义
+同一未中断全自动回合 SHALL 按 `reviewMode` 决定审查关卡、按 `reviewExecutor` 决定审查主体、按 `codingExecutor` 决定实施主体，并在每步完成后立即继续下一阶段。执行模式只在当前回合内保存；SHALL NOT 写入 `run-state.md`。主 agent 与 subagent 两条路径 SHALL 使用相同的 apply 快照、partial apply 检测、index 隔离和提交校验规则。节点校验 SHALL 使用当前会话记录的 change、正常清零点与 apply commit SHA；信息冲突时以 Git/tasks 事实为准并停止。
+
+#### Scenario: 全自动路径默认主 agent 执行
+- **WHEN** 用户选择全自动且执行者均为 `main`
+- **THEN** review-plan、apply、review-code 依次由主 agent 执行，不出现 spawn
+
+#### Scenario: 全自动路径配置为 subagent
+- **WHEN** reviewExecutor 与 codingExecutor 均为 `subagent`
+- **THEN** 审查复用同一子代理，实施子代理回传后由主会话提交
+
+#### Scenario: 阶段报告后不等待用户继续
+- **WHEN** review-plan 或 apply 正常完成且无未决项
+- **THEN** 当前回合继续下一阶段，不写 run-state，也不等待用户再次触发
+
+#### Scenario: reviewMode=off 时编排顺序退化为仅 apply
+- **WHEN** reviewMode 为 `off` 且用户选择全自动
+- **THEN** 打印两个审查跳过状态行，仅执行 apply

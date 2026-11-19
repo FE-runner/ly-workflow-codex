@@ -7,7 +7,7 @@
 ## ADDED Requirements
 
 ### Requirement: ask 决策使用当前调用会话
-effective `testMode = "ask"` 时，change 级命令 SHALL 在需要测试决策前询问一次 `normal` / `off`，并在当前命令及其同一全自动回合内复用该选择。命令 SHALL NOT 把决策写入 `run-state.md`、`.openspec.yaml` 或其他专用状态文件。新用户回合或新的直接命令调用 SHALL 视为没有持久决策并重新询问；显式项目或宿主级 `normal` / `off` SHALL 优先并避免询问。
+effective `testMode = "ask"` 时，change 级命令 SHALL 在需要测试决策前询问一次 `normal` / `off`。选择 SHALL 在同一个未中断全自动回合的 propose、审查、apply 内复用；新的直接命令调用、新用户回合或中断后 SHALL 视为没有可复用选择并重新询问。命令 SHALL NOT 把决策写入 `run-state.md`、`.openspec.yaml` 或其他专用状态文件。显式项目或宿主级 `normal` / `off` SHALL 优先并避免询问。
 
 #### Scenario: propose 在同一回合选择
 - **WHEN** effective 配置为 `ask`，用户选择 `off`

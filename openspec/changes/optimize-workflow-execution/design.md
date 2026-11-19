@@ -26,7 +26,7 @@ The existing run-state exists to survive context compression and new user turns.
 
 ### Decision: workflow state is session-scoped
 
-`@lyx-propose` keeps `EXECUTION_MODE`, isolation coordinates, and the `ask` test-mode answer in the current conversation. Full-auto continuation is valid only in the same agent turn. If the turn is interrupted, the user re-invokes the desired lifecycle command; the command derives work from Git, `tasks.md`, `context.md`, and relevant commits instead of recovering a persisted pipeline.
+`@lyx-propose` keeps `EXECUTION_MODE`, isolation coordinates, and the `ask` test-mode answer only for the same uninterrupted full-auto agent turn. If the turn is interrupted, the user re-invokes the desired lifecycle command; the command derives work from Git, `tasks.md`, `context.md`, and relevant commits instead of recovering a persisted pipeline.
 
 Alternative rejected: use `.openspec.yaml` or another metadata file. That would recreate the same read/write and schema burden under a different filename.
 

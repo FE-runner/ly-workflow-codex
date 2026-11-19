@@ -1,3 +1,16 @@
+## MODIFIED Requirements
+
+### Requirement: 评测结果形成仓库内可审计报告
+实际执行 baseline/current 评测后，仓库 SHALL 保存精简报告，列出运行命令、运行环境、每个 case/version 的 passed/failed/not-executed 状态和关键证据，并把 baseline/current 结论与报告引用回写到四个场景文件的 `Evidence Record`。原始 transcript MAY 保存在临时目录，但 SHALL NOT 提交凭据、完整环境、cookie 或无关的用户数据。实现该评测的 change SHALL 在 apply 阶段运行本 change 修改过的 propose / apply / review-plan / review-code fixture 对应场景的两个版本；环境不可用时按既有规则记录 `not-executed` 与原因。证据 SHALL 写入最终报告、场景 `Evidence Record` 或阶段 commit 正文；SHALL NOT 创建或更新 `run-state.md`。
+
+#### Scenario: 八个评测单元全部执行
+- **WHEN** 四个场景分别运行 baseline 与 current
+- **THEN** 报告包含 8 行结果，每行 link 到对应 transcript 的临时摘要或记录关键最终输出，不使用占位 `not-executed` 冒充执行
+
+#### Scenario: current 场景失败
+- **WHEN** current 版本任一场景未满足通过条件
+- **THEN** 报告标记 failed，记录原始关键输出与失败原因，并停止宣称该行为已通过
+
 ## REMOVED Requirements
 
 ### Requirement: 全自动跨阶段续跑具备真实行为评测

@@ -11,6 +11,7 @@
 - [ ] 2.1 Update `templates/skills/review-plan.md` and `templates/skills/review-code.md`: round two prefers `send_input` / `SendMessage`, re-spawn only on failure; normal rounds report counts/evidence, stop conditions show details immediately, final report is consolidated; verify `rg -n '第 2 轮起重新 spawn|逐字展示.*Warning|逐字完整贴出' templates` returns no conflicting instruction.
 - [ ] 2.2 Update full-auto continuation in `templates/skills/propose.md`, `templates/skills/review-plan.md`, and `templates/skills/apply.md` to emit one-line intermediate status and not repeat full reports; verify static tests assert the quiet-report and reuse language.
 - [ ] 2.3 Update `templates/hosts/codex/fragments/review-plan/*`, `templates/hosts/codex/fragments/review-code/*`, and corresponding Claude fragments/agents so host-specific text consistently says reuse first, re-spawn only on failure, and no run-state lookup; verify rendered Codex/Claude bundles contain neither the old “round two respawn” rule nor run-state instructions.
+- [ ] 2.4 Update skill-reference assertions for the post-compression invariant to require same-turn bundle loading plus current session/Git/tasks facts, not run-state; verify `src/utils/__tests__/skill-references.test.ts` and `src/utils/__tests__/host-adapters.test.ts` reject the old wording.
 
 ## 3. 自审、验证批次与 worktree baseline
 

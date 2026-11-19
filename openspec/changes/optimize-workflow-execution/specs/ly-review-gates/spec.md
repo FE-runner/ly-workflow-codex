@@ -12,6 +12,10 @@
 **Reason**: run-state 已删除，审查只使用 Git 与审查输入文件。
 **Migration**: 审查基线通过 commit trailer 和当前 diff 确定；新回合重新定位，不从账本恢复。
 
+### Requirement: 循环结束后统一提交, `--no-commit` 关闭最终提交
+**Reason**: 原要求把 run-state 决策写入、消费和 dirty 恢复纳入统一提交，并对不存在的新账本提出额外提交义务。
+**Migration**: 仅对审查范围内实际发生变化的代码或 artifacts 统一提交；测试模式选择只存在当前调用内，不产生状态文件提交。
+
 ## ADDED Requirements
 
 ### Requirement: 审查-修复循环、复用与终止条件
@@ -138,7 +142,7 @@
 - **THEN** 触发影响项熔断，循环停止转人工
 
 ### Requirement: review ask 决策使用当前调用
-review-plan 与 review-code 在 effective 配置为 `ask` 时 SHALL 在当前命令开始阶段询问一次 `normal` / `off`，并在该命令的审查循环及正常清零提交内复用。命令 SHALL NOT 写入 run-state，跨命令重新调用时 SHALL 重新询问。显式项目或宿主配置优先；旧 `.openspec.yaml lyx.testModeDecision` MAY 只读兼容但不改写。
+review-plan 与 review-code 在 effective 配置为 `ask` 时 SHALL 优先复用同一未中断全自动回合已有的 `normal` / `off` 选择；没有可复用选择时 SHALL 询问一次，并在当前审查循环及正常清零提交内复用。命令 SHALL NOT 写入 run-state；新的直接命令调用、新用户回合或中断后 SHALL 重新询问。显式项目或宿主配置优先；旧 `.openspec.yaml lyx.testModeDecision` MAY 只读兼容但不改写。
 
 #### Scenario: 同一循环复用选择
 - **WHEN** effective 配置为 `ask`，用户在 review-code 第一轮选择 `off`
@@ -158,3 +162,26 @@ review-plan 与 review-code SHALL 在最终报告记录审查基线、轮次、�
 #### Scenario: 终止
 - **WHEN** 审查触发驳回硬线
 - **THEN** 报告展示涉及 Critical 的原始文本和每轮裁决依据
+
+### Requirement: 审查正常清零后统一提交实际差异
+review-plan 与 review-code SHALL 在循环期间保持修复未提交；仅在正常清零时对审查目标内实际变化的文件执行一次统一提交。review-plan 的目标是该 change 的 artifacts 与 delta spec，review-code 的目标是审查范围代码与循环修复；`review-findings.md` 继续按快照规则独立提交。命令 SHALL NOT 因 ask 选择、run-state 或其他不存在状态文件创建额外 commit。非正常终止时 SHALL NOT 提交审查修复；`--no-commit` 时统一提交和快照提交均跳过。提交使用 `Change-Stage: review-plan-fix` 或 `Change-Stage: review-code-fix` trailer，并校验 `git show --name-only` 不超出目标范围。
+
+#### Scenario: review-plan 正常清零提交 artifacts
+- **WHEN** review-plan 修复了 design 和 delta spec 后清零
+- **THEN** 只提交该 change 的 artifacts 与 delta spec，不创建 run-state
+
+#### Scenario: review-code 正常清零提交代码修复
+- **WHEN** review-code 修复 Critical 后清零
+- **THEN** 只提交审查范围内的代码与必要测试修复
+
+#### Scenario: 本轮无实际变化
+- **WHEN** 审查正常清零但没有认可任何修复或 artifact 改动
+- **THEN** 不创建空 commit
+
+#### Scenario: 非清零终止
+- **WHEN** 审查触发驳回硬线、熔断或调用失败
+- **THEN** 修复改动留在工作区，不提交审查修复
+
+#### Scenario: no-commit
+- **WHEN** 用户传入 `--no-commit`
+- **THEN** 不执行统一提交或快照提交

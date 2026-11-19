@@ -30,7 +30,7 @@
 
 ### Requirement: 旧 change 的 lyx 元数据只读兼容
 **Reason**: 新流程不接受 run-state 或旧 `.openspec.yaml lyx:` 作为流水线状态输入。
-**Migration**: 存量文件不做破坏性修改；用户需要继续旧 change 时，重新提供测试模式或根据当前 Git/tasks 重新进入相应阶段。
+**Migration**: 存量文件不做破坏性修改；用户需要继续旧 change 时，重新提供测试模式或根据当前 Git/tasks 重新进入相应阶段。旧 `.openspec.yaml lyx.testModeDecision` 仍可由 `test-mode` 能力定义为只读兼容输入，但不参与流水线阶段恢复。
 
 ### Requirement: 损坏的新 run-state frontmatter 停止处理
 **Reason**: 新流程不再读取 run-state frontmatter，因此不存在该阻断分支。
@@ -50,7 +50,7 @@
 - **THEN** 新命令保持该文件不变，并忽略其中的 stage、commit 或下一步信息
 
 ### Requirement: 全自动状态只在当前会话内传递
-全自动流程 SHALL 在当前会话中保存 `EXECUTION_MODE`、隔离坐标、测试模式选择和阶段结果，并在同一回合按正常终态继续下一阶段。命令 SHALL NOT 承诺中断后的自动恢复；新用户回合开始时，状态 SHALL 从当前 Git、`tasks.md`、`context.md`、commit trailer 和用户重新提供的决策重建。
+全自动流程 SHALL 只在同一未中断全自动回合的当前会话中保存 `EXECUTION_MODE`、隔离坐标、测试模式选择和阶段结果，并在该回合按正常终态继续下一阶段。命令 SHALL NOT 承诺中断后的自动恢复；新用户回合开始时，状态 SHALL 从当前 Git、`tasks.md`、`context.md`、commit trailer 和用户重新提供的决策重建。
 
 #### Scenario: 同一回合连续执行
 - **WHEN** 用户选择全自动且 review-plan 正常清零

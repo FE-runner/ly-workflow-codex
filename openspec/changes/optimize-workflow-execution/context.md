@@ -4,12 +4,12 @@
 
 - 隔离方式：branch；来源分支：main；开发分支：codex/optimize-workflow-execution。
 - 测试模式：normal（项目配置）。
-- 执行模式：full-auto（当前会话）。
+- 执行模式：full-auto（同一未中断回合）。
 - worktree：无。
 
 ## 核心决策
 
-- 用当前会话保存全自动阶段、隔离与测试模式选择；不新增任何替代 `run-state.md` 的状态文件。
+- 同一未中断全自动回合保存阶段、隔离与测试模式选择；独立 archive 调用只在本次调用内决策。不新增任何替代 `run-state.md` 的状态文件。
 - `context.md` 新增简洁的 `## 执行上下文`，只保存人读决策，不保存阶段机、commit 队列或 next action。
 - 中断后的可靠性降级为显式人工重入：先读 Git、`tasks.md`、`context.md`、阶段 trailer 和审查快照，再重新调用目标命令。
 - 正常审查轮不在终端重复逐字输出全部 Warning/Info；触发终止条件时仍立即展示相关原文与裁决依据。
@@ -32,9 +32,13 @@
 
 ## 方案自审
 
-- 正向闭环：What Changes 1–10 均映射到 tasks 1–7；删除 run-state、压缩自审、安静报告、复用、分批验证、worktree baseline、ask 会话决策和文档/测试均有任务。
+- 正向闭环：What Changes 1–10 均映射到 tasks 1–7；删除 run-state、压缩自审、安静报告、复用、分批验证、worktree baseline、ask 同回合决策和文档/测试均有任务。
 - 反向闭环：tasks 1.1–7.3 均可溯源到至少一条 What Change 或验证义务，无孤儿任务。
-- 基线波及：`execution-run-state`、`ly-propose-flow`、`ly-review-gates`、`ly-lifecycle-commands`、`test-mode`、`worktree-create-before-propose`、`archive-verification-gate`、`archive-branch-cleanup`、`skill-behavior-evals`、`risk-based-testing-policy` 均有 delta 覆盖。
+- 基线波及：`execution-run-state`、`ly-propose-flow`、`ly-review-gates`、`ly-lifecycle-commands`、`test-mode`、`worktree-create-before-propose`、`archive-verification-gate`、`archive-branch-cleanup`、`skill-behavior-evals`、`skill-reference-bundles`、`risk-based-testing-policy` 均有 delta 覆盖。
 - 通用维度：权限与凭据处理不适用；并发通过删除共享状态文件降低冲突；失败路径覆盖复用失败、验证失败、信息缺失和归档阻断；兼容性明确为保留存量 run-state、忽略而不迁移。
 - 实施就绪：每个 task 均点名文件/定位范围与验证命令；跨模块契约由 spec 明确；无待用户决策项。
 - 验证：`openspec validate --changes optimize-workflow-execution` exit 0，1 passed / 0 failed；仅有“审查终止要求文本过长”的既有规则警告。
+
+## 审查记录
+
+- review-plan：4 轮正常清零；第 1 轮 3 Critical + 1 影响落地 Warning，第 2 轮 2 Critical + 2 影响落地 Warning，第 3 轮 1 影响落地 Warning，第 4 轮无 Critical / 无影响落地 Warning。
