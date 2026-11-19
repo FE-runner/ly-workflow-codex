@@ -20,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - 安装、备份与卸载把两个包装 skill 视为 lyx 自有 `lyx-*` 产物；非 force 安装不覆盖已有文件，卸载不影响宿主外部同名 skill
+- **BREAKING** 新流程删除 `run-state.md`；全自动状态只在同一未中断回合内传递，跨回合恢复改为重新调用目标阶段并从 Git/tasks/context/commit trailer 推导
+- `testMode=ask` 改为同一未中断回合内复用，新的直接命令调用重新询问；不再持久化 change 级决策
+- 全自动中间阶段改为一行状态输出；正常审查轮不再逐字复制全部 Warning/Info，最终只汇总一次
+- review-plan / review-code 第 2 轮优先复用同一审查 subagent，复用失败才重新 spawn
+- apply 对连续、同验证命令且无独立风险边界的低风险任务支持批次验证；行为、缺陷复现、安全/迁移与独立验收仍保留检查点
+- worktree baseline 默认改为依赖可用性 + typecheck/smoke，完整测试由 archive 门禁执行一次
+
+### Removed
+
+- 删除新流程的 `run-state.md` 创建、读取、更新、提交、归档和损坏 frontmatter 阻断契约；存量 run-state 保留但不参与新流程
 
 ## [0.16.0] - 2026-11-18
 

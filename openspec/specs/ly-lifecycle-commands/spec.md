@@ -49,93 +49,6 @@
 - **WHEN** 在 claude 宿主下运行 `/ly:init` 且项目中已存在 codex 宿主产生的 OpenSpec 技能目录
 - **THEN** 命令只为当前缺失技能的宿主执行补齐，既有另一宿主目录保持原样，SHALL NOT 被重建或清理
 
-### Requirement: Explore 命令是纯委托；Apply 由当前会话本人实施完成立即提交；Propose 是编排入口
-
-**实施主体变更（自本 change 起）**：本 Requirement 标题中"Apply 由当前会话本人实施"为历史措辞——自 `switchable-executor-flow` 起，`@lyx-apply` 的实施主体由 `[codexHost] codingExecutor` 决定：`"subagent"`（显式配置）时由 coding subagent 实施，`"main"`（默认，含未配置）时由主 agent 在当前会话直接实施。语义以正文为准。
-
-`/ly:explore` SHALL 保持纯委托为主——调用 `opsx:explore` 并原样转发 `$ARGUMENTS`，SHALL NOT 包含自定义的多模型分派或环境校验；唯一例外是委托**之前**的一次审查未修项快照询问（扫描 active 与 archive 下的 `review-findings.md`，有命中则先询问是否列出，用户同意才列出，见 `review-findings-snapshot`），该例外 SHALL NOT 改写参数转发、SHALL NOT 接管 artifact 创建；讨论收敛到"要落地方案"时 SHALL 按规模分流提示：属于 `lightweight-fix-flow` 分流 A / B 范围的小改动（真 bug 或少量 Scenario 级行为变化）提示用户可用 `@lyx-fix`，其余提示切换 `/ly:propose`；该提示 SHALL NOT 自动切换命令或创建 artifact，由用户决定。
-
-`/ly:apply` SHALL 在实施**之前**解析目标 change 名：按固定优先级 `$ARGUMENTS` 中显式且合法的 change 名 → `openspec/changes/` 下唯一未归档的 change → 无法唯一确定时直接询问用户。
-
-**执行者分支（自本 change 起）**：`/ly:apply` SHALL 读取 `~/.codex/lyx/config.toml` 的 `[codexHost] codingExecutor`，按取值决定实施主体：
-
-- **`"subagent"`**：主会话 spawn 一个 coding subagent（非 fork，任务点名"只实施 change 范围"，TASK 指示读取该 change 目录下 `context.md` 获取软上下文；模型按 `codingModel`、非空推理档按 `codingReasoningEffort` 传入），由它读取该 change 的 `tasks.md` 逐任务实施 + 验证（项目对应的测试/类型检查/构建）+ 勾选 checkbox，完成后将改动与结果回传主会话；coding subagent SHALL NOT 自行 commit。失败区分两阶段：**环境级不可用**（宿主无 subagent 能力、初始 spawn 失败）按 `subagent-agent-config` 的回退口径回退主 agent 直接实施并输出 `[回退] subagent 不可用: <原始报错>`，SHALL NOT 视为业务失败；**实施中/验证失败** SHALL 原样呈报失败详情转人工，不自动重试、不自动兜底。
-- **`"main"`（默认，含未配置）**：主 agent SHALL 在当前会话直接实施——读取该 change 的 `tasks.md` 逐任务实施 + 验证（项目对应的测试/类型检查/构建）+ 勾选 checkbox；SHALL NOT spawn 子代理、SHALL NOT 读取 `codingModel` / `codingReasoningEffort`、SHALL NOT 产生回退标记。
-
-两条路径共同遵守：实施过程 SHALL NOT 有 wrapper 调用、SHALL NOT 有 OVERALL 判定解析；SHALL NOT 再执行基于 worktree 的隔离检测——是否隔离由 `/ly:propose` 在创建方案前决定；apply 只负责在**当前工作区**（无论是否 worktree）实施 tasks，SHALL NOT 调用 `/ly:worktree switch`。
-
-主会话（无论哪条执行者路径）收到结果并确认后，实施产生实际文件变动时 SHALL 按 `commit-conventions` 的"propose / apply 共用提交范围隔离协议"提交：先 `git add` 本次实际改动文件清单，提交前按共用协议处理范围外 staged 内容（`--only` 隔离或 unstage-提交-恢复；同一文件内混合 hunk 不可分离时停止转人工），提交后以 `git show --name-only` 校验文件集合严格等于本次待提交清单。commit message SHALL 采用 `<cc-type>(<scope>): <subject>` + `Change-Stage: apply` + `Change-Name: <change-name>` trailer 结构，CC type 由主会话按本次实际改动判断（`feat` / `fix` / `refactor` 等），SHALL NOT 固定为某个 type；无变动则跳过，SHALL NOT 创建空 commit。该 commit 即为 `/ly:review-code` 的审查对象（见 `ly-propose-flow` 的"审查对象 = 最近一次相关 commit"，定位见 `commit-conventions`）。若 `git commit` 失败，如实报告 Git 返回的原始错误，不重试不兜底。
-
-若实施前工作区已存在该 change 目录之外的未提交改动（如审查修复残留），`/ly:apply` SHALL 先检查 `git status --porcelain`：存在与本次实施无关的预存改动时，`git add` 范围仅限本次实际改动的文件，SHALL NOT 将预存改动一并暂存/提交，并在报告中说明"预存改动未被提交"。
-
-`/ly:archive` SHALL **先执行归档前验证**（见 `archive-verification-gate`：测试 / 类型检查，按项目实际提供的脚本选择、缺失项跳过并注明；不执行生产构建），全部通过后才调用 `opsx:archive`：`$ARGUMENTS` 显式指定 change 名时原样转发；未指定时，归档前核对阶段（见 `review-findings-snapshot` 的「本 change 内修复标注」）按 `opsx:archive` 默认规则确定的目标 change 名 SHALL 作为参数交给 `opsx:archive`，SHALL NOT 让其二次推断或二次询问；委托时 SHALL 约定 delta spec 同步决策直接采用推荐项（有 delta 变更 → `Sync now (recommended)`；已同步 → `Archive now`），SHALL NOT 就该同步决策询问用户；归档完成后若 `openspec/` 下存在实际文件变动，SHALL 提交（commit message 采用 `chore(openspec): <subject>` + `Change-Stage: archive` + `Change-Name: <change-name>` trailer 结构）；无变动或提交本身失败则跳过并如实报告。验证失败 SHALL 停止归档，SHALL NOT 移动 `openspec/changes/<change-name>/`，并如实报告失败的脚本与原始错误输出。
-
-`/ly:propose` SHALL NOT 是纯委托——它是本能力集里唯一的编排入口：在调用 `opsx:propose` **之前** SHALL 先执行一次隔离方式询问（三选一：隔离 worktree / 本项目切新分支 / 留在当前分支，见 `worktree-create-before-propose`，仅当不在任何 worktree 内时询问，全局仅一次），再询问一次"本次收尾走全自动还是手动逐步确认"（也仅一次）；委托 `opsx:propose` 完成后 SHALL 先执行方案自审（五项检查，逐项结论写入 `run-state.md` 的 `## 方案自审`，见 `ly-propose-flow`）与 context.md 产出（见 `review-context-artifact`）再对生成的 artifact `git add` 并**立即 commit**（message 采用 `docs(openspec): <subject>` + `Change-Stage: propose` + `Change-Name: <change-name>` trailer 结构），随后按自动/手动两路径分支，且审查关卡的执行与否 SHALL 由当前宿主的 `reviewMode`（见 `subagent-agent-config`；未配置、空白或非法取值等价 `full`）门控：**全自动路径** SHALL 按 `reviewMode` 决定执行哪些审查关卡——`full` 为 `/ly:review-plan` → `/ly:apply` → `/ly:review-code`，`plan-only` 跳过 `/ly:review-code`，`code-only` 跳过 `/ly:review-plan`，`off` 两个审查关卡都跳过（`/ly:apply` 在任何取值下都执行；任一被执行的审查关卡非清零终止即停；被跳过的关卡 SHALL 打印显式状态行，见 `ly-propose-flow`）；**手动路径**在 `full` / `plan-only` 时 SHALL 询问一次"要不要跑 review-plan 审查"（选是则调用审查循环、选否则编排结束，方案已 commit），在 `code-only` / `off` 时 SHALL NOT 发起该询问、propose commit 完成后即结束。`reviewMode` SHALL NOT 影响被直接调用的 `@lyx-review-plan` / `@lyx-review-code`（见 `ly-review-gates`）。具体分支细节见 `ly-propose-flow` 能力。
-
-#### Scenario: explore 命令原样转发参数
-- **WHEN** 用户运行 `/ly:explore "real-time collaboration"`
-- **THEN** 命令以未经改动的参数调用 `opsx:explore` 技能；委托前的一次快照询问/列出不改变参数转发本身
-
-#### Scenario: explore 进入时先处理快照询问
-- **WHEN** 用户运行 `/ly:explore`，active 或 archive 下存在 `review-findings.md` 快照
-- **THEN** 命令在委托 `opsx:explore` 前先询问是否列出快照，用户同意才列出，拒绝则直接进入讨论（见 `review-findings-snapshot`）
-
-#### Scenario: explore 收敛提示按规模分流
-- **WHEN** `/ly:explore` 讨论收敛，结论是一个只需对齐既有 spec 的小 bug 修复
-- **THEN** 命令提示可用 `@lyx-fix` 落地，不提示 `/ly:propose`，也不自动执行任何一个
-
-#### Scenario: explore 收敛到较大方案时提示 propose
-- **WHEN** `/ly:explore` 讨论收敛，结论需要新增 capability
-- **THEN** 命令提示切换 `/ly:propose` 落地方案
-
-#### Scenario: archive 命令归档后自动提交
-- **WHEN** 用户运行 `/ly:archive`，项目归档前验证全部通过，归档移动了 `openspec/changes/<change-name>/` 到 `archive/` 目录
-- **THEN** 命令在归档前执行测试与类型检查，通过后调用 `opsx:archive` 完成归档，并提交 `openspec/` 下的文件移动，commit message 带 `Change-Stage: archive` trailer
-
-#### Scenario: archive 未指定参数时传递已确定的 change 名
-- **WHEN** 用户运行 `/ly:archive` 未带参数，归档前核对阶段按默认规则确定（或经用户选择确定）目标 change 为 `foo`
-- **THEN** 命令以 `foo` 作为参数委托 `opsx:archive`，SHALL NOT 让 `opsx:archive` 再次推断或询问目标 change
-
-#### Scenario: archive 默认同步 delta spec 不询问
-- **WHEN** 用户运行 `/ly:archive <change-name>`，该 change 存在 delta spec
-- **THEN** 命令在委托 `opsx:archive` 时直接采用推荐同步项（有 delta 变更选 `Sync now (recommended)`，已同步选 `Archive now`），SHALL NOT 就该同步决策向用户提问
-
-#### Scenario: archive 归档前验证失败阻断归档
-- **WHEN** 用户运行 `/ly:archive`，测试脚本执行失败
-- **THEN** 命令停止归档，SHALL NOT 移动 change 目录，如实报告失败的脚本与原始错误输出
-
-#### Scenario: apply 由当前会话本人实施，完成后立即提交
-- **WHEN** 用户运行 `/ly:apply`，未配置 `codingExecutor`（等价 `main`），主 agent 读 tasks.md 逐任务实施并验证通过，产生实际文件变动
-- **THEN** 主 agent 按共用隔离协议 `git add` 本次实际改动的文件后立即提交，message 采用 CC 前缀 + `Change-Stage: apply` trailer（type 由实际改动判断），作为 `/ly:review-code` 的审查对象；实施不 spawn 子代理、不产生回退标记
-
-#### Scenario: apply 配置为 subagent 时由 coding subagent 实施
-- **WHEN** 用户配置 `codingExecutor = "subagent"` 运行 `/ly:apply`，coding subagent（非 fork spawn，经 context.md 获取软上下文）读 tasks.md 逐任务实施并验证通过，将改动回传主会话
-- **THEN** 主会话确认后按共用隔离协议提交本次实际改动的文件，message 带 `Change-Stage: apply` trailer；coding subagent 不自行 commit
-
-#### Scenario: apply 实施前工作区已有与本次无关的预存改动
-- **WHEN** 用户在某个 worktree 内运行 `/ly:apply`，实施前该 worktree 已存在未提交的预存改动（如审查修复残留），实施产生新的实际改动
-- **THEN** 主会话 `git add` 仅限本次实际改动的文件，SHALL NOT 将预存改动一并暂存/提交，并说明"预存改动未被提交"
-
-#### Scenario: apply 不在 worktree 内时直接在当前工作区实施
-- **WHEN** 用户在主工作区（非 worktree）运行 `/ly:apply`
-- **THEN** 命令不询问是否切换 worktree、不调用 `/ly:worktree switch`，直接在当前工作区按执行者字段实施 tasks
-
-#### Scenario: apply 无实际文件变动, 跳过提交
-- **WHEN** 用户运行 `/ly:apply`，tasks.md 全部任务实施完毕但 `git status --porcelain` 无任何变动
-- **THEN** 命令跳过提交, 不创建空 commit
-
-#### Scenario: propose 命令在委托前先问隔离方式再问全自动/手动
-- **WHEN** 用户在主工作区运行 `/ly:propose "add dark mode"`（未隔离）
-- **THEN** 命令先询问隔离方式三选一；选择"隔离 worktree"则 `git worktree add` 切出并同会话 cd 进 worktree 续跑；选择"本项目切新分支"/"留在当前分支"则按 `worktree-create-before-propose` 处置后，再询问"全自动 or 手动"，随后以原样参数调用 `opsx:propose`；委托完成后先方案自审，再 `git add` 该 change 目录并立即提交，message 带 `Change-Stage: propose` trailer
-
-#### Scenario: propose 命令全自动路径下的编排
-- **WHEN** 用户运行 `/ly:propose`，选择"全自动"，`reviewMode` 为 `full`（含未配置），propose 阶段 commit 完成
-- **THEN** 命令自动调用 `/ly:review-plan`（审查对象为 propose 阶段 commit，按 `ly-review-gates` 的执行者语义执行，清零时由循环统一提交修复）；清零后自动进入 `/ly:apply`（按 `codingExecutor` 决定实施主体）→ 自动进入 `/ly:review-code`（审查对象为 apply 阶段 commit）；任一环节非清零终止则停止流水线并报告；全程无 worktree 询问、无 `/ly:worktree switch` 调用，不自动归档
-
-#### Scenario: propose 全自动路径按 reviewMode 决定审查关卡
-- **WHEN** 用户配置 `reviewMode = "code-only"` 并运行 `/ly:propose` 选择"全自动"，propose 阶段 commit 完成
-- **THEN** 命令跳过 `/ly:review-plan` 并打印显式状态行，执行 `/ly:apply`，随后执行 `/ly:review-code`；SHALL NOT 在 `reviewMode = "code-only"` 下仍调用 review-plan
-
 ### Requirement: 生命周期命令自动提交使用增强正文
 
 `/ly:init`、`/ly:apply`、`/ly:archive` 与 `/ly:propose` 生成的自动提交 SHALL 按 `commit-conventions` 的“lyx 生成提交统一复用 `@lyx-commit` 正文规范”生成 message 正文。change 生命周期命令（apply/archive/propose 阶段 commit）SHALL 在正文后追加既有 change trailer；非 change 生命周期提交（init、propose WIP）SHALL 遵守正文规范但不追加 `Change-Stage` / `Change-Name` trailer。
@@ -156,33 +69,6 @@
 - **WHEN** `/ly:propose` 创建 WIP commit 暂存切分支前的工作区改动
 - **THEN** commit message 包含动机、改动、影响正文，但不携带 `Change-Stage` / `Change-Name` trailer
 
-### Requirement: archive 归档提交后进入分支收尾流程
-
-`/ly:archive` SHALL 在归档提交成功完成后调用 `archive-branch-cleanup` 能力定义的收尾流程。该流程 SHALL 在归档提交之后执行，确保 archive commit 已存在于当前开发分支上，随后才提示合并、删除 worktree 或删除开发分支。
-
-若归档提交失败或无归档改动可提交，命令 SHALL 如实报告，并 SHALL NOT 继续执行合并或清理。
-
-#### Scenario: 归档提交成功后提示收尾
-- **WHEN** `/ly:archive <change-name>` 完成归档并成功提交 archive 阶段 commit
-- **THEN** 命令从归档后 `run-state.md` 读取 isolation metadata（旧 change 可只读回退 `.openspec.yaml`），并按 `archive-branch-cleanup` 规则提示是否合并回 `sourceBranch` 并清理 worktree/开发分支
-
-#### Scenario: 归档提交失败不清理
-- **WHEN** `/ly:archive <change-name>` 归档提交失败
-- **THEN** 命令报告失败，SHALL NOT 执行合并、删除 worktree 或删除开发分支
-
-### Requirement: 生命周期命令以 run-state 作为 lyx 状态源
-新建 change 的 propose、apply、review-plan、review-code 与 archive SHALL 以 change 目录 `run-state.md` 的固定 YAML frontmatter 作为 lyx 状态来源。命令 SHALL NOT 从新 change 的 `.openspec.yaml` 读取 `lyx:` 或 `x-lyx:`，也 SHALL NOT 向该文件写入这些字段。
-
-旧活跃 change 的 `.openspec.yaml lyx:` MAY 只读回退，但生命周期命令 SHALL NOT 自动迁移或改写旧字段。归档后的分支收尾 SHALL 从归档目录中的 run-state 读取新格式字段，确需兼容时才读取归档后的旧 `.openspec.yaml`。
-
-#### Scenario: 新 change 生命周期只读 run-state
-- **WHEN** 新 change 已由 propose 创建固定 frontmatter
-- **THEN** apply/review/archive 从 run-state 读取测试模式与隔离信息，不检查 `.openspec.yaml` 是否存在 lyx 字段
-
-#### Scenario: 旧 change 不被自动迁移
-- **WHEN** 生命周期命令处理一个只有旧 `.openspec.yaml lyx:` 的活跃 change
-- **THEN** 命令按兼容规则只读旧值，不向 `.openspec.yaml` 写回，也不批量复制旧字段
-
 ### Requirement: apply 使用 lyx 包装的简化 skills
 
 `@lyx-apply` 的 `main` 与 `subagent` 两条实施路径 SHALL 在实施前读取并应用 `lyx-ponytail`，并在全部 tasks 完成任务级验证后、主会话确认前读取并应用 `lyx-code-simplification`。简化收口只覆盖本次 change 已改代码，SHALL 保持行为、错误路径和测试语义不变，且 SHALL NOT 新增独立 commit 或修改范围外文件。
@@ -196,3 +82,104 @@
 #### Scenario: subagent 路径回传简化证据
 - **WHEN** `codingExecutor = "subagent"` 且 coding subagent 完成全部 tasks
 - **THEN** subagent 应用两个包装 skill，把简化后的文件清单与新鲜验证证据随结果回传，不自行 commit
+
+### Requirement: 生命周期命令不依赖持久运行账本
+propose、apply、review-plan、review-code 与 archive SHALL NOT 创建、读取或更新 `run-state.md`。阶段身份 SHALL 由 Git commit trailer 和当前会话结果确定；任务进度 SHALL 由 `tasks.md` 勾选确定；讨论决策与隔离信息 SHALL 来自 `context.md`；未修审查项 SHALL 来自 `review-findings.md`。命令遇到信息不足时 SHALL 询问用户或根据当前 Git 事实进入保守路径，SHALL NOT 虚构历史阶段。
+
+#### Scenario: apply 识别已完成任务
+- **WHEN** 用户重新调用 `@lyx-apply <change-name>`
+- **THEN** 命令读取 `tasks.md`、Git diff 与 apply 阶段 commit，不读取 run-state
+
+#### Scenario: review 识别审查基线
+- **WHEN** 用户调用 `@lyx-review-plan` 或 `@lyx-review-code`
+- **THEN** 命令通过 `Change-Stage` / `Change-Name` trailer 定位对应阶段 commit
+
+### Requirement: apply 按批次执行低风险验证
+`@lyx-apply` SHALL 读取 tasks 中每个任务的验证要求，并允许连续、使用相同命令且无独立风险边界的低风险任务共享一次批次验证。行为或契约改动、逻辑缺陷复现、安全或迁移任务，以及 tasks 明确声明为独立验证单元的任务 SHALL 保留自身验证检查点。批次验证通过后 MAY 一次性勾选该批次全部任务；任一任务失败时 SHALL 报告批次中失败的检查点并停止自动勾选后续任务。
+
+#### Scenario: 低风险任务同命令合并
+- **WHEN** 连续三个文档或配置任务都要求 `pnpm typecheck`
+- **THEN** apply 在批次结束时运行一次 typecheck，并据结果勾选三个任务
+
+#### Scenario: 高风险任务不合并
+- **WHEN** 一个任务要求先写失败复现测试
+- **THEN** 该任务独立运行测试，不等待其他任务
+
+### Requirement: archive 从当前 Git 与 context 推导分支收尾
+`@lyx-archive` 在归档提交成功后 SHALL 根据当前分支、`git worktree list --porcelain` 和 `context.md` 的 `## 执行上下文` 识别开发分支、来源分支与 worktree 候选。当前会话仍保有 propose 隔离选择时 MAY 直接使用该值；新回合信息不足时 SHALL 询问目标分支或跳过收尾，SHALL NOT 默认猜测 `main` / `master`。所有 merge、worktree 删除和分支删除仍须用户确认，并保持现有失败保留现场规则。
+
+#### Scenario: context 含来源分支
+- **WHEN** 归档后的 `context.md` 记录来源分支 `main`、开发分支 `feature/login` 和当前 worktree 路径
+- **THEN** archive 校验 Git 状态后提示是否合并和清理
+
+#### Scenario: 新回合缺少来源分支
+- **WHEN** archive 在新会话运行且 context 与当前会话都没有来源分支
+- **THEN** 命令要求用户选择目标分支或跳过收尾
+
+### Requirement: Explore 与 Apply 保持既有委托和实施职责
+`@lyx-explore` SHALL 在委托前扫描 active 与 archive 下的 `review-findings.md`；只有存在至少一个未解决 Warning 时才询问是否列出，无命中或全部已解决时不询问；读取失败 SHALL 如实注明，不中断参数转发。之后 SHALL 原样转发参数给 `opsx:explore`，并在收敛时按规模提示 `@lyx-fix` 或 `@lyx-propose`。`@lyx-apply` SHALL 按显式参数中的合法 change 名 → 唯一未归档 change → 无法唯一确定时询问用户的优先级解析目标，按 `codingExecutor` 选择主体，只实施当前工作区 tasks，不调用 wrapper、不做 worktree 切换。
+
+#### Scenario: explore 原样转发
+- **WHEN** 用户运行 `@lyx-explore "实时协作"`
+- **THEN** 命令先按未解决 Warning 条件决定是否询问，再原样转发参数
+
+#### Scenario: apply 配置为 subagent
+- **WHEN** `codingExecutor = "subagent"`
+- **THEN** 非 fork coding subagent 读取 tasks 与 context 后实施并回传，不自行 commit
+
+#### Scenario: apply 配置为 main
+- **WHEN** `codingExecutor = "main"` 或未配置
+- **THEN** 主 agent 直接实施 tasks，不 spawn、不产生回退标记
+
+#### Scenario: apply 目标解析
+- **WHEN** 参数未指定 change 且有多个未归档 change
+- **THEN** 命令询问目标，不猜测
+
+### Requirement: Archive 保留目标确定、验证与 delta 同步职责
+`@lyx-archive` SHALL 先执行 `archive-verification-gate`，全部通过后才委托 `opsx:archive`。显式 change 参数 SHALL 原样转发；未指定时，命令 SHALL 先按 OpenSpec 默认规则确定唯一目标并在需要时询问，再把已确定的 change 名传入，SHALL NOT 让下游二次推断或询问。存在 delta 变更时 SHALL 直接采用 `Sync now (recommended)`，已同步时采用 `Archive now`，不得就同步方式询问。验证失败 SHALL 不移动 change。
+
+#### Scenario: archive 已确定目标
+- **WHEN** 用户运行 archive 未带参数且命令确定目标为 `foo`
+- **THEN** 以 `foo` 委托 `opsx:archive`，不允许二次询问
+
+#### Scenario: archive 同步 delta
+- **WHEN** change 存在 delta 变更
+- **THEN** 直接采用 Sync now，不询问同步方式
+
+#### Scenario: archive 验证失败
+- **WHEN** 测试或类型检查失败
+- **THEN** 停止并保留 active change
+
+### Requirement: Apply 按实际差异统一提交
+主会话确认实施结果后 SHALL 按实际文件清单暂存和提交；范围外预存改动 SHALL NOT 被纳入。提交使用 `<cc-type>(<scope>): <subject>`、正文和 `Change-Stage: apply` / `Change-Name` trailer，提交后校验文件集合。无实际变化时 SHALL 跳过，不创建空 commit。验证批次规则 SHALL 遵循 `risk-based-testing-policy`。
+
+#### Scenario: apply 有实际改动
+- **WHEN** tasks 通过验证并产生实际文件变化
+- **THEN** 主会话只暂存本次文件并创建 apply commit
+
+#### Scenario: apply 无实际改动
+- **WHEN** tasks 完成但工作区没有变化
+- **THEN** 跳过提交
+
+#### Scenario: 范围外预存改动
+- **WHEN** apply 前已有无关 dirty 文件
+- **THEN** 提交清单不包含该文件，并在报告说明
+
+### Requirement: Propose 作为无 run-state 编排入口
+`@lyx-propose` SHALL 在委托 `opsx:propose` 前询问隔离方式与全自动/手动模式，生成 artifacts 后在 `context.md` 写压缩自审，再提交 propose 阶段 commit。全自动路径 SHALL 按 `reviewMode` 执行 review-plan、apply、review-code；被跳过关卡 SHALL 打印状态行。命令 SHALL NOT 创建或更新 run-state；阶段只由当前未中断全自动回合、commit trailer、tasks 与 Git 事实衔接。手动路径 SHALL 按 `reviewMode` 决定是否询问 review-plan。
+
+#### Scenario: propose 委托前询问
+- **WHEN** 用户在非 worktree 工作区运行 propose
+- **THEN** 先询问隔离方式，再询问全自动/手动
+
+#### Scenario: propose 全自动
+- **WHEN** 用户选择全自动且 reviewMode 为 full
+- **THEN** propose commit 后按 review-plan → apply → review-code 在同一回合继续，不写 run-state
+
+#### Scenario: propose 手动
+- **WHEN** 用户选择手动且 reviewMode 为 full 或 plan-only
+- **THEN** propose commit 后询问是否运行 review-plan，不自动 apply
+
+#### Scenario: 审查范围关闭
+- **WHEN** reviewMode 为 off
+- **THEN** 打印跳过状态，propose 完成后全自动仅执行 apply，手动路径直接结束

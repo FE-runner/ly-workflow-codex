@@ -14,24 +14,24 @@ argument-hint: '<需求描述>'
 
 ## 全自动执行不变量（最高优先级）
 
-- 用户选择全自动后，真实 change 名一经确认，SHALL 立即创建 `run-state.md`，在固定 YAML frontmatter 写入 `lyx.executionMode: full-auto`、当前阶段、测试模式（如已选择）、隔离信息和下一步；该初始化 SHALL 早于方案自审。
-- `@openspec-propose` 的 Planning boundary 只结束它自己的 artifacts 生成阶段，不结束 `@lyx-propose` 编排；artifacts 返回后 SHALL 继续方案自审、context/run-state、propose commit 与后续流水线。
-- 方案自审逐项结论 MUST 写入 `run-state.md` 的 `## 方案自审`；SHALL NOT 作为独立 assistant 消息输出。写账本后 SHALL 立即执行步骤 5.5→5.6→5.7→6，完成 propose commit 后才读取 review-plan bundle，SHALL NOT 在自审后结束回合。
-- review-plan 报告、apply 完成证据和节点校验结论都只是中间状态，SHALL NOT 被当作最终回复。
+- 用户选择全自动后，`EXECUTION_MODE=full-auto`、隔离坐标和 ask 选择 SHALL 只保存在同一未中断全自动回合的当前会话；SHALL NOT 创建 `run-state.md` 或其他替代状态文件。
+- `@openspec-propose` 的 Planning boundary 只结束它自己的 artifacts 生成阶段，不结束 `@lyx-propose` 编排；artifacts 返回后 SHALL 继续压缩方案自审、context.md、propose commit 与后续流水线。
+- 方案自审结论 MUST 写入 `context.md` 的 `## 方案自审`；通过项 MAY 按连续范围合并，异常项必须展开。自审结论 SHALL NOT 作为独立 assistant 消息输出。写完后 SHALL 立即执行步骤 5.5→5.6→6，完成 propose commit 后才读取 review-plan bundle。
+- 全自动中间阶段只输出一行状态；review-plan 报告、apply 完成证据和节点校验结论都只是中间状态，SHALL NOT 被当作最终回复。
 - 当前阶段正常完成且不存在待用户决策、失败或终止条件时，SHALL 以当前 skill 目录为锚点完整读取同级 `lyx-review-plan/SKILL.md`、`lyx-apply/SKILL.md` 或 `lyx-review-code/SKILL.md`，再继续同一回合。
 - 只输出 `@lyx-*`、写出下一阶段名称或说明“下一步应执行”SHALL NOT 视为已进入下一阶段；无法定位同级 bundle 时停止并报告，不得回退为等待用户再次触发。
-- 恢复时若目标 change 的 run-state frontmatter 已是 `lyx.stage: propose-self-review` 且方案 artifacts 完整，SHALL 沿用既有 isolation / `lyx.executionMode` 并从方案自审或 5.5 继续，SHALL NOT 重复询问隔离方式或全自动/手动。旧 change 无 YAML frontmatter 时 MAY 只读回退旧 `.openspec.yaml lyx`；frontmatter 损坏时停止。
+- 中断后不自动恢复 propose 状态。用户重新调用时，命令 SHALL 从 proposal/design/tasks/context 与 Git 判断方案是否完整；需要继续时重新确认隔离/执行模式，SHALL NOT 读取旧 run-state 作为恢复状态。
 - review-plan 正常清零后 SHALL 继续 apply；apply 正常完成并提交后 SHALL 继续 review-code。
 - 只有 review-code 正常清零，或出现明确业务决策、失败、终止条件时，才允许结束全自动回合。
-- 准备结束回合前 SHALL 核对 `run-state.md` frontmatter；若 `lyx.executionMode=full-auto` 且流水线尚未到正常终态，不得结束当前回合。
+- 准备结束回合前 SHALL 核对当前会话中的执行模式；同一全自动回合尚未到正常终态时，不得结束当前回合。
 
 收尾编排入口。创建方案前先问两件事（各只一次）：本次开发的隔离方式（隔离 worktree / 本项目切新分支 / 留在当前分支，不在 worktree 内才问）、本次走全自动还是手动。产物生成后、commit 前由方案提出者执行一次方案自审（逻辑闭环 + 业务全面性，见步骤 5）与 context.md 软上下文产出（见步骤 5.5），自审修复与 context.md 随 propose 阶段 commit（message 带 `Change-Stage: propose` 与 `Change-Name` trailer）一次干净落库；全自动路径在同一会话内自动跑 review-plan → apply → review-code 直到审完代码，手动路径逐步确认。
 
 ## 步骤
 
-### 0. 启动恢复（创建方案前）
+### 0. 启动检查（创建方案前）
 
-若 `参数` 显式包含一个活跃 change 名，或 `openspec/changes/` 下恰好只有一个活跃 change，且其 `run-state.md` 的 `lyx.stage` 为 `propose-self-review`、`lyx.executionMode` 为 `full-auto`，同时 proposal/design/tasks（及已声明的 delta spec）完整：SHALL 视为恢复未完成的 propose 阶段。此时沿用 run-state frontmatter 中的 change、isolation 与 `executionMode`，跳过步骤 1-4 的隔离/模式询问和 artifact 重生成，核对 git/files 后从步骤 5 继续；若 run-state 已包含 `## 方案自审` 逐项结论但尚无 `context.md` 或 propose 阶段 commit，则从步骤 5.5 继续。未写入自审结论的旧中断记录仍从步骤 5 重新自审。不得再次询问隔离方式或全自动/手动，也不得新建第二个 change。旧 change 没有 YAML frontmatter 时 MAY 只读回退旧 `.openspec.yaml lyx`；frontmatter 损坏时停止，不得静默回退。
+新流程 SHALL NOT 创建、读取或更新 `run-state.md`。若用户显式给出活跃 change 或目录中只有一个活跃 change，命令 MAY 读取 proposal/design/tasks/context、Git 状态和阶段 commit，报告“该 change 已存在”；是否继续原方案、重新 propose 或转 apply 由用户决定。命令 SHALL NOT 根据旧 run-state stage、executionMode 或 next action 自动恢复流水线。
 
 ### 1. 是否已在 worktree 内 + 隔离方式询问（创建方案前，全局只问一次）
 
@@ -60,7 +60,7 @@ argument-hint: '<需求描述>'
        git worktree add -b <开发分支名> ~/.ly/worktrees/<项目名>/<开发分支名> <当前分支HEAD>
        ```
        （`<项目名>` 以 `git rev-parse --git-common-dir` 反推主仓库目录名；多级分支名按 `/` 展开路径，仍保持无来源前缀的单层语义。）
-    5. 自动复制环境文件（`.env` 等，复用 `@lyx-worktree add` 规则），跑一次项目 baseline 验证。
+    5. 自动复制环境文件（`.env` 等，复用 `@lyx-worktree add` 规则），执行轻量 baseline：检查依赖可用性，并在可用时运行 typecheck 或项目声明的 smoke；SHALL NOT 默认运行完整测试套件。
     6. **baseline 失败** → 报告失败摘要并询问用户"仍继续 / 放弃"：**仍继续** → 同会话 cd 进 worktree 继续编排（失败摘要作为已知风险带入后续流程，按本步 7/8 执行）；**放弃** → 保留已创建的 worktree 与分支（不自动清理，需要时用 `@lyx-worktree remove` 显式删除），打印携带失败摘要的兜底续接命令（同 7 的格式），会话结束，change 尚未生成。
     7. 打印**兜底续接命令**（绝对路径 + shell 安全转义）——正常路径不使用，仅当本会话意外死亡（崩溃、终端关闭等）时，用于在新 worktree 中恢复：
        ```
@@ -96,7 +96,7 @@ argument-hint: '<需求描述>'
 
 这是唯一决定"自动/手动"路径的开关询问。自动化程度与隔离正交：选全自动不隐含必须切 worktree，切了 worktree 也不隐含必须全自动。后续步骤不再重复问"要不要继续自动"。本轮若已在 worktree 内（跳过步骤 1 的询问），此询问照常进行。
 
-用户回答后 SHALL 捕获 `EXECUTION_MODE=full-auto` 或 `EXECUTION_MODE=manual`，并在 change 确定后写入 `run-state.md`。后续阶段恢复时 SHALL 读取该字段，SHALL NOT 仅依赖会话记忆。
+用户回答后 SHALL 捕获当前未中断回合的 `EXECUTION_MODE=full-auto` 或 `EXECUTION_MODE=manual`。该值 SHALL NOT 写入专用状态文件；手动或中断后重新调用时重新确认需要的模式。
 
 ### 3. 按 opsx:propose 编排流程生成方案
 
@@ -106,11 +106,11 @@ argument-hint: '<需求描述>'
 
 **范围最小化（SHALL）**：生成 artifacts 前读取并应用 `{{HOST_SKILLS_DIR}}/lyx-ponytail/SKILL.md`。proposal 的 What Changes、delta spec 与 tasks 只覆盖用户目标及完成任务必需的调用方、验证、错误处理、安全与迁移；用户未要求的扩展点、可选配置、向后兼容层和投机抽象 SHALL NOT 被自动生成。确实主动省略时，可在 proposal 的边界说明保留一句，不额外制造 Requirement、Scenario 或 task。该 skill 缺失或不可读时停止并报告缺失路径。
 
-**产物语言（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 的 `[general].language`（缺失、空白或非法时按 `zh-CN`）。proposal.md、design.md、tasks.md、delta spec、context.md 与 run-state.md 的标题、说明、决策、任务、场景和验收描述 SHALL 使用该语言；`zh-CN` 用中文，`en` 用英文。OpenSpec 提供的模板栏目结构必须保留，但栏目标题和自然语言内容要按配置语言表达；代码标识符、命令、路径、错误原文和必要技术术语 MAY 保留英文。该规则同样约束方案自审对 artifacts 的修改与后续各阶段对 run-state.md 的续写，SHALL NOT 因 OpenSpec 默认模板是英文而生成英文正文。
+**产物语言（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 的 `[general].language`（缺失、空白或非法时按 `zh-CN`）。proposal.md、design.md、tasks.md、delta spec 与 context.md 的标题、说明、决策、任务、场景和验收描述 SHALL 使用该语言；`zh-CN` 用中文，`en` 用英文。OpenSpec 提供的模板栏目结构必须保留，但栏目标题和自然语言内容要按配置语言表达；代码标识符、命令、路径、错误原文和必要技术术语 MAY 保留英文。该规则同样约束方案自审对 artifacts 的修改，SHALL NOT 因 OpenSpec 默认模板是英文而生成英文正文。
 
 **测试模式与风险策略适配（SHALL）**：生成 artifacts 前读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时停止并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
 
-配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时，SHALL 在生成 artifacts 前询问一次：`normal` 表示写测试、跑测试；`off` 表示不写测试、不跑测试。用户取消或环境无法交互时停止，不生成 artifacts。该选择在当前会话暂存为 `TEST_MODE_DECISION`；步骤 4 确认真实 change 名后，SHALL 在步骤 4.5 创建 run-state 时写入 `lyx.testModeDecision`。若在这之前中断，恢复时重新询问，不得声称决策已持久化。新 change SHALL NOT 把该值写入 `.openspec.yaml`。
+配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时，SHALL 在生成 artifacts 前询问一次：`normal` 表示写测试、跑测试；`off` 表示不写测试、不跑测试。用户取消或环境无法交互时停止，不生成 artifacts。该选择只在同一未中断全自动回合内复用，并可写入 `context.md` 的人读说明；SHALL NOT 写入 run-state 或其他持久决策文件。新直接命令调用或中断后重新询问。
 
 最终模式为 `testMode = "off"` 时 SHALL NOT 生成测试文件、测试修改或测试命令任务；行为或契约所需 spec 仍照常生成，tasks 的验证限定为 typecheck、build、视觉检查或其他非测试检查。来源为项目覆盖时，状态行写为 `[跳过] ...（testMode=off，项目配置）`。
 
@@ -132,21 +132,9 @@ argument-hint: '<需求描述>'
 
 标题同步是附属动作：失败或宿主不提供自动调用能力时，SHALL 如实报告实际状态并继续方案流程，SHALL NOT 伪造成功，也 SHALL NOT 因标题同步失败中断 propose。
 
-### 4.5 初始化 run-state.md（方案自审前）
+### 4.5 确定执行上下文（方案自审前）
 
-真实 change 名确认后、进入步骤 5 之前，SHALL 按本文件「运行账本与证据」的骨架立即创建 `run-state.md`，不得等到自审或 context.md 完成后再创建。初始 frontmatter 至少写入：
-
-- `lyx.schemaVersion: 1`
-- `lyx.change: <change-name>`
-- `lyx.stage: propose-self-review`
-- `lyx.executionMode: <EXECUTION_MODE>`
-- `lyx.pipelineStage: review-plan | apply | review-code | none`（按 `reviewMode` 与执行模式确定）
-- `lyx.testModeDecision: normal | off | null`（effective `ask` 且已选择时写所选值）
-- `lyx.isolation`：`mode`、`sourceBranch`、`developmentBranch`、`worktreePath`
-- `lyx.lastGoodCommit: <propose 基线或 null>`
-- `lyx.completedTasks`、`lyx.review` 与 `lyx.nextSafeAction`
-
-`run-state.md` 无法创建或写入时 SHALL 立即停止并报告原始错误，SHALL NOT 进入方案自审。该文件后续由步骤 5.7 增量更新并随步骤 6 一起提交。
+真实 change 名确认后，命令 SHALL 在当前未中断回合内保留 `EXECUTION_MODE`、isolation 与测试模式选择，并准备在 `context.md` 写入简短人读说明。SHALL NOT 创建机器状态文件，也不得把这些值扩展成 YAML frontmatter 或 commit 队列。
 
 ### 5. 方案自审（commit 前，由方案提出者执行）
 
@@ -165,55 +153,39 @@ argument-hint: '<需求描述>'
 - **机械断链**（核心实施任务漏项、范围未同步、design 决策缺失等可直接修复的缺陷）：由提出者直接修改对应 artifact，SHALL NOT 就此类问题询问用户。补充边界测试、额外 Scenario 或额外测试任务缺失 SHALL NOT 归入机械断链。
 - **业务判断类**（"这个场景要不要支持"等需要用户决策的开放问题）：SHALL 列为开放问题直接向用户提问，SHALL NOT 由提出者自行猜测决定。**全自动模式下同样询问**——该询问是自动流水线的人工确认点，与"需要人工介入"同级；用户回答后按回答更新对应 artifact 再继续。用户拒绝/取消回答 → 停止后续编排（不 commit、全自动流水线不启动），artifacts 留在工作区，报告结论清单与未决问题，转人工处理。
 
-**逐项结论写入账本（硬约束，防走过场）：**
+**压缩结论写入 context.md（硬约束，防走过场）：**
 
-自审 MUST 把**逐项结论**写入 `run-state.md` 的 `## 方案自审` 正文，对五项检查的每一子项（每条 What Change 的闭环情况、每个 Modified Capability 的基线波及情况、每个通用维度、每个核心 task 的实施就绪情况）分别标注四值结论之一：**通过 / 不适用（含理由）/ 已修复（含改动说明）/ 待用户决策（含问题）**。SHALL NOT 以"自审通过，无问题"之类的一句总结代替逐项结论；未写理由的静默跳过视为未执行该项。存在"待用户决策"项时，SHALL 从 run-state 提炼完整问题后询问用户。
+自审 MUST 在 `context.md` 的 `## 方案自审` 覆盖五项检查的每个子项。连续且全部通过的 What Change、Requirement 或 task MAY 按范围合并，例如 `What Change 1–8：通过`、`Task 1.1–1.6：通过`、`通用维度：权限不适用（无权限面） / 失败路径通过 / 并发通过 / 兼容迁移通过`。**不适用 / 已修复 / 待用户决策 MUST 单独展开理由或修改说明**。覆盖范围必须可从 proposal/tasks 编号核对，SHALL NOT 以“自审通过，无问题”代替。存在待用户决策项时，从该清单提炼问题后询问用户。
 
 自审结论 SHALL NOT 作为独立的 assistant 消息输出。宿主会把没有后续工具调用的 assistant 消息当作 `task_complete`，导致后续文件工具动作没有执行；当前模型不得用“下一步将生成 context.md”一类文字代替工具动作。
 
 **自审修改后验证**：自审产生任何 artifact 修改（尤其 delta spec）后，SHALL 运行 `openspec validate --changes <change-name>` 确认结构合法，再进入步骤 5.5。
 
-**自审收口非终态（SHALL）**：自审判定完成后，SHALL 直接通过文件工具把逐项结论写入 `run-state.md` 的 `## 方案自审`，再立即执行步骤 5.5→5.6→5.7→6 propose commit。只要不存在"待用户决策"项、失败或终止条件，SHALL NOT 先输出独立自审消息、结束回合或等待用户再次确认，也 SHALL NOT 在 propose commit 前读取 review-plan bundle。
+**自审收口非终态（SHALL）**：自审判定完成后，SHALL 直接通过文件工具把压缩结论写入 `context.md` 的 `## 方案自审`，再立即执行步骤 5.5→5.6→6 propose commit。只要不存在"待用户决策"项、失败或终止条件，SHALL NOT 先输出独立自审消息、结束回合或等待用户再次确认，也 SHALL NOT 在 propose commit 前读取 review-plan bundle。
 
 ### 5.5 产出 context.md 软上下文 artifact（commit 前）
 
 在方案自审完成之后、步骤 6 commit 之前，由当前会话产出 `openspec/changes/<change-name>/context.md`（软上下文 artifact，详见 spec 能力 `review-context-artifact`）：
 
-1. **收录内容**（只记文档之外的讨论结论）：关键决策与理由、已否决的备选方案及否决理由、范围边界（明确做什么/不做什么）、已知坑与注意事项。与 proposal/design/tasks/delta spec 重复的内容以一句话引用指路，SHALL NOT 整段摘抄。
+1. **收录内容**（只记文档之外的讨论结论）：关键决策与理由、已否决的备选方案及否决理由、范围边界（明确做什么/不做什么）、已知坑与注意事项、简短执行上下文和压缩方案自审。与 proposal/design/tasks/delta spec 重复的内容以一句话引用指路，SHALL NOT 整段摘抄。
 2. **内容边界自检（产出质量关卡）**：产出时完成一次自检——(a) 无与 artifact 重复的整段内容；(b) 每条决策/否决理由可溯源到本 change 讨论或基线 artifact 对应条目；(c) 行数 ≤ 100 行（它是每次 subagent spawn 的固定读取成本）。自检不通过 → 修订后重检，SHALL NOT 带病产出。
 3. **无实质内容时**：仍产出仅含标题与一行说明的最小骨架文件，SHALL NOT 省略文件——审查/实施 subagent 的 TASK 引用固定路径，文件缺失会造成断链。
 
-### 5.6 完成 run-state metadata（commit 前）
+### 5.6 完成 context 执行上下文（commit 前）
 
-步骤 4.5 已创建 run-state；在本步骤确认并补全 `lyx.isolation`：
+在本步骤确认 `context.md` 的 `## 执行上下文` 包含：
 
-- `mode: worktree | branch | none`
-- `sourceBranch: <ISOLATION_SOURCE_BRANCH 或 null>`
-- `developmentBranch: <DEVELOPMENT_BRANCH 或 null>`
-- `worktreePath: <WORKTREE_PATH 或 null>`
+- 隔离方式 `worktree | branch | none`；来源分支；开发分支；worktree 绝对路径（如适用）。
+- effective 配置为 `ask` 时本次调用的测试模式选择与来源。
+- 执行模式 `full-auto | manual` 的当前回合说明。
 
-`mode: none` 时 `sourceBranch` 仍记录当前分支，`developmentBranch` / `worktreePath` 为 `null`。`sourceBranch` 缺失时写 `null`，不得猜测。effective `testMode = ask` 且已有选择时，同一 frontmatter 的 `testModeDecision` SHALL 已写入所选值。
-
-新 change SHALL NOT 在 `.openspec.yaml` 写入 `lyx:` 或 `x-lyx:`。run-state 属于 propose 提交单元，随步骤 6 的 `git add -- openspec/changes/<change-name>/` 一起提交。写入后 SHALL 再运行一次 `openspec validate --changes <change-name>`；若验证失败，停止在 commit 前并报告原始错误。
-
-### 5.7 更新 run-state.md（commit 前）
-
-在方案自审、context.md 与 metadata 完成后、步骤 6 commit 前，SHALL 增量更新步骤 4.5 已创建的 `run-state.md`，至少更新：
-
-- `lyx.stage: propose`
-- `lyx.executionMode: <EXECUTION_MODE>`
-- `lyx.pipelineStage: review-plan | apply | review-code | none`（按 `reviewMode` 与执行模式确定）
-- `lyx.lastGoodCommit`：propose 基线
-- `lyx.nextSafeAction`：全自动时写明下一命令、同级 `SKILL.md` 路径、change 参数与继续条件；手动时写明等待用户选择是否审查
-- 正文中的方案自审结论摘要与验证证据；`## 方案自审` 必须包含五项检查的全部逐项结论
-
-`run-state.md` 不存在、不可读或无法写入时 SHALL 停止在 commit 前并如实报告，SHALL NOT 跳过后继续 commit。该文件 SHALL 随步骤 6 的 propose 阶段 commit 一并提交。
+`isolation = none` 时仍记录来源分支并注明“无需自动清理”。信息缺失时写“未知”，不得猜测。新 change SHALL NOT 在 `.openspec.yaml` 写入 `lyx:` 或 `x-lyx:`。写入后 SHALL 运行一次 `openspec validate --changes <change-name>`；失败时停止在 commit 前并报告原始错误。
 
 ### 6. 暂存并立即 commit（每步 commit）
 
 自审完成（含其修复）与 context.md 产出后执行。自审产生的 artifact 修复与 context.md 属于本次待提交内容——产物、自审修复与 context.md 是同一个待提交单元，随这次 commit 一次干净落库，不产生"commit + 未提交自审修复"的混合状态。
 
-1. `git add -- openspec/changes/<change-name>/`（该目录含 `.openspec.yaml` 元数据、proposal/design/tasks、context.md、run-state.md 与全部 delta spec，集群暂存，不用 `git add -A`）。
+1. `git add -- openspec/changes/<change-name>/`（该目录含 `.openspec.yaml` 元数据、proposal/design/tasks、context.md 与全部 delta spec；不创建 run-state）。
 2. **按共用 index 隔离协议提交**——目标范围为 `openspec/changes/<change-name>/` 目录，协议分支：
    - index 中无该目录外的已暂存内容 → 直接 commit（见第 3 步命令）。
    - index 中存在该目录外的已暂存内容、且与目标范围无文件重叠 → 用 `git commit --only -F "$MSG_FILE" -- openspec/changes/<change-name>/` 隔离提交（**`-F` 必须放在 `--` 之前**；`MSG_FILE` 由 `git rev-parse --git-path COMMIT_EDITMSG` 获取；目标范围含未跟踪新文件时**必须先 `git add`**，否则 `--only` 报 `pathspec ... did not match any file(s) known to git`），或先 unstage 非目标文件、提交后恢复原暂存状态；范围外文件保留原暂存状态。
@@ -244,13 +216,13 @@ argument-hint: '<需求描述>'
 
 **全程无隔离方式询问、不自动 archive。**
 
-**阶段报告非终态（SHALL）**：本流水线中的所有阶段报告、节点校验结论和“完成证据”都是中间状态，SHALL NOT 被当作最终回复。只要当前阶段正常完成且不存在未决业务决策、失败或终止条件，当前回合 SHALL 立即继续下一阶段：
+**安静阶段报告与续跑（SHALL）**：正常中间阶段只输出一行状态，包含阶段名、轮次/结果和 commit。所有中间状态、节点校验结论和完成证据 SHALL NOT 被当作最终回复。只要当前阶段正常完成且不存在未决业务决策、失败或终止条件，当前回合 SHALL 立即继续下一阶段：
 
 - review-plan 正常清零并输出报告后，立即执行步骤 2 的节点校验，再执行步骤 3 apply。
 - apply 完成、提交并输出完成证据后，立即执行步骤 4 的节点校验，再执行步骤 5 review-code。
 - 只有 review-code 正常清零并输出最终报告后，才允许结束全自动回合。
 
-各阶段命令 SHALL 从 `run-state.md` frontmatter 读取 `lyx.executionMode`、`lyx.pipelineStage` 与 `lyx.nextSafeAction`，并在阶段结束时更新；SHALL NOT 只依赖会话记忆判断是否自动续跑。阶段报告不是人工确认点，SHALL NOT 等待用户再次触发下一阶段。
+各阶段命令 SHALL 使用同一未中断全自动回合中的顺序、当前 change 名与本阶段产生的 commit SHA 判断续跑；SHALL NOT 读取或更新 run-state。阶段报告不是人工确认点，SHALL NOT 等待用户再次触发下一阶段。
 
 **下一阶段 bundle 读取协议（SHALL）**：进入任何下一阶段前，以当前已加载 skill 所在目录为锚点解析并完整读取同级 `lyx-<next-command>/SKILL.md`，再按该 bundle 执行。`@lyx-*` 在本流程中是命令标识；只输出命令标识、写出下一阶段名称或说明“下一步应执行”SHALL NOT 触发 skill。同级 bundle 缺失或无法定位时停止并报告缺失路径，SHALL NOT 猜测绝对路径后继续。
 
@@ -261,9 +233,9 @@ argument-hint: '<需求描述>'
 1. **review-plan 关卡（仅 `full` / `plan-only`）**：完整读取同级 `lyx-review-plan/SKILL.md`，再按该 bundle 以 `<change-name>` 执行审查-修复循环（审查对象为 propose 阶段 commit（带 `Change-Stage: propose` trailer），清零时由循环统一提交修复）。`code-only` / `off` 时跳过本步（连同第 2 步一并跳过），并打印 `[跳过] review-plan（reviewMode=<取值>）` 状态行。
    - 正常清零（Critical 为 0 且所有 `影响落地=是` 的 Warning 都已解决）→ 进入下一步。
    - 其余任一种终止（熔断、驳回硬线、无法安全修复、验证失败、审查调用失败、达到轮数上限）→ **停止流水线**，复用该循环已产出的终止报告（不重新生成或重复一份）报告终止原因，结束，不执行后续步骤。
-2. **节点前置校验（进入 apply 前，仅 `full` / `plan-only`）**：进入 apply 之前 SHALL 校验 review-plan 是否以"正常清零"收尾——判据为 **`run-state.md` 记录的 review-plan 循环终止类型 == 正常清零**且无未决人工介入项；会话记忆与该记录冲突时以可核验的 run-state、git 和审查报告事实为准。校验 SHALL 在该节点显式打印一行校验结论（含依据：终止类型、是否无未决项）；校验不过（终止类型为熔断/驳回硬线/无法安全修复/验证失败/审查调用失败/轮数上限，或存在未决项）SHALL 停在该节点，复用 review-plan 已产出的终止报告说明阻断原因，SHALL NOT 硬闯 apply。校验通过后 SHALL 在同一回合立即进入第 3 步。第 1 步跳过 review-plan 时本节一并跳过。
+2. **节点前置校验（进入 apply 前，仅 `full` / `plan-only`）**：进入 apply 之前 SHALL 校验当前回合的 review-plan 结果以“正常清零”收尾且无未决人工介入项，并以 review commit / changed files 核对。校验 SHALL 打印一行结论；校验不过时复用 review-plan 终止报告说明阻断原因，SHALL NOT 硬闯 apply。第 1 步跳过 review-plan 时本节一并跳过。
 3. 完整读取同级 `lyx-apply/SKILL.md`，再按该 bundle 以 `<change-name>` 执行实施（实施主体按 `codingExecutor` 决定，实施完成后由主会话确认、回写 `context.md`（实施决策）并统一提交 apply 阶段 commit——message 为 CC 前缀（type 由主会话按实际改动判断）+ `Change-Stage: apply` + `Change-Name: <change-name>` trailer）。apply 完成报告输出后 SHALL 在同一回合继续第 4 步，SHALL NOT 把实施完成报告当作全自动终点。
-4. **节点前置校验（进入 review-code 前，仅 `full` / `code-only`）**：apply 实施完成并提交时 SHALL 以 `git rev-parse HEAD` 记录本次 apply 提交后的 HEAD SHA；进入 review-code 之前 SHALL 按 trailer 优先定位最近一期 apply 阶段 commit 的 SHA（`git log --grep="^Change-Stage: apply$" --grep="^Change-Name: <change-name>$" --all-match -1 --format=%H`；未命中时回退旧前缀 `git log --grep="^apply: <change-name>" -1 --format=%H` 并打印 DEPRECATED 兼容通道提示），并校验其等于本次记录（**历史存在旧 apply commit 不得绕过本次校验**）。校验 SHALL 在该节点显式打印一行校验结论（含依据：本次记录的 SHA、最近一期 apply 阶段 commit SHA、是否相等）。校验不过（SHA 不等、commit 缺失或实施阶段未正常收尾）SHALL 停在该节点如实报告实施收尾失败详情，SHALL NOT 以旧 commit 作为本次审查对象进入 review-code。第 5 步跳过 review-code 时本节一并跳过。
+4. **节点前置校验（进入 review-code 前，仅 `full` / `code-only`）**：apply 实施完成并提交时 SHALL 以 `git rev-parse HEAD` 记录本次 apply 提交后的 HEAD SHA；进入 review-code 前 SHALL 按 trailer 定位最近一期 apply 阶段 commit，并校验其等于本次记录。历史旧 commit SHALL NOT 绕过本次校验。校验 SHALL 打印一行结果；不通过时停止并报告。第 5 步跳过 review-code 时本节一并跳过。
 5. **review-code 关卡（仅 `full` / `code-only`）**：完整读取同级 `lyx-review-code/SKILL.md`，再按该 bundle 以 `<change-name>` 执行代码审查（审查主体按 `reviewExecutor` 决定；审查对象为 apply 阶段 commit（带 `Change-Stage: apply` trailer），清零时由循环统一提交修复）。`plan-only` / `off` 时跳过本步（连同第 4 步一并跳过），并打印 `[跳过] review-code（reviewMode=<取值>）` 状态行。
    - 正常清零（Critical 为 0 且所有 `影响落地=是` 的 Warning 都已解决）→ 流水线结束，提示可手动 `@lyx-archive` 归档。
    - 其余任一种终止 → **停止流水线**，复用该循环已产出的终止报告报告终止原因，结束。
@@ -289,79 +261,18 @@ argument-hint: '<需求描述>'
 
 隔离方式询问（三选一：隔离 worktree / 本项目切新分支 / 留在当前分支）只发生在步骤 1（创建方案前，全局一次），且仅当当前不在任何 worktree 内时触发。
 
-## 运行账本与证据
+## 执行上下文与证据
 
-### Run State
+### Context
 
-在 change 确定后创建 `openspec/changes/<change-name>/run-state.md`。读取 `{{LYX_CONFIG_FILE}}` 的 `[general].language`（缺失、空白或非法时按 `zh-CN`）：frontmatter 键名和技术枚举使用固定英文，Markdown 正文按语言配置使用中文或英文。后续阶段续写时沿用正文现有语言，不得无理由切换。
+`context.md` SHALL 保存“为什么这样做”和轻量执行上下文：
 
-```md
----
-lyx:
-  schemaVersion: 1
-  change: <change-name>
-  stage: propose-self-review | propose | review-plan | apply | review-code | archive-ready | archived
-  executionMode: full-auto | manual
-  pipelineStage: review-plan | apply | review-code | none
-  testModeDecision: normal | off | null
-  isolation:
-    mode: worktree | branch | none
-    sourceBranch: <branch> | null
-    developmentBranch: <branch> | null
-    worktreePath: <absolute-path> | null
-  lastGoodCommit: <sha> | null
-  completedTasks:
-    done: <number>
-    total: <number>
-  review:
-    planRounds: <number>
-    codeRounds: <number>
-    terminationType: normal | <other> | null
-  nextSafeAction:
-    command: <command-id> | null
-    skillPath: <relative-skill-path> | null
-    change: <change-name> | null
-    condition: <short-condition> | null
----
+- `## 执行上下文`：隔离方式、来源分支、开发分支、worktree 路径、测试模式选择与执行模式。
+- `## 方案自审`：压缩后的五项检查结论。
+- `## 审查记录`：review-plan / review-code 的轮次、正常清零或终止类型。
+- `## 实施说明`：apply 阶段的实现取舍与例外。
 
-# 运行状态
-
-## 任务证据
-
-- 已完成任务: <done>/<total>
-
-## 基线评测
-
-- <skill>: passed|failed|not-executed — <summary>
-
-## 修改后评测（中间）
-
-- <skill>: passed|failed|not-executed — <summary>
-
-## 修改后评测（最终）
-
-- <skill>: passed|failed|not-executed — <summary>
-
-## 审查状态
-
-## 方案自审
-
-- <每条 What Change / 每个 Modified Capability Requirement / 每个通用维度 / 每个核心 task 的四值结论>
-
-## 验证
-
-## 裁决
-```
-
-- YAML frontmatter 是阶段、执行模式、测试模式、隔离、commit、任务计数、审查状态和下一步安全动作的唯一机器状态来源；Markdown 正文不得作为这些字段的第二权威来源。正文与 frontmatter 冲突时以 frontmatter 为准，并在报告中记录不一致。
-- `context.md` 记录“为什么这样做”，run-state 记录“做到哪、证据是什么、下一步做什么”。
-- run-state 作为 change artifact 纳入 propose 阶段 commit，不得用它替代 proposal/design/tasks。
-- 任务、阶段和验证后增量更新；尚未归属统一 commit 时，frontmatter `lastGoodCommit` 保持 `null`，Markdown 正文写“待本次阶段提交归属”，不得填不存在的 SHA。
-- 执行模式在用户完成全自动/手动选择且 run-state 创建后立即写入 frontmatter；恢复时直接沿用该值，SHALL NOT 重复询问。
-- 全自动模式下，`lyx.pipelineStage` 与 `lyx.nextSafeAction` 是阶段报告后的续跑依据。`nextSafeAction` SHALL 写明下一阶段命令、同级 skill 路径、change 参数和继续条件；坐标模糊时，SHALL 从当前阶段和 `reviewMode` 重建后再执行。
-- 新 change 的 lyx 状态 SHALL NOT 写入 `.openspec.yaml`。旧 change 没有 YAML frontmatter 时 MAY 只读回退旧 `.openspec.yaml lyx`；frontmatter 存在但损坏、`lyx` 缺失或不是 mapping、`schemaVersion` 缺失或不受支持时 SHALL 停止，不得静默回退。
-- 方案自审结论 SHALL 写入正文 `## 方案自审`，作为自审已执行的证据；SHALL NOT 作为独立 assistant 消息发送。
-- 阶段正常完成且无未决业务决策时，报告只是中间状态；当前回合 SHALL 完整读取下一阶段同级 `lyx-<next-command>/SKILL.md` 后继续，SHALL NOT 把命令标识或文字说明当作执行。
+该文件 SHALL NOT 包含 YAML frontmatter、阶段机、commit 队列、任务计数或 next action。
 
 ### Rulings
 

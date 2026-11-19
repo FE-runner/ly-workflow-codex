@@ -49,11 +49,11 @@
 - **THEN** 如实报告失败和原始原因，继续方案自审与后续 commit，不得伪造标题已更新
 
 ### Requirement: change artifacts 的自然语言跟随宿主配置语言
-`@lyx-propose` 在生成 change artifacts 前 SHALL 读取当前宿主 `[general].language`（缺失、空白或非法时按 `zh-CN`），并让 proposal.md、design.md、tasks.md、delta spec、context.md 与 run-state.md 的标题、说明、决策、任务、场景和验收描述使用对应自然语言。OpenSpec schema 要求的栏目结构 SHALL 保留，但栏目标题和自然语言内容 SHALL 按配置语言表达；代码标识符、命令、路径、错误原文和必要技术术语 MAY 保留英文。该规则 SHALL NOT 因 OpenSpec 默认模板为英文而生成全英文正文。
+`@lyx-propose` 在生成 change artifacts 前 SHALL 读取当前宿主 `[general].language`（缺失、空白或非法时按 `zh-CN`），并让 proposal.md、design.md、tasks.md、delta spec 与 context.md 的标题、说明、决策、任务、场景和验收描述使用对应自然语言。OpenSpec schema 要求的栏目结构 SHALL 保留，但栏目标题和自然语言内容 SHALL 按配置语言表达；代码标识符、命令、路径、错误原文和必要技术术语 MAY 保留英文。该规则 SHALL NOT 因 OpenSpec 默认模板为英文而生成全英文正文。
 
 #### Scenario: zh-CN 宿主生成中文方案
 - **WHEN** 当前宿主 `[general].language` 为 `zh-CN`，用户运行 `@lyx-propose`
-- **THEN** proposal/design/tasks/delta spec/context/run-state 的标题与自然语言正文均为中文，技术标识符和命令可保留英文
+- **THEN** proposal/design/tasks/delta spec/context 的标题与自然语言正文均为中文，技术标识符和命令可保留英文
 
 ### Requirement: 产物生成后、commit 前执行方案自审（四项检查 + 两类发现处理）
 `/ly:propose` SHALL 在确定真实 change 名之后、执行 `propose: <change-name>` commit 之前，由方案提出者（当前会话，即 Codex 本人）对该 change 的全部 artifacts（proposal.md/design.md/tasks.md/全部 delta spec）执行一次**方案自审**。自审 SHALL 包含四项检查：
@@ -83,23 +83,6 @@
 #### Scenario: 用户拒绝回答开放问题时停止编排
 - **WHEN** 自审列出业务判断类开放问题并用 AskUserQuestion 询问，用户拒绝/取消回答
 - **THEN** 命令停止后续编排（不执行 index 检查、不 commit、全自动流水线不启动），方案 artifacts 留在工作区，报告已有结论清单与未决问题，转人工处理
-
-### Requirement: 自审逐项结论写入 run-state，禁止一句带过或独立消息停住
-方案自审 SHALL 把**逐项结论**写入 `openspec/changes/<change-name>/run-state.md` 的 `## 方案自审` 正文，对每项检查的每一子项（每条 What Change 的闭环情况、每个 Modified Capability 的基线波及情况、每个通用维度、每个核心 task 的实施就绪情况）分别标注结论：通过 / 不适用（含理由）/ 已修复（含改动说明）/ 待用户决策（含问题）。SHALL NOT 以"自审通过，无问题"之类的一句总结代替逐项结论；存在"待用户决策"项时 SHALL 从 run-state 提炼完整问题再询问。
-
-方案自审结论 SHALL NOT 作为独立的 assistant 消息输出。自审判定完成后 SHALL 直接通过文件工具更新 run-state，并在无待用户决策、失败或终止条件时继续 context、metadata 与 propose commit；不得用“下一步将...”等文字代替工具动作。
-
-#### Scenario: 全部通过时仍需逐项写入
-- **WHEN** 自审全部通过、无需修复、无开放问题
-- **THEN** `run-state.md` 的 `## 方案自审` 仍逐项记录每条 What Change、每个基线 Requirement、每个通用维度和每个核心 task 的"通过"结论，而非一句"自审通过"
-
-#### Scenario: 自审完成后不输出独立消息
-- **WHEN** 自审判定完成且无待用户决策项
-- **THEN** 当前回合通过文件工具写入 `## 方案自审`，随后直接产出 context.md、更新 run-state 并提交 propose 阶段 commit，不先发送独立自审清单消息
-
-#### Scenario: 不适用维度必须写明理由
-- **WHEN** 某通用维度（如并发）判定为不适用
-- **THEN** run-state 的逐项结论中该维度标注"不适用"+ 具体理由；未写理由的 silent skip 视为自审未执行该项
 
 ### Requirement: propose 产物按风险测试策略生成
 
@@ -316,41 +299,6 @@
 - **WHEN** context.md 产出环节因异常未能写入文件
 - **THEN** 编排如实报告该失败并停止在 commit 之前, SHALL NOT 在缺少 context.md 的情况下继续 commit 或后续流水线
 
-### Requirement: 全自动流水线按执行者语义衔接
-
-**适用范围覆盖（自本 change 起）**：本能力中凡以"单审查 subagent（非 fork）机制"或"coding subagent 实施"为前提的 Requirement（含「全自动路径 = 自动流水线直到审完代码」「apply 实施由 coding subagent 执行」），其适用范围 SHALL 限定为对应执行者字段为 `"subagent"` 时；执行者为 `"main"`（默认，含未配置）时 SHALL 以本 Requirement 与 `ly-review-gates` 的「审查执行者可切换（main / subagent）」为准。
-
-全自动路径在被执行的关卡范围内 SHALL 保持原有编排顺序（propose 阶段 commit → review-plan → 节点前置校验 → apply → 节点前置校验 → review-code）；具体执行哪些审查关卡 SHALL 由 `reviewMode` 门控（见「全自动路径 = 自动流水线直到审完代码」——`full` 全跑、`plan-only` 跳过 review-code、`code-only` 跳过 review-plan、`off` 两个审查关卡都跳过，`apply` 始终执行）。每一步 SHALL 按执行者字段决定主体：
-
-- review-plan / review-code 按 `reviewExecutor`（见 `ly-review-gates`）
-- apply 按 `codingExecutor`（见 `ly-lifecycle-commands`）
-
-**apply 阶段快照与提交规则 SHALL 同时覆盖两条执行者路径**：主 agent 直接实施时无 subagent 回传清单，SHALL 以主会话自己记录的实施改动文件清单充当回传清单；实施前 `git status --porcelain` 快照、partial apply 检测、index 隔离（按 `commit-conventions` 的"propose / apply 共用提交范围隔离协议"）、`git show --name-only` 校验规则 SHALL 与 subagent 路径一致。
-
-节点前置校验（review-plan 必须正常清零才进 apply；最近一期 apply 阶段 commit（带 `Change-Stage: apply` trailer，定位见 `commit-conventions`）的 SHA 必须等于本次记录才进 review-code）SHALL 在被执行到对应关卡时适用，与执行者选择无关；对应关卡因 `reviewMode` 被跳过时其前置校验一并跳过。
-
-用户选择全自动或手动后，`/ly:propose` SHALL 把 `executionMode`（`full-auto` / `manual`）写入 `run-state.md`。全自动模式下，review-plan、apply 与节点校验输出的阶段报告 SHALL 被视为“阶段报告非终态”：只要当前阶段正常完成、无未决业务决策或终止条件，当前回合 SHALL 立即继续下一流水线阶段，SHALL NOT 等待用户再次触发；只有 review-code 正常清零并输出最终报告，或出现需要人工决策/介入的停止条件时，才允许结束全自动回合。
-
-#### Scenario: 全自动路径默认主 agent 执行
-- **WHEN** 用户执行 `/ly:propose` 选择"全自动"，未配置执行者字段（等价 `main`），`reviewMode` 为 `full`
-- **THEN** 流水线按序自动执行 review-plan（主 agent 直接审查）→ apply（主 agent 直接实施）→ review-code（主 agent 直接审查），节点前置校验照常适用，全程不出现 spawn 与回退标记
-
-#### Scenario: 全自动路径配置为 subagent
-- **WHEN** 用户配置 `reviewExecutor = "subagent"` 与 `codingExecutor = "subagent"`，执行 `/ly:propose` 选择"全自动"
-- **THEN** 流水线各环节按 subagent 路径执行：审查复用同一子代理，coding subagent 实施后由主会话统一提交
-
-#### Scenario: 主 agent 实施时快照规则照常适用
-- **WHEN** `codingExecutor = "main"`，全自动流水线进入 apply，主 agent 直接实施
-- **THEN** 主会话仍记录实施前 `git status --porcelain` 快照，以自记录改动清单充当回传清单，partial apply 检测与提交校验照常执行
-
-#### Scenario: 阶段报告后不等待用户继续
-- **WHEN** 全自动路径完成 review-plan 或 apply 阶段并输出阶段报告，且无未决业务决策或终止条件
-- **THEN** 当前回合继续下一阶段（review-plan 后进入 apply，apply 后进入 review-code），阶段报告不作为最终回复
-
-#### Scenario: reviewMode=off 时编排顺序退化为仅 apply
-- **WHEN** 用户配置 `reviewMode = "off"` 并选择"全自动"
-- **THEN** 在被执行范围内顺序保持 propose 阶段 commit → apply，review-plan / review-code 被跳过并各打印显式状态行，执行者语义（`codingExecutor`）照常适用
-
 ### Requirement: propose 阶段 commit 使用增强正文
 
 `/ly:propose` 在生成 artifacts、完成方案自审与 `context.md` 产出后执行的 propose 阶段 commit SHALL 按 `commit-conventions` 的正文规范生成 message：首行仍固定 `docs(openspec): <subject>`，正文说明方案目标、范围边界与关键决策，末尾仍带 `Change-Stage: propose` 与 `Change-Name: <change-name>` trailer。该变更 SHALL NOT 改变全自动/手动路径、审查对象定位或每步 commit 时机。
@@ -382,58 +330,6 @@
 - **WHEN** `proposal.md` 已声明解决某条历史 Warning，propose 阶段 commit 完成
 - **THEN** 历史 `review-findings.md` 保持原样，解决说明直到 `@lyx-archive` 归档时才被追加
 
-### Requirement: propose 与 apply 使用 change 级 ask 决策
-
-`@lyx-propose` SHALL 在生成 artifacts 前解析 effective 配置 `testMode` 与 change 级决策。effective 配置为 `ask` 且新 change 尚无 change 级决策时，命令 SHALL 在生成 artifacts 前询问一次 `normal` / `off`，并在当前会话暂存该选择；真实 change 名确定后，SHALL 把选择写入该 change 的 `run-state.md` 固定 frontmatter，随 propose 阶段 commit 提交。若在 run-state 建立前中断，恢复时 MAY 重新询问，SHALL NOT 伪造已持久化的决策。
-
-`@lyx-apply` SHALL 在实施前读取当前 change 的 `run-state.md` `testModeDecision`。目标 change 没有 YAML frontmatter 时，MAY 只读回退 `.openspec.yaml` 的 `lyx.testModeDecision`。effective 配置为 `ask` 且决策为 `normal` / `off` 时，apply SHALL 使用该决策；决策缺失、为 `null` 或为非法枚举字符串时，apply SHALL 询问一次并把新选择持久化到 run-state 后再实施。frontmatter、mapping 或字段类型结构非法时，apply SHALL 停止并要求人工修复。配置为 `normal` / `off` 时，配置 SHALL 覆盖历史决策。
-
-最终决策为 `off` 时，propose/apply SHALL 遵守无测试模式；最终决策为 `normal` 时，SHALL 按 `risk-based-testing-policy` 生成测试任务并在 apply 执行相称测试。apply SHALL 在成功路径把 `run-state.md` 纳入待提交清单，只要本轮新写入决策，或读取了前次遗留且尚未提交的决策；即使没有其他实施改动也不得遗漏该决策修改。
-
-apply 在最终模式为 `normal` 时 SHALL 校验 artifacts 与该模式一致：若历史决策为 `off` 但配置覆盖为 `normal`，或缺失决策补问为 `normal`，而 proposal/tasks 没有测试任务或测试执行计划，apply SHALL 在实施前停止并要求先更新 artifacts 或恢复配置，SHALL NOT 临时添加范围外测试。
-
-run-state frontmatter 不可读或结构非法时，propose/apply SHALL 停止并要求人工修复。新 change 的 `.openspec.yaml` 整体不可读或 YAML 解析失败时，propose/apply SHALL 停止并要求人工修复 OpenSpec 元数据。仅在需要回退读取旧 `lyx` 时，旧 `.openspec.yaml` 不可读、解析失败或结构非法同样 SHALL 阻断。
-
-#### Scenario: ask 选择 normal 时 propose 生成测试任务
-- **WHEN** effective 配置为 `ask`，用户在 `@lyx-propose` 中选择 `normal`
-- **THEN** artifacts 按风险策略包含相称测试任务，run-state 写入 `testModeDecision: "normal"` 并随 propose commit 提交
-
-#### Scenario: ask 选择 off 时 propose 不生成测试任务
-- **WHEN** effective 配置为 `ask`，用户在 `@lyx-propose` 中选择 `off`
-- **THEN** tasks 不包含测试文件或测试命令任务，run-state 写入 `testModeDecision: "off"`
-
-#### Scenario: apply 沿用 change 决策
-- **WHEN** effective 配置为 `ask`，run-state 保存 `testModeDecision: "off"`
-- **THEN** apply 不执行测试命令，跳过测试专用任务并保留实现部分
-
-#### Scenario: apply 补问并提交元数据
-- **WHEN** effective 配置为 `ask`，目标 change 缺少决策，用户在 apply 中选择 `normal`
-- **THEN** apply 写入 run-state 的 `testModeDecision: "normal"`，随 apply 阶段 commit 提交 `run-state.md` 并按 normal 执行相称测试
-
-#### Scenario: 旧活跃 change 只读回退
-- **WHEN** run-state 没有 `testModeDecision`，旧 change 的 `.openspec.yaml` 保存 `lyx.testModeDecision = "off"`
-- **THEN** apply 使用 `off` 且不修改 `.openspec.yaml`
-
-#### Scenario: 历史决策不覆盖显式配置
-- **WHEN** run-state 保存 `testModeDecision: "off"`，当前 effective 配置为 `normal`
-- **THEN** apply 使用 `normal`，不沿用历史 `off`
-
-#### Scenario: 未回答时 propose 停止
-- **WHEN** effective 配置为 `ask`，用户在 propose 的测试模式询问中取消回答
-- **THEN** 命令停止，不生成任何 artifacts 或测试任务
-
-#### Scenario: run-state 不可读时停止
-- **WHEN** effective 配置为 `ask` 且目标 change 的 run-state frontmatter 不可读或解析失败
-- **THEN** propose/apply 停止，不覆盖元数据，也不执行测试相关动作
-
-#### Scenario: YAML 不可读时停止
-- **WHEN** effective 配置为 `ask`，run-state 缺少决策且需要回退读取旧 `.openspec.yaml`，但该文件不可读或解析失败
-- **THEN** propose/apply 停止，不覆盖元数据，也不执行测试相关动作
-
-#### Scenario: normal 覆盖历史 off 但 artifacts 未规划测试时停止
-- **WHEN** change 保存 `testModeDecision: "off"`，当前配置为 `normal`，tasks 没有测试任务或测试执行计划
-- **THEN** apply 在实施前停止并提示更新 artifacts 或恢复配置
-
 ### Requirement: 方案自审增加实施就绪检查
 `@lyx-propose` 的方案自审 SHALL 在既有四项检查之外验证实施就绪：每个核心任务有明确文件路径或可检索定位锚点；跨任务接口写明参数、返回值或数据结构；每个任务有可运行验证命令和预期结果；禁止“完善处理”“适当校验”“补充相关逻辑”等不可执行描述；每个任务可作为独立交付、验证和审查单元。机械缺失 SHALL 直接修复，涉及产品语义或取舍的未知项 SHALL 询问用户。
 
@@ -444,54 +340,6 @@ run-state frontmatter 不可读或结构非法时，propose/apply SHALL 停止�
 #### Scenario: 任务需要未决业务决策
 - **WHEN** 实施者必须决定是否支持一个尚未确认的用户场景
 - **THEN** propose 自审把该问题列为待用户决策，不自行补默认行为
-
-### Requirement: propose 初始化 change 运行账本
-`@lyx-propose` SHALL 在真实 change 名确认后、方案自审开始前创建 `run-state.md`，以固定 YAML frontmatter 初始记录 isolation metadata、执行模式、`stage: propose-self-review`、流水线阶段、propose 基线、`testModeDecision`（如有）和下一步安全动作；自审完成后 SHALL 把完整逐项结论写入正文 `## 方案自审`，再继续 context.md 与 propose commit。该文件 SHALL 作为 change artifact 与 context.md 一同纳入 propose 阶段提交，但不得替代 proposal/design/tasks。
-
-propose SHALL NOT 为新建 change 向 `.openspec.yaml` 写入 `lyx:` 或 `x-lyx:`；隔离、测试模式和运行坐标只写入 run-state。
-
-#### Scenario: 全自动自审前已有恢复账本
-- **WHEN** 用户选择全自动，真实 change 名确认且方案自审即将开始
-- **THEN** `run-state.md` 已记录 `executionMode: full-auto`、`stage: propose-self-review`、隔离信息、测试模式（如已选择）和下一流水线阶段
-
-#### Scenario: 全自动 propose 结束
-- **WHEN** propose commit 成功
-- **THEN** run-state 的下一步是 review-plan 或 apply，取决于 reviewMode 与自动/手动路径
-
-#### Scenario: 新 change 不写 lyx 扩展字段
-- **WHEN** propose 为新 change 写入隔离与测试模式
-- **THEN** `.openspec.yaml` 只包含 OpenSpec 官方字段，不包含 `lyx:` 或 `x-lyx:`
-
-### Requirement: 全自动阶段交接显式加载下一 skill bundle
-`@lyx-propose` 的全自动流水线在进入 review-plan、apply 或 review-code 前，SHALL 以当前 skill 所在目录为锚点解析并完整读取同级 `lyx-<next-command>/SKILL.md`，再按该 skill 执行。仅输出 `@lyx-<command>`、写出下一阶段名称或等待用户再次触发 SHALL NOT 视为已交接。
-
-#### Scenario: review-plan 正常清零后进入 apply
-- **WHEN** 全自动执行中的 review-plan 以正常清零结束，`run-state.md` 的下一步为 apply
-- **THEN** 当前回合完整读取同级 `lyx-apply/SKILL.md`，随后以同一 change 名继续 apply，不在阶段报告后结束
-
-#### Scenario: apply 正常完成后进入 review-code
-- **WHEN** apply 实施、验证与阶段 commit 均正常完成，且 `run-state.md` 的下一步为 review-code
-- **THEN** 当前回合完整读取同级 `lyx-review-code/SKILL.md`，随后继续代码审查
-
-#### Scenario: 只输出命令标识不算交接
-- **WHEN** 阶段报告写有“下一步运行 `@lyx-apply <change-name>`”，但没有读取 `lyx-apply` bundle
-- **THEN** 该回合不得声明全自动已推进，恢复时应从 run-state 记录的当前阶段重新执行显式交接
-
-#### Scenario: 人工介入点仍允许结束
-- **WHEN** review-plan 或 apply 因业务决策、失败或审查终止条件需要人工介入
-- **THEN** 不加载下一阶段 bundle，如实报告停止原因并结束全自动回合
-
-#### Scenario: 方案自审后先完成 propose 内部步骤
-- **WHEN** 全自动 propose 完成方案自审且无待用户决策项
-- **THEN** 同一回合先把逐项结论写入 run-state 的 `## 方案自审`，再产出 context.md、更新 isolation metadata，并提交 propose 阶段 commit，之后才读取 review-plan bundle
-
-#### Scenario: opsx planning boundary 不终止 lyx 编排
-- **WHEN** 被委托的 opsx:propose 完成 artifacts 并声明 planning boundary 或 “stop after artifacts”
-- **THEN** 当前会话返回 lyx-propose 编排，继续后续步骤；该声明不要求用户再次触发环节，也不把 artifacts 完成作为全自动终态
-
-#### Scenario: 自审中断后从 run-state 恢复
-- **WHEN** 唯一活跃 change 的 run-state 记录 `stage: propose-self-review`、`executionMode: full-auto` 且 proposal/design/tasks 完整
-- **THEN** 恢复执行沿用 run-state 中的 isolation 与执行模式，从方案自审或 context.md 产出继续，不重复询问隔离方式或全自动/手动
 
 ### Requirement: propose 使用 lyx-ponytail 约束方案范围
 
@@ -506,3 +354,74 @@ propose SHALL NOT 为新建 change 向 `.openspec.yaml` 写入 `lyx:` 或 `x-lyx
 #### Scenario: 主动省略只留边界说明
 - **WHEN** 当前实现已足以满足需求，方案决定不增加可选配置
 - **THEN** proposal 可用一句话记录省略项，但不把该省略项扩成 Requirement、Scenario 或 task
+
+### Requirement: 方案自审使用压缩结论账本
+`@lyx-propose` SHALL 在 `context.md` 的 `## 方案自审` 记录五项检查结果。对连续且结果均为“通过”的条目 MAY 使用范围合并，例如 `What Change 1–8：通过`、`Task 1.1–1.6：通过`；对“不适用 / 已修复 / 待用户决策”的条目 SHALL 单独展开理由或修改说明。记录必须覆盖全部检查对象，但 SHALL NOT 为每个通过项重复一行长句，也 SHALL NOT 以“自审通过，无问题”替代覆盖范围。
+
+#### Scenario: 全部通过
+- **WHEN** 一个 change 包含 8 条 What Change、3 个通用维度和 6 个任务且全部通过
+- **THEN** `context.md` 可按三个连续范围记录通过，无需逐项重复长句
+
+#### Scenario: 存在异常项
+- **WHEN** Task 2.3 需要用户决定接口鉴权
+- **THEN** 自审单独列出该 Task 并标记“待用户决策”
+
+#### Scenario: 自审不中断 propose
+- **WHEN** 自审无待决策项
+- **THEN** 当前回合写入压缩结论、产出 context 并提交 propose，不输出独立自审消息
+
+### Requirement: 全自动中间阶段使用安静报告
+全自动流水线 SHALL 只在终端输出每个成功中间阶段的一行状态，包含阶段名、轮次/结果和 commit（如适用）。命令 SHALL NOT 在每个阶段重复完整审查原文、Warning/Info 列表或完成证据；这些细节 SHALL 在最终合并报告中只出现一次，必要时引用 artifact 与 commit。存在 Critical、失败或人工介入条件时 SHALL 立即输出足够的停止详情，不受安静模式限制。
+
+#### Scenario: review-plan 正常清零
+- **WHEN** review-plan 在 2 轮后正常清零
+- **THEN** 中间输出可只有一行“review-plan: normal, 2 rounds, commit <sha>”，随后继续 apply
+
+#### Scenario: review-code 失败
+- **WHEN** review-code 触发驳回硬线
+- **THEN** 命令立即输出终止条件、相关 Critical 和可核验依据，不等待最终汇总
+
+### Requirement: propose 与 apply 的 ask 决策只在会话内复用
+`@lyx-propose` SHALL 在 effective `testMode = "ask"` 时于生成 artifacts 前询问一次 `normal` / `off`，并在同一未中断全自动回合的 propose、后续审查和 apply 中复用该选择。`@lyx-apply` 在新的直接调用或新用户回合开始时 SHALL 重新解析 effective 配置；若仍为 `ask` 且没有可复用的同回合选择，SHALL 重新询问。命令 SHALL NOT 把决策写入 run-state 或其他专用状态文件；`context.md` MAY 记录人读说明但不作为持久机器决策。
+
+#### Scenario: 全自动同回合复用
+- **WHEN** 用户在 propose 选择 `normal`
+- **THEN** 同一全自动回合的 review 与 apply 使用 `normal`，不重复询问
+
+#### Scenario: 新 apply 调用重新询问
+- **WHEN** 用户稍后直接调用 `@lyx-apply` 且配置仍为 `ask`
+- **THEN** apply 重新询问，不假设 propose 的选择仍有效
+
+### Requirement: 全自动交接使用固定顺序与当前会话
+`@lyx-propose`、`@lyx-review-plan` 和 `@lyx-apply` 在正常完成且同一回合继续时 SHALL 按固定阶段顺序完整读取同级下一 `lyx-<next-command>/SKILL.md`，并使用当前会话中的 change 与 apply commit SHA。命令 SHALL NOT 从 run-state 读取下一阶段坐标。无法定位 bundle、当前会话结果冲突或所需 commit 缺失时 SHALL 停止并报告。
+
+#### Scenario: review-plan 后进入 apply
+- **WHEN** review-plan 正常清零且当前会话记录 change 名
+- **THEN** 完整读取同级 `lyx-apply/SKILL.md` 并继续 apply
+
+#### Scenario: apply 后进入 review-code
+- **WHEN** apply 正常提交并记录 HEAD SHA
+- **THEN** 完整读取同级 `lyx-review-code/SKILL.md` 并校验 HEAD 与本次 apply commit
+
+#### Scenario: 只写下一步命令不算交接
+- **WHEN** 当前阶段只输出 `@lyx-apply <change-name>` 而没有读取 bundle
+- **THEN** 不得声明全自动已推进
+
+### Requirement: 全自动流水线保持执行者与同步续跑语义
+同一未中断全自动回合 SHALL 按 `reviewMode` 决定审查关卡、按 `reviewExecutor` 决定审查主体、按 `codingExecutor` 决定实施主体，并在每步完成后立即继续下一阶段。执行模式只在当前回合内保存；SHALL NOT 写入 `run-state.md`。主 agent 与 subagent 两条路径 SHALL 使用相同的 apply 快照、partial apply 检测、index 隔离和提交校验规则。节点校验 SHALL 使用当前会话记录的 change、正常清零点与 apply commit SHA；信息冲突时以 Git/tasks 事实为准并停止。
+
+#### Scenario: 全自动路径默认主 agent 执行
+- **WHEN** 用户选择全自动且执行者均为 `main`
+- **THEN** review-plan、apply、review-code 依次由主 agent 执行，不出现 spawn
+
+#### Scenario: 全自动路径配置为 subagent
+- **WHEN** reviewExecutor 与 codingExecutor 均为 `subagent`
+- **THEN** 审查复用同一子代理，实施子代理回传后由主会话提交
+
+#### Scenario: 阶段报告后不等待用户继续
+- **WHEN** review-plan 或 apply 正常完成且无未决项
+- **THEN** 当前回合继续下一阶段，不写 run-state，也不等待用户再次触发
+
+#### Scenario: reviewMode=off 时编排顺序退化为仅 apply
+- **WHEN** reviewMode 为 `off` 且用户选择全自动
+- **THEN** 打印两个审查跳过状态行，仅执行 apply

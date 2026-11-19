@@ -257,14 +257,15 @@ describe('skill eval fixtures and cleanup', () => {
         expect.arrayContaining([
           'review-code',
           '(?:0\\s*Critical|未发现\\s*Critical|未发现问题)',
-          '(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)',
+          '(?:全自动|全流程).*(?:完成|跑完|结束|正常终态|正常清零)|正常清零结束',
         ]),
       )
       await evalCase.setup(fixture)
       const before = await evalCase.verifySideEffects(fixture)
       expect(before.passed).toBe(false)
       expect(before.evidence).toContain('applyCommit=(missing)')
-      expect(before.evidence).toContain('runStateNormal=false')
+      expect(before.evidence).toContain('reviewRecorded=false')
+      expect(before.evidence).toContain('runStateExists=false')
       expect(before.evidence).toContain('featureImplemented=false')
     }
     finally {
@@ -283,7 +284,7 @@ describe('skill eval fixtures and cleanup', () => {
         expect.arrayContaining([
           'review-code',
           '(?:0\\s*Critical|未发现\\s*Critical|未发现问题)',
-          '(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)',
+          '(?:全自动|全流程).*(?:完成|跑完|结束|正常终态|正常清零)|正常清零结束',
         ]),
       )
       await evalCase.setup(fixture)
@@ -347,14 +348,14 @@ describe('skill eval fixtures and cleanup', () => {
     }
   })
 
-  it('rejects unexpected apply changes while allowing run-state evidence updates', async () => {
+  it('rejects unexpected apply changes while allowing context evidence updates', async () => {
     const base = mkdtempSync(join(tmpdir(), 'lyx-eval-apply-sideeffect-'))
     const fixture = { repoDir: join(base, 'repo'), homeDir: join(base, 'home') }
     try {
       const evalCase = getSkillEvalCase('apply')
       await evalCase.setup(fixture)
-      const runState = join(fixture.repoDir, 'openspec/changes/eval-change/run-state.md')
-      writeFileSync(runState, `${readFileSync(runState, 'utf8')}- Ruling: partial apply\n`)
+      const context = join(fixture.repoDir, 'openspec/changes/eval-change/context.md')
+      writeFileSync(context, `${readFileSync(context, 'utf8')}- Ruling: partial apply\n`)
       expect((await evalCase.verifySideEffects(fixture)).passed).toBe(true)
       writeFileSync(join(fixture.repoDir, 'unexpected.txt'), 'changed\n')
       expect((await evalCase.verifySideEffects(fixture)).passed).toBe(false)
@@ -386,12 +387,12 @@ describe('skill eval fixtures and cleanup', () => {
     try {
       const evalCase = getSkillEvalCase('review-code')
       await evalCase.setup(fixture)
-      const runStatePath = join(fixture.repoDir, 'openspec/changes/eval-change/run-state.md')
+      const contextPath = join(fixture.repoDir, 'openspec/changes/eval-change/context.md')
       const reportPath = join(fixture.repoDir, 'openspec/changes/eval-change/review-round-2.md')
-      const roundOne = readFileSync(runStatePath, 'utf8').match(/^- Round 1 Critical: (.+)$/m)?.[1]
+      const roundOne = readFileSync(contextPath, 'utf8').match(/^- Round 1 Critical: (.+)$/m)?.[1]
       expect(roundOne).toBe(REVIEW_CODE_CRITICAL)
       expect(readFileSync(reportPath, 'utf8')).toContain(`1. ${REVIEW_CODE_CRITICAL}`)
-      writeFileSync(runStatePath, `${readFileSync(runStatePath, 'utf8')}- Round 2: rejected\n`)
+      writeFileSync(contextPath, `${readFileSync(contextPath, 'utf8')}- Round 2: rejected\n`)
       expect((await evalCase.verifySideEffects(fixture)).passed).toBe(true)
       writeFileSync(join(fixture.repoDir, 'src/worker.ts'), `${readFileSync(join(fixture.repoDir, 'src/worker.ts'), 'utf8')}// changed\n`)
       expect((await evalCase.verifySideEffects(fixture)).passed).toBe(false)

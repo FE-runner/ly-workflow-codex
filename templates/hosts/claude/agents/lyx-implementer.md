@@ -1,6 +1,6 @@
 ---
 name: lyx-implementer
-description: ly-workflow-codex 实施子代理：只实施指定 OpenSpec change 的 tasks.md（逐任务实施 + 验证 + 勾选），改动留在主检出、不自行提交，完成后回传改动清单与验证结果。仅由 /lyx-apply 在 codingExecutor = "subagent" 时调用。
+description: ly-workflow-codex 实施子代理：只实施指定 OpenSpec change 的 tasks.md（按风险分批实施、验证、勾选），改动留在主检出、不自行提交，完成后回传改动清单与验证结果。仅由 /lyx-apply 在 codingExecutor = "subagent" 时调用。
 tools: Read, Grep, Glob, Edit, Write, Bash
 {{AGENT_MODEL_LINES}}
 ---
@@ -21,9 +21,9 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 
 ## 实施规范
 
-1. 自顶向下逐任务实施，每完成一个任务立即按 tasks.md 指定的验证方式运行验证（如 typecheck / build / test）
-2. 验证失败则修复后重试，每个任务最多 3 次修复尝试；仍失败则停止并如实报告
-3. 验证通过后把 tasks.md 中对应条目从 `- [ ]` 改为 `- [x]`，继续下一个任务
+1. 自顶向下按 tasks 实施；连续任务使用同一验证命令且不涉及行为/契约改动、缺陷复现、安全/迁移或独立验收边界时，可组成验证批次
+2. 每个批次/高风险检查点按 tasks 指定命令运行验证；失败则修复后重试，最多 3 次；仍失败则停止并如实报告
+3. 验证通过后把该批次/检查点对应的 tasks 条目从 `- [ ]` 改为 `- [x]`，继续下一批
 4. 全部任务验证完成后做一次行为不变的简化收口；不得修改测试语义、扩大任务范围或新增独立重构 commit，简化后重跑受影响验证
 
 ## Response Structure

@@ -85,7 +85,7 @@ your-project/
 3. **`--local` 时必须校验已忽略**：`git check-ignore -q .worktrees`。未忽略则先写入 `.gitignore`，用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取 message 路径，按 `@lyx-commit` 正文规范提交（首行 `chore(worktree): 忽略 .worktrees 目录`，正文写动机/改动/影响，不追加 Change trailer），再继续创建——防止 worktree 内容被误提交进仓库。
 4. 创建 worktree（`git worktree add <path> -b <branch>`）
 5. 自动复制环境文件（`.env` 等）
-6. **验证 baseline**：自动检测并跑项目安装/测试命令（`npm install && npm test` / `cargo build && cargo test` / `pip install -r requirements.txt && pytest` / `go mod download && go test ./...` 等），确认新 worktree 干净可用后才报告完成；测试失败则汇报失败详情，询问是继续还是先排查。
+6. **轻量 baseline**：检查依赖是否可用，并在项目提供时运行 typecheck 或明确声明的 smoke 命令；SHALL NOT 默认运行完整测试套件。项目只有完整 `test` 脚本时，记录“轻量 baseline 不可用”并继续；完整测试由 `@lyx-archive` 执行一次。用户显式要求完整 baseline 时 MAY 运行测试。
 7. 可选：用 IDE 打开
 8. **权限失败兜底**：`git worktree add` 因 sandbox 权限被拒时，提示用户已降级为原地工作，不再创建 worktree。
 
@@ -155,6 +155,6 @@ your-project/
 - 支持 Windows、macOS、Linux
 - 默认用户目录 `~/.ly/worktrees/` 下创建，不需要 `--local` 时不碰 `.gitignore`
 - `--local` 且 `.worktrees/` 未被忽略时会先写 `.gitignore` 并提交，再继续创建
-- 创建后会跑一次项目 setup + baseline 测试，确认新 worktree 干净可用
+- 创建后默认只做依赖可用性 + typecheck/smoke；完整测试由 archive 门禁执行
 - 隔离 worktree 的创建/切换统一由 `@lyx-propose` 在**创建方案前**通过 `git worktree add`（从当前分支 HEAD 切出，目录 `~/.ly/worktrees/<项目名>/<开发分支名>`）触发；worktree 目录/分支锁定为开发分支名，不随 change 名重命名；孤儿 worktree（关联 worktree 已删除/重命名）需人工 `remove`/`prune`
-- `@lyx-propose` 创建 worktree 或新分支时负责捕获 isolation metadata（mode / sourceBranch / developmentBranch / worktreePath），并在 change 名确认后写入 `run-state.md` 的 `lyx.isolation`；手动 `@lyx-worktree add` 不强制记录该 metadata
+- `@lyx-propose` 创建 worktree 或新分支时负责捕获隔离信息，并在 change 名确认后把简短的人读说明写入 `context.md` 的 `## 执行上下文`；不创建 run-state。手动 `@lyx-worktree add` 不强制记录

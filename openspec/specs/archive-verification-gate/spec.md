@@ -34,53 +34,24 @@
 - **WHEN** 用户运行 `@lyx-archive <change-name>`，项目 `package.json` 未定义 `typecheck` 脚本
 - **THEN** 命令跳过该项并在报告中注明"未提供 typecheck 脚本"，其余应执行的验证照常执行，不因该项缺失判定失败
 
-### Requirement: archive 在 ask 模式下使用 change 决策
+### Requirement: archive ask 使用当前调用决策
+effective 配置为 `ask` 时，`@lyx-archive` SHALL 在验证前询问一次 `normal` / `off`，并在本次调用内使用该选择。命令 SHALL NOT 写入 run-state 或其他持久决策文件；显式项目或宿主配置为 `normal` / `off` 时 SHALL 直接使用配置。旧 `.openspec.yaml lyx.testModeDecision` MAY 作为只读兼容输入，SHALL NOT 被改写。
 
-`@lyx-archive` SHALL 在归档前验证开始前解析 effective 配置 `testMode` 与目标 change 的 run-state `testModeDecision`。effective 配置为 `ask` 且决策为 `normal` / `off` 时，归档门禁 SHALL 使用该决策；目标 change 没有 YAML frontmatter 时，MAY 只读回退 `.openspec.yaml` 的 `lyx.testModeDecision`。决策缺失、为 `null` 或为非法枚举字符串时，命令 SHALL 询问一次 `normal` / `off` 并持久化到 run-state 后再验证。结构非法时停止并要求人工修复。
+#### Scenario: 当前调用选择 off
+- **WHEN** effective 配置为 `ask`，用户在 archive 中选择 `off`
+- **THEN** archive 跳过测试，执行类型检查，不写 run-state
 
-最终决策为 `normal` 时 SHALL 执行测试与类型检查；最终决策为 `off` 时 SHALL 跳过测试并执行类型检查。两种模式 SHALL NOT 执行生产构建。因 `ask` 新写入，或本轮成功消费的前次遗留且尚未提交的 run-state 决策修改，SHALL 随既有 `git add -- openspec/` 进入归档 commit。
+#### Scenario: 显式配置 normal
+- **WHEN** effective 配置为项目级 `normal`
+- **THEN** archive 直接执行测试与类型检查，不询问
 
-新 change 的 `.openspec.yaml` 不承载 lyx 决策；仅在兼容回退时读取旧 `.openspec.yaml`。需要回退时若该文件不可读或 YAML 解析失败，archive SHALL 在询问、写入、验证或归档动作前停止并要求人工修复。run-state frontmatter 不可读或解析失败时同样 SHALL 阻断归档。
+### Requirement: archive 验证证据写入报告和 commit
+`@lyx-archive` SHALL 在最终报告中列出测试和类型检查的“命令 + 退出码 + 结果摘要”，并在有 archive commit 时把同一摘要写入 commit 正文。验证失败时 SHALL 不移动 change，并在报告中保留失败命令、退出码与关键错误摘要。命令 SHALL NOT 为保存该证据创建额外状态文件。
 
-#### Scenario: ask 已有 off 决策
-- **WHEN** effective 配置为 `ask`，run-state 保存 `testModeDecision: "off"`
-- **THEN** archive 跳过测试，执行 typecheck，并注明最终决策来自 run-state
+#### Scenario: 验证通过
+- **WHEN** 测试与类型检查均通过
+- **THEN** 报告与 archive commit 正文包含两类验证证据
 
-#### Scenario: ask 已有 normal 决策
-- **WHEN** effective 配置为 `ask`，run-state 保存 `testModeDecision: "normal"`
-- **THEN** archive 执行测试与 typecheck，不执行 build
-
-#### Scenario: archive 补问并持久化
-- **WHEN** effective 配置为 `ask`，change 缺少决策，用户在归档前选择 `off`
-- **THEN** archive 写入 run-state 的 `testModeDecision: "off"`，随归档 commit 提交，并按 off 执行门禁
-
-#### Scenario: archive 消费继承 dirty 决策
-- **WHEN** 前次阶段留下尚未提交的 run-state `testModeDecision`，archive 成功消费该决策并完成归档
-- **THEN** 归档 commit 包含 `run-state.md`，不遗留 dirty 决策
-
-#### Scenario: 旧活跃 change 只读回退
-- **WHEN** run-state 没有 `testModeDecision`，目标旧 change 的 `.openspec.yaml` 保存 `lyx.testModeDecision = "off"`
-- **THEN** archive 使用 `off` 执行门禁，且不修改 `.openspec.yaml`
-
-#### Scenario: archive 未获得回答时停止
-- **WHEN** effective 配置为 `ask` 且决策缺失，用户取消或环境无法交互
-- **THEN** archive 停止在验证与归档动作前，不移动 change 目录
-
-#### Scenario: run-state 不可读时停止
-- **WHEN** effective 配置为 `ask` 且目标 change 的 run-state frontmatter 不可读或解析失败
-- **THEN** archive 停止，不覆盖元数据、不执行门禁、不移动 change 目录
-
-#### Scenario: YAML 不可读时停止
-- **WHEN** effective 配置为 `ask`，run-state 缺少决策且需要回退读取旧 `.openspec.yaml`，但该文件不可读或解析失败
-- **THEN** archive 停止，不覆盖元数据、不执行门禁、不移动 change 目录
-
-### Requirement: 归档前验证结果写入 run-state
-`@lyx-archive` 在执行测试和类型检查后 SHALL 把每类命令、退出码和关键结果摘要写入 `run-state.md`，并记录 final testMode 来源。任一验证失败时 SHALL 写入失败证据且不移动 change；全部通过后 SHALL 把当前阶段更新为 archive-ready，再执行归档。
-
-#### Scenario: testMode=off 的归档
-- **WHEN** 最终测试模式为 off
-- **THEN** run-state 明确记录测试已按策略跳过，同时记录 typecheck 的新鲜通过证据
-
-#### Scenario: 归档前验证成功
-- **WHEN** 测试与类型检查全部通过
-- **THEN** run-state 记录命令、退出码和摘要，归档 commit 包含最终状态
+#### Scenario: 验证失败
+- **WHEN** 测试失败
+- **THEN** 命令停止归档，保留失败证据，不创建 archive commit

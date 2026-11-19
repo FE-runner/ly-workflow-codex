@@ -25,9 +25,9 @@ argument-hint: '[<change-name>] [--no-commit]'
 
 审查 subagent 模型按 `[host] reviewModel` 指定，未配置或空白时继承当前会话模型。SHALL NOT spawn 第二个审查 agent、SHALL NOT 实现"并行双审、交换结论、共识归并"环节——单 agent 的分级结论即本轮唯一审查发现来源，质量把关由当前会话逐条裁决与"驳回硬线"终止条件承担。Critical 修复由当前会话执行。
 
-循环执行期间不提交审查修复；仅当循环以"正常清零"结束时，才对审查目标全部文件（`git diff HEAD` 圈定的原始改动 + 循环修复 + `run-state.md` 一并暂存）统一提交一次。`review-findings.md` 快照独立于该统一提交：审查收尾后无论正常清零还是任一非正常终止，均按本文件「快照提交」规则单独提交；传入 `--no-commit` 时，统一提交与快照提交都不执行。
+循环执行期间不提交审查修复；仅当循环以"正常清零"结束时，才对审查目标中的实际变化统一提交一次。`review-findings.md` 快照独立于该统一提交：审查收尾后无论正常清零还是任一非正常终止，均按本文件「快照提交」规则单独提交；传入 `--no-commit` 时，统一提交与快照提交都不执行。
 
-**测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接作为最终模式并忽略历史决策；配置为 `ask` 时读取目标 change 的 run-state frontmatter `lyx.testModeDecision`，目标 change 没有 YAML frontmatter 时 MAY 只读回退旧 `.openspec.yaml lyx.testModeDecision`。决策为 `normal` / `off` 时沿用；缺失、为 `null` 或为非法枚举字符串时询问一次并写入 run-state；frontmatter、mapping、`schemaVersion` 或字段类型结构非法时停止；用户取消或无法交互时停止。本轮新写入或实际消费继承 dirty 决策时，正常清零统一 commit SHALL 包含 `run-state.md`；`--no-commit`、非清零或 commit 失败时允许保留 dirty 并报告，后续同 change 可复用。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
+**测试模式与 ask 决策（SHALL）**：开始测试相关判级前，先按 `[projects."<主仓库根>"].testMode` > `[host].testMode` > `normal` 解析有效配置。配置为 `normal` / `off` 时直接使用；配置为 `ask` 时优先复用同一未中断全自动回合已有选择，其次 MAY 只读复用旧 change 的 `.openspec.yaml lyx.testModeDecision`，仍无决策时在当前 review 调用询问一次。选择只在当前循环内复用，SHALL NOT 写入 run-state。若 TASK 未提供 final mode 或仍为 `ask`，审查 subagent SHALL 停止。
 
 **简化 skill 审查镜头（SHALL）**：`main` 路径的主 agent 与 `subagent` 路径的审查 subagent SHALL 在读取审查范围后分别读取并应用 `{{HOST_SKILLS_DIR}}/lyx-ponytail/SKILL.md` 与 `{{HOST_SKILLS_DIR}}/lyx-code-simplification/SKILL.md`。
 
@@ -147,7 +147,7 @@ OUTPUT 约定（写入审查 subagent 的任务）：审查发现按严重度分
 - **环境级不可用**（配置合法时宿主无 subagent 能力、初始 spawn 不可用）→ 按回退口径处理：回退为当前会话直接执行审查，并输出**显式状态标记** `[回退] subagent 不可用: <原始报错>` 作为回退事实的唯一宣告——SHALL NOT 以其他自然语言描述代替该标记，SHALL NOT 在回退后以"审查已完成"之类结论冒充真实执行；该回退 SHALL NOT 视为流程失败中断整体编排。
 - **配置读取失败**（缺文件或解析错误）→ 视为"配置状态未知"，见第 3 条，明确提示运行 `lycx doctor` 检查。
 
-本轮结束后，无论是否有 Critical，都先生成"本轮执行日志"（见"逐轮执行日志"一节），再判定：
+本轮结束后，先生成轮次、Critical/Warning 数量、修复文件与验证结果摘要，再判定：
 
 若本轮 Critical 数为 0 → 跳到步骤 4 输出报告，结束（不进入循环）。
 若本轮 Critical > 0 → 进入步骤 3 循环体。
@@ -174,13 +174,13 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证中的�
 
 验证通过后，把本轮实际改动的文件相对路径清单写入本轮报告——这份清单是"路径清单"的一部分，供 3.5 步构造下一轮增量 TASK 直接复用，不得在后续轮次靠"当前 git 状态"反推（循环期间不逐轮 commit，但后续轮次还会继续修改文件、文件也可能被删除/重命名，仅凭某个时间点的 git 状态无法可靠还原"本轮具体改了什么"）。本轮不执行任何 git commit——提交只发生在循环以正常清零结束之后（见步骤 4）。
 
-**3.5 自动触发下一轮审查（增量传递；第 2 轮起重新 spawn）**
+**3.5 自动触发下一轮审查（增量传递；优先复用同一 subagent）**
 
-第 2 轮起，TASK SHALL NOT 重新拼贴完整基线 diff；改为仅包含：
+第 2 轮起，主会话 SHALL 优先通过宿主提供的最优子代理续跑能力复用首轮 subagent，只发送增量内容；复用失败才按同一增量语义重新 spawn。TASK SHALL NOT 重新拼贴完整基线 diff，仅包含：
 
-1. 上一轮审查 subagent 报告的全部 Critical 原文（逐字，不经改写，包含被判定"不认可"的条目——这些原文仍要传，供"驳回硬线"判定所需的比对，非 fork 的审查 agent 无任何历史记忆）**，以及上一轮 `影响落地=是` 的 Warning 条目的逐字原文**（含其两项标注取值），供审查 subagent 判断这些条目是否已修复；未携带原文的「是」条目 SHALL NOT 被当作已修复。
+1. 上一轮审查 subagent 报告的全部 Critical 原文（逐字，包含被判定"不认可"的条目）**，以及上一轮 `影响落地=是` 的 Warning 条目的逐字原文**（含标注）。复用成功时保留上文并逐条复核；复用失败重新 spawn 时，它们是唯一历史依据。
 2. 路径清单，必须覆盖"本轮实际修复改动的文件"（3.4 记录的清单）∪"上一轮全部 Critical 各自指向的文件"（即使某条因不认可而未被修改，其指向的文件路径也要纳入，否则审查 subagent 无法重新核实该问题是否仍存在）。若上一轮某条 Critical 指向的文件在本轮被删除或重命名，路径清单改用新路径（若有）并在 TASK 中说明该文件的状态变化，不让审查 subagent 尝试读取不存在的旧路径。
-3. 该 change 目录下 `context.md` 的路径引用——非 fork spawn 每轮都是全新子代理、无任何历史记忆，缺少该引用即彻底失去软上下文通道，SHALL NOT 因为 `context.md` 不在本轮改动/上一轮 Critical 指向的文件集合内而省略；`context.md` 仍只作背景引用，不计入上述"路径清单"所指的修复对象范围。
+3. 该 change 目录下 `context.md` 的路径引用。复用成功时用于刷新当前决策；复用失败重新 spawn 时它是唯一软上下文通道。SHALL NOT 省略。
 
 路径清单之外的文件不重新整段传入。若某条上一轮 Critical 的位置字段缺失可解析路径（角色提示词未被遵守等异常情况），保守处理：将该 change 已知的相关文件集合统一纳入下一轮路径清单，并在报告中说明"该条 Critical 缺少路径，已扩大范围"，不得静默丢弃。
 
@@ -220,11 +220,9 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证中的�
 - `@lyx-archive` 暂不归档（按当前终止原因说明）；
 - 改动保留在工作区未提交，可先 `git diff` 查看。
 
-### 逐轮执行日志
+### 审查记录
 
-每一轮审查 subagent 派发完成后（包括首轮 Critical 为 0、直接跳到步骤 4 结束的情况，不只是进入了循环体的轮次），都要在报告中包含一个独立区块，逐字展示该轮审查 subagent 返回的原始 Critical/Warning/Info 内容（不经概括、改写或合并），与当前会话对该轮每条 Critical 的裁决（认可 / 不认可及可核验依据）并排列出（若该轮无 Critical，只展示原文，不需要并排判定）。这个区块在该轮审查返回之后即可呈现，不是审查 subagent 执行期间的流式展示。这是给需要核实细节的人看的补充材料；最终报告的主体是人话摘要（见步骤 4），二者并存，不互相替代。
-
-**硬性约束（逐字性）**：该区块中的 Warning/Info 与 Critical 同样必须逐字完整贴出，**禁止用省略号（"…"、"（同前）"等）改写或压缩**；正常清零轮的判定仍需写明依据——对照前一轮各 Critical 的修复情况与验证结果、以及各 `影响落地=是` 条目是否已修复，说明"认可正常清零"的理由，不得仅以"无 Critical，正常清零"一句带过。
+每轮 SHALL 记录轮次、Critical/Warning/Info 数量、Critical 修复文件清单与验证结果。正常中间阶段只输出一行进度；触发终止条件时 SHALL 立即展示相关原始发现和当前会话裁决依据。最终报告只汇总一次，不要求在终端逐字复制全部 Warning/Info。
 
 ### 循环结束后写入审查未修项快照（Warning）
 
@@ -245,7 +243,7 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证中的�
 3. `git commit -F "$MSG_FILE"`。
 4. `git show --name-only --format=` 核对文件集合只含该快照；若删除后文件不存在，同样核对删除已进入 commit。
 
-该提交 SHALL NOT 包含代码修复、run-state 或其他 artifact。快照提交失败时如实报告原始错误，保留 dirty 状态，SHALL NOT 重试、回滚已有 commit 或改变审查终止结论。
+该提交 SHALL NOT 包含代码修复或其他 artifact。快照提交失败时如实报告原始错误，保留 dirty 状态，SHALL NOT 重试、回滚已有 commit 或改变审查终止结论。
 
 ### 审查后同会话修复的就地标注（快照写入之后）
 
@@ -265,7 +263,7 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证中的�
 
 **正常清零结束：**
 
-先执行统一提交：先 `git add` 审查范围内的全部文件与 `run-state.md`（审查范围首轮判定的 `git diff HEAD` 圈定的文件 —— 原始改动与循环期间修复的改动一并暂存；未跟踪的新建文件，扫描 `??` 清单得到的路径同样 `git add`，直到审查目标内不再有未暂存的改动），再对审查目标执行一次统一 commit（不做审查范围外的 `git add`），提交信息先用 `MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"` 获取路径并按 `@lyx-commit` 正文规范写入完整 message，采用 Conventional Commits 前缀 + 正文 + trailer 结构：CC 前缀形如 `fix(<scope>): review-code 反馈修复（N 轮）`，正文至少含 `- 动机：` / `- 改动：` / `- 影响：`，并说明本轮 Critical、代码修复动作与验证，末尾带 `Change-Stage: review-code-fix` 与 `Change-Name: <change-name>` trailer，提交命令使用 `git commit -F "$MSG_FILE"`。审查目标为审查范围圈定的全部文件（有 apply 阶段 commit 时为该 commit 差异叠加循环修复；退化场景下才是未提交变更）与 `run-state.md`；排除 `review-findings.md` 后若有任何实际变更，即执行统一提交，SHALL NOT 以“未修复 Critical”为由跳过 run-state 变更。统一提交成功后 SHALL 用 `git show --name-only` 校验文件集合包含实际变更的 `run-state.md`，且不超出审查目标范围。若这次统一提交本身执行失败（Git hook 拒绝、身份未配置、锁文件冲突等），在报告中如实说明该失败，视为"清零但提交失败"的独立结果——不重新进入循环（已经清零），但报告必须明确指出还需要人工手动完成这次提交。若传入 `--no-commit`，跳过这次统一提交，修复结果留给调用方或用户自行处理。
+提交前 SHALL 先用文件工具 upsert `context.md` 的 `## 审查记录`，写入 review-code 轮次、Critical/Warning 数量、终止类型 `normal` 与验证结果；随后 `git add` 审查范围内实际变化的文件、`context.md` 与必要测试，再执行统一 commit。提交信息使用 `fix(<scope>): review-code 反馈修复（N 轮）`、完整正文和 `Change-Stage: review-code-fix` / `Change-Name` trailer。排除 `review-findings.md` 后无实际变化时不创建空 commit。提交后以 `git show --name-only` 校验不超出审查目标范围。`--no-commit` 时跳过统一提交与快照提交。
 
 ```
 📋 代码审查报告
@@ -281,9 +279,6 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证中的�
 
 ## Info（供参考，最后一轮结果）
 1. [file:line] — <观察/建议，人话>
-
-## 逐轮执行日志
-（见"逐轮执行日志"一节，按轮次顺序列出每轮审查 subagent 原文 + 当前会话裁决，作为补充材料）
 
 ---
 总轮次: [轮数]
@@ -318,8 +313,8 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证中的�
 第 N+1 轮：<依据>
 第 N+2 轮：<依据>
 
-## 逐轮执行日志
-（同上）
+## 终止证据摘要
+（展示与终止条件相关的原始发现和裁决依据，不复制无影响的 Warning/Info）
 
 ## 需要人工介入
 <人话说明，改动都留在工作区未提交，可用 git diff 查看>
@@ -341,21 +336,11 @@ review-code SHALL NOT 运行测试 / 类型检查 / 构建——慢验证中的�
 
 ## Recovery
 
-开始审查和每轮循环前读取 `openspec/changes/<change-name>/run-state.md` frontmatter，获取 `lyx.stage`、`lyx.executionMode`、`lyx.pipelineStage`、`lyx.lastGoodCommit`、`lyx.review` 和未决项；再用 `git status`、`git log` 和固定基线核对真实 diff。冲突时以 git 和文件内容为准，并在报告中记录。旧 change 无 YAML frontmatter 时按旧格式容错；frontmatter 损坏时停止，不得静默回退。
-
-run-state 是恢复与证据输入，不是实现代码；不得对它提出源码审查发现或要求业务修复。
+开始审查时只读取审查输入、`context.md`、`review-findings.md`、Git 状态和 commit trailer，确定固定基线。命令 SHALL NOT 读取 run-state；中断后重新调用时重新定位 apply commit 和 diff。
 
 ## Review State
 
-每轮结束更新 run-state frontmatter 的 `lyx.review`，并在正文续写时沿用 `run-state.md` 现有语言：
-
-```text
-第 <n> 轮：<Critical 数> 个 Critical，<Warning 数> 个 Warning；<认可/驳回摘要>
-终止类型：normal | circuit-breaker | rejection-hardline | unsafe | failed | round-limit | in-progress
-```
-
-统一 commit 尚未形成时写“待统一提交归属”，成功后在下一次允许更新中回填 SHA。
-正常清零的统一提交 SHALL 显式包含 `run-state.md`，并在提交后核对文件集合。
+每轮结束在当前报告记录轮次、Critical/Warning 数量与裁决摘要；循环结束后、统一提交前必须把压缩摘要写回 `context.md` 的 `## 审查记录`。无需更新独立状态文件。
 
 ## Evidence
 
