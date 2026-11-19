@@ -12,28 +12,24 @@ argument-hint: '[<change-name>]'
 
 > **delta spec 同步决策默认项（SHALL）**：委托 `@openspec-archive-change skill` 时 SHALL 约定：当该流程就 delta spec 同步方式询问用户时，直接采用推荐项——有 delta 变更时选 `Sync now (recommended)`，已同步时选 `Archive now`——SHALL NOT 就该同步决策向用户提问；流程其余步骤照常。
 
-## 启动恢复（SHALL）
+## 启动核对（SHALL）
 
-归档前先读取目标 change 的 `run-state.md` frontmatter，获取 `lyx.stage`、`lyx.lastGoodCommit`、`lyx.review` 和未决项；再以 `git status --porcelain`、`git log`、`tasks.md` 与实际文件核对。账本与 git/files 冲突时以可核验事实为准，并把冲突记录为新的恢复事件；旧 change 没有 YAML frontmatter 时按旧格式容错；frontmatter 损坏时停止，不得静默回退。
+归档前读取 `tasks.md`、`context.md`、`review-findings.md`、`git status --porcelain`、阶段 commit 与实际文件；任务勾选、审查快照或阶段 commit 明显不一致时停止转人工。命令 SHALL NOT 读取 run-state，也不承诺恢复旧流水线。
 
 ## 归档前验证（SHALL，先于任何归档动作）
 
 在委托 OpenSpec 归档流程**之前**，读取 `{{LYX_CONFIG_FILE}}` 并解析当前项目的有效配置 `testMode`：项目路径按主仓库根归一（普通 checkout 与 separate-git-dir checkout 用 `show-toplevel`，子模块用自身 `show-toplevel`，非 bare linked worktree 能确定主工作树时用主树根，bare worktree 或 separate-git-dir 无法反推主树时用当前 worktree 的 `show-toplevel`，非 Git 目录用规范化 cwd）；优先级为 `[projects."<项目根>"].testMode` > `[host].testMode` > `normal`。项目覆盖缺失时回退宿主默认，项目覆盖取值非法时回退宿主默认并由 doctor 告警；配置文件整体缺失、不可读或 TOML 解析失败时 SHALL 停止归档并提示运行 `lycx doctor`；宿主默认字段缺失、空白或非法时按 `normal` 处理。
 
-配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时读取目标 change 的 run-state frontmatter `lyx.testModeDecision`；目标 change 没有 YAML frontmatter 时 MAY 只读回退旧 `.openspec.yaml lyx.testModeDecision`。`normal` / `off` 直接沿用；决策缺失、为 `null` 或为非法枚举字符串时询问一次并写入 run-state；frontmatter、mapping、`schemaVersion` 或字段类型结构非法，或需要回退的旧 `.openspec.yaml` 结构非法时停止。用户取消或环境无法交互时停止，不执行验证或归档。
-
-确定最终模式后，SHALL 把 `final testMode` 及来源（项目配置 / 宿主默认 / change 元数据）写入 `run-state.md` 正文，并把 `lyx.stage` 更新为 `verifying`。写入时沿用 `run-state.md` 现有语言，不得无理由切换为英文。
+配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时，旧 `.openspec.yaml lyx.testModeDecision` 为合法值时 MAY 只读复用且不写回；否则本次 archive 调用询问一次。选择只在本次调用内使用，SHALL NOT 写入 run-state。用户取消或环境无法交互时停止，不执行验证或归档。
 
 - 最终模式为 `normal`：对当前工作区执行一次项目验证，覆盖测试 / 类型检查两类。
 - 最终模式为 `testMode = "off"`：跳过测试类别，仍执行类型检查，并在报告中明确注明“testMode=off，测试已跳过”；来源为配置时注明宿主默认或项目配置来源，来源为 `ask` 决策时注明“最终决策来自 change 元数据”。
 - SHALL NOT 执行 `build` / 生产构建；项目提供 `scripts.build` 时也跳过并在报告中注明生产构建不在归档门禁范围。
 
-因 `ask` 新写入，或本轮实际消费的继承 dirty run-state 决策，`run-state.md` SHALL 随既有 `git add -- openspec/` 进入归档 commit；若门禁失败，决策可保留为 dirty 并如实报告。
-
 - 按项目实际提供的脚本选择（例如 `package.json` 的 `scripts.test` / `scripts.typecheck`，或项目 README/AGENTS.md 声明的等价命令）。
 - 项目未提供的类别 SHALL 跳过并在报告中注明（例如"未提供 typecheck 脚本"），SHALL NOT 因缺失判定失败。
-- 全部通过才继续；任一类别失败 SHALL 停止归档，**不移动** `openspec/changes/<change-name>/`，并在 run-state 记录失败命令、退出码、关键错误摘要和 `archive-blocked` 阶段，如实报告原始错误输出。
-- 全部通过后 SHALL 在 run-state 正文逐类记录“命令 + 退出码 + 结果摘要”，并把 `lyx.stage` 更新为 `archive-ready`。
+- 全部通过才继续；任一类别失败 SHALL 停止归档，**不移动** `openspec/changes/<change-name>/`，在报告中记录失败命令、退出码和关键错误摘要。
+- 全部通过后 SHALL 在最终报告和 archive commit 正文逐类记录“命令 + 退出码 + 结果摘要”。
 
 该验证是慢验证的**唯一执行点**：审查关卡（`@lyx-review-plan` / `@lyx-review-code`）SHALL NOT 重复执行测试 / 类型检查（`openspec validate` 仍由 review-plan 每轮执行，不属于本步范围）。生产构建不属于归档门禁，由上线或发布流程负责。
 
@@ -86,7 +82,7 @@ git commit -F "$MSG_FILE"
 
 change 目录下的 `review-findings.md`（审查未修项快照，见 `review-findings-snapshot`）可能已由 review-plan / review-code 审查关卡单独提交，也可能仍有归档前追加的未提交解决子项。两种状态都随既有 `git add -- openspec/` 落库并随 change 目录搬入 `archive/`，无需额外步骤——SHALL NOT 为它新增任何专门的归档命令。归档前核对追加的就地标注只追加解决子项，不属于对当前 change 快照的重新生成或重建；向更早 change 已归档快照追加的解决说明同理，只是追加子项，不属于重建当前 change 快照。
 
-已跟踪的 `run-state.md` 同样随 `git add -- openspec/` 进入归档 commit；归档完成后 SHALL 在报告中引用其中的最终验证证据，并确认文件已位于归档目录。
+归档 commit 正文 SHALL 包含最终 testMode、来源与测试/类型检查证据；不创建 run-state。
 
 message 采用 Conventional Commits 前缀 + 正文 + trailer 结构：先用 `git rev-parse --git-path COMMIT_EDITMSG` 获取 message 路径并按 `@lyx-commit` 规范写入完整 message，CC 前缀固定 `chore(openspec)`，正文包含动机/改动/影响，末尾带 `Change-Stage: archive` 与 `Change-Name: <change-name>` trailer。
 
@@ -94,22 +90,13 @@ message 采用 Conventional Commits 前缀 + 正文 + trailer 结构：先用 `g
 
 ## 归档后分支收尾（archive commit 成功后）
 
-archive 阶段 commit 成功后，读取归档后 change 目录下 `run-state.md` frontmatter 的 `lyx.isolation`，并执行分支收尾。旧 change 没有 YAML frontmatter 时 MAY 只读回退归档后 `.openspec.yaml` 的 `lyx:` metadata；不得改写旧文件。
-
-```yaml
-lyx:
-  isolation:
-    mode: worktree | branch | none
-    sourceBranch: main | null
-    developmentBranch: feature/xxx | null
-    worktreePath: /abs/path | null
-```
+archive 阶段 commit 成功后，使用当前会话保留的 propose 隔离选择；新回合读取归档后 `context.md` 的 `## 执行上下文`，再以当前分支和 `git worktree list --porcelain` 校验。信息不足时询问目标分支或跳过，SHALL NOT 读取 run-state。
 
 ### 1. 解析 metadata 与决定目标分支
 
-- `mode: none`：不提示，直接结束收尾流程。
-- `mode: branch` / `worktree` 且 `sourceBranch` 有值：把该值作为 `targetBranch`。
-- run-state 与旧 `.openspec.yaml` 都缺少 isolation metadata，或 `mode != none` 且 `sourceBranch` 为 `null` / 空：进入保守路径，提示用户选择目标分支或跳过；SHALL NOT 默认猜 `main` / `master`。用户选择目标分支后，把该分支作为 `targetBranch`。
+- `isolation: none`：不提示，直接结束收尾流程。
+- `isolation: branch` / `worktree` 且来源分支有值：把该值作为 `targetBranch`。
+- 当前会话与 `context.md` 都缺少隔离信息：进入保守路径，提示用户选择目标分支或跳过；SHALL NOT 默认猜 `main` / `master`。
 - 保守路径可推导 `developmentBranch = 当前分支`、`worktreePath = 当前 linked worktree（若存在）`；无法唯一判定当前分支或 worktree 时，跳过收尾并保留现场。
 
 ### 2. 展示确认前完成一致性校验

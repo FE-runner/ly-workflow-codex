@@ -42,3 +42,12 @@
 ## 审查记录
 
 - review-plan：4 轮正常清零；第 1 轮 3 Critical + 1 影响落地 Warning，第 2 轮 2 Critical + 2 影响落地 Warning，第 3 轮 1 影响落地 Warning，第 4 轮无 Critical / 无影响落地 Warning。
+
+## 实施说明
+
+- 新流程不再创建 `run-state.md`；执行模式、ask 选择与隔离只保存在当前未中断回合或 `context.md` 人读说明。
+- 审查正常轮改为一行进度 + 最终汇总；第 2 轮先复用同一 subagent，失败才重新 spawn。
+- apply 以相同验证命令划分低风险批次；行为、缺陷复现、安全/迁移与独立验收保留任务级检查点。
+- worktree baseline 只检查依赖并运行 typecheck/smoke，完整测试仍由 archive 执行。
+- 真实 current evals：`propose`、`apply`、`review-plan`、`review-code`、`propose-self-review-full-auto` 直接通过；`apply-legacy-compat` 在明示旧决策只读复用后通过；`propose-full-auto` 的 side effects 全通过，分类器补充“正常清零结束”等中文终态锚点后对同一 transcript 复核 3/3。
+- 最终门禁：`openspec validate` exit 0（仅长 Requirement warning）；`pnpm lint` exit 0；`pnpm typecheck` exit 0；`pnpm test` exit 0，27 files / 471 tests；`git diff --check` exit 0。

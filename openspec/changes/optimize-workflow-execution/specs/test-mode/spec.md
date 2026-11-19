@@ -30,4 +30,4 @@ effective `testMode = "ask"` 时，change 级命令 SHALL 在需要测试决策�
 
 #### Scenario: 旧 `.openspec.yaml` 存在 lyx 决策
 - **WHEN** 一个旧 change 的 `.openspec.yaml` 含 `lyx.testModeDecision`
-- **THEN** 命令可只读参考该值作为旧兼容输入，但不改写文件，也不把它扩展到新 change 流程
+- **THEN** `ask` 且没有同回合选择时，命令 MAY 只读复用该合法值；不改写文件，也不把它扩展到新 change 流程

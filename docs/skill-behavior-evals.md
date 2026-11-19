@@ -34,7 +34,7 @@ Evidence: <paths, commands, transcript refs>
 
 优先覆盖时间压力、沉没成本、权威指令、上下文压缩、脏工作区和真实失败输出。场景 SHALL NOT 只断言模板里存在某句文字。
 
-全自动续跑场景 SHALL 单独验证：用户只确认一次执行模式后，阶段报告输出不能结束回合；propose、review-plan、apply 与 review-code 必须按 run-state frontmatter 的 `lyx.pipelineStage` 与 `lyx.nextSafeAction` 连续执行，直到正常终态或明确人工介入条件。场景还应核对主 `SKILL.md` 注入内容自身包含续跑不变量，且 `run-state.md` 的固定 frontmatter 在方案自审前已经初始化，不能只依赖后续读取 reference 或自审完成后的补写。propose 自审必须验证为“结论写入 `## 方案自审` 后立即继续工具动作”，不得只验证“输出清单后继续”。
+全自动续跑场景 SHALL 单独验证：用户只确认一次执行模式后，阶段报告输出不能结束回合；propose、review-plan、apply 与 review-code 必须按同一未中断回合的阶段顺序连续执行，直到正常终态或明确人工介入条件。fixture SHALL NOT 依赖 `run-state.md`；阶段证据来自 commit trailer、tasks、context 与最终报告。场景还应核对主 `SKILL.md` 注入内容自身包含续跑不变量。propose 自审必须验证为“压缩结论写入 `context.md` 的 `## 方案自审` 后立即继续工具动作”。
 
 ## 高风险 Skill 门禁
 
@@ -43,7 +43,7 @@ Evidence: <paths, commands, transcript refs>
 1. 修改前运行受影响场景，记录基线。
 2. 修改后运行同一场景，记录修改后结果。
 3. 最终模板完成后再次运行，不得用中间证据替代。
-4. 失败或未执行的结论写入 change 的 `run-state.md`，不能写成“测试通过”。
+4. 失败或未执行的结论写入最终报告、场景 `Evidence Record` 或阶段 commit 正文，不能写成“测试通过”。
 
 当前四类核心 skill 还依赖随包安装的 `lyx-ponytail` 与 `lyx-code-simplification`。评测 fixture 的 `.agents/skills/` SHALL 同时安装这两个 lyx 包装 skill，不能依赖评测机器上已有的无前缀同名外部 skill；涉及方案范围、实施简化或代码审查的场景应核对工作流是否实际读取包装 skill，而不只断言模板文本存在。
 
@@ -70,7 +70,7 @@ pnpm eval:skills -- --version both --baseline-ref dce2466
 - `--keep-temp`：保留 fixture、临时 HOME 与 transcript 路径供排查。
 - `--setup-only`：只构建 baseline source、fixture 和本地 skill，不调用模型。
 
-每个 case/version 使用独立的临时 Git 仓库。基础新格式场景安装被测命令自身的 skill bundle 并使用 run-state frontmatter；`apply-legacy-compat` 使用 testMode `ask` 与无 frontmatter 的旧 run-state，验证只读 `.openspec.yaml lyx.testModeDecision` 且不改写该文件。`propose-full-auto` 安装 review-plan、apply、review-code 三个 bundle，并从 review-plan 中途恢复；`propose-self-review-full-auto` 从空仓库调用 propose，安装 propose、review-plan、apply、review-code 四个 bundle，验证 opsx artifacts 与方案自审都不会终止回合。child `HOME` 指向 fixture，`CODEX_HOME` 只用于复用当前认证；runner 不复制或提交 `auth.json`，报告不写完整环境。
+每个 case/version 使用独立的临时 Git 仓库。基础场景 SHALL NOT 创建 run-state，使用 `context.md`、tasks 与阶段 commit 作为事实输入；`apply-legacy-compat` 验证旧 `.openspec.yaml lyx.testModeDecision` 只读兼容且不改写文件。`propose-full-auto` 安装 review-plan、apply、review-code 三个 bundle，验证无账本的同回合交接；`propose-self-review-full-auto` 从空仓库调用 propose，安装 propose、review-plan、apply、review-code 四个 bundle，验证 opsx artifacts、压缩自审写入 context 且不会终止回合。child `HOME` 指向 fixture，`CODEX_HOME` 只用于复用当前认证；runner 不复制或提交 `auth.json`。
 
 状态语义：
 
@@ -78,6 +78,6 @@ pnpm eval:skills -- --version both --baseline-ref dce2466
 - `failed`：调用完成并产生最终文本，但通过条件、禁止条件或 fixture 副作用不满足。
 - `not-executed`：命令缺失、认证/网络失败、超时、非零退出、最终文本为空或 JSONL 缺少完成事件；不得写成行为通过。
 
-真实执行后，把 baseline/current 状态、关键摘要和结果文件引用回写到对应 `evals/skills/*.md` 的 `Evidence Record`。`propose-full-auto` 的 current 必须实际产生 apply commit、代码/测试文件、run-state `terminationType: normal`，最终文本含 review-code、0 Critical/未发现问题与正常终态锚点；只验证停在 review-plan→apply 不能记为通过。current 因认证、网络或 runner 环境失败时只能记 `not-executed`。
+真实执行后，把 baseline/current 状态、关键摘要和结果文件引用回写到对应 `evals/skills/*.md` 的 `Evidence Record`。`propose-full-auto` 的 current 必须实际产生 apply commit、代码/测试文件、context 审查记录与最终正常终态文本；不得创建 run-state。只验证停在 review-plan→apply 不能记为通过。current 因认证、网络或 runner 环境失败时只能记 `not-executed`。
 
-`propose-self-review-full-auto` 的 current 必须从空仓库生成 propose artifacts，并在同一个回合完成 propose 自审、context/run-state、propose commit、review-plan、apply 与 review-code。run-state 必须包含 `## 方案自审` 逐项结论；独立输出方案自审消息后停住、未写入 `## 方案自审`、停在 opsx artifacts 后均判 failed。archive 的 run-state 兼容行为由模板/单元断言验证，不新增不可执行的 archive eval runner。
+`propose-self-review-full-auto` 的 current 必须从空仓库生成 propose artifacts，并在同一个回合完成 propose 压缩自审、context、propose commit、review-plan、apply 与 review-code。`context.md` 必须包含 `## 方案自审` 与审查记录；独立输出自审消息后停住、未写入 `## 方案自审`、停在 opsx artifacts 后均判 failed。评测同时断言不创建 run-state。

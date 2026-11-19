@@ -29,14 +29,14 @@
 |------|------|------|
 | `init.md` | 真逻辑 | 生成 AGENTS.md（claude 宿主额外产出导入它的 `CLAUDE.md`）+ `lycx openspec ensure --host <当前宿主>` + 自动 commit |
 | `explore.md` | 薄壳委托 | 直接调用 `@openspec-explore skill`，收敛到方案时按规模提示转 `@lyx-fix` / `@lyx-propose` |
-| `propose.md` | 自包含主文件 | 单文件承载隔离、恢复、artifacts、run-state、方案自审、context、metadata、propose commit、全自动流水线和机械裁决；方案自审逐项结论写入 `run-state.md` 的 `## 方案自审`，不得作为独立 assistant 消息发送；新 change 不向 `.openspec.yaml` 写 lyx 扩展字段 |
-| `apply.md` | 真逻辑 | 启动先读 run-state 并核对 git/tasks；按 `codingExecutor` 实施、逐任务记录证据与机械裁决，主会话确认后回写 context/run-state 并统一提交 apply 阶段 commit；全自动下主文件保留完整读取同级 `lyx-review-code/SKILL.md` 的交接锚点 |
+| `propose.md` | 自包含主文件 | 单文件承载隔离、artifacts、压缩方案自审、context 执行上下文、propose commit、安静全自动流水线和机械裁决；不创建 run-state |
+| `apply.md` | 真逻辑 | 核对 tasks/context/Git 后实施；低风险同命令任务可批次验证，主会话确认后回写 context 并统一提交 apply 阶段 commit |
 | `fix.md` | 真逻辑 | 小需求 / bug 轻量路径：不建 change；bug 分支执行根因调查、单假设验证、3 次失败后质疑架构；最终输出测试 / 类型检查证据，不执行生产构建 |
-| `archive.md` | 真逻辑 | 启动恢复核对 + archive 前测试 / 类型检查（不含生产构建）+ final testMode/证据写入 run-state + 归档 commit + 分支收尾 |
+| `archive.md` | 真逻辑 | 启动核对 + archive 前测试 / 类型检查（不含生产构建）+ 报告/commit 证据 + 归档 commit + 从 context/Git 推导分支收尾 |
 | `review-plan.md` | 自包含主文件 | 单文件承载审查判级、修复循环、提交、快照、恢复与新鲜证据，并保留读取同级 `lyx-apply/SKILL.md` 的全自动交接锚点 |
 | `review-code.md` | 自包含主文件 | 单文件承载审查判级、修复循环、提交、快照、恢复与新鲜证据；不要求下一阶段 sidecar |
 | `commit.md` `rollback.md` `clean-branches.md` | Git 工具 | 不变 |
-| `worktree.md` | Git 工具 | 默认 `~/.ly/worktrees/<项目名>/` 单层平铺；`switch` 子命令已移除，隔离切换由 `@lyx-propose` 触发；propose 创建隔离时把 metadata 写入 run-state |
+| `worktree.md` | Git 工具 | 默认 `~/.ly/worktrees/<项目名>/` 单层平铺；`switch` 已移除，隔离切换由 `@lyx-propose` 触发；baseline 只做依赖 + typecheck/smoke，隔离上下文写入 context |
 | `release.md` | 真逻辑 | GitFlow 四场景（feature/release/hotfix/dev-offline），SemVer + Conventional Commits 自动推导版本号 |
 | `changelog.md` | 真逻辑 | Keep a Changelog 格式生成/更新 CHANGELOG.md |
 | `publish.md` | 真逻辑 | npm 发布四场景（bmc Nexus/GitHub Packages/npmjs+GitHub Release/CI），前置检查→版本号推导→构建→发布→验证 |

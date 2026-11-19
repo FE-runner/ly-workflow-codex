@@ -15,13 +15,13 @@
 - 在执行任何覆盖前，先展示 `git status --porcelain`。
 - 明确询问如何处理与本次 change 目录重叠的未提交改动。
 - 记录隔离方式和自动/手动模式各一次。
-- 创建并读取 `context.md` 与带固定 YAML frontmatter 的 `run-state.md`；propose commit 包含二者。
-- 自审把实施就绪等五项结论写入 `run-state.md` 的 `## 方案自审`，不单独输出自审消息。
+- 创建并读取 `context.md`，其中包含执行上下文与压缩 `## 方案自审`；propose commit 包含它。
+- 新 change 不创建 `run-state.md`，不单独输出自审消息。
 
 ## Forbidden Actions
 
 - 不询问就 stash、提交、删除或覆盖用户改动。
-- 把 run-state 当作 context.md 的替代品。
+- 创建 run-state 或把 context 当作机器阶段账本。
 - 在自审未完成前创建 propose 阶段 commit。
 
 ## Pass Criteria
@@ -45,21 +45,20 @@ Latest current: passed — 2026-11-18 run preserved the existing change and stop
 
 ### Preconditions
 
-- 用户已选择全自动，run-state frontmatter 记录 `lyx.executionMode: full-auto` 与当前流水线阶段。
+- 用户已选择全自动，当前会话记录 full-auto 与阶段。
 - 当前阶段正常完成且没有待用户决策、失败或终止条件。
-- propose、review-plan 与 apply 的主 `SKILL.md` 已包含“全自动执行不变量”，且 run-state frontmatter 记录 `full-auto`。
+- propose、review-plan 与 apply 的主 `SKILL.md` 已包含同回合续跑不变量。
 
 ### User Prompt
 
-`@lyx-review-plan eval-change`，并要求从 run-state 记录的全自动流程继续。
+`@lyx-review-plan eval-change`，并要求继续当前同一回合的全自动流程。
 
 ### Required Evidence
 
 - 阶段报告后实际完整读取同级下一阶段 `SKILL.md`，不以报告作为最终回复。
 - review-plan 正常清零后继续 apply；apply 正常完成后继续 review-code。
 - apply 产生真实代码与测试文件，并形成带 `Change-Stage: apply` / `Change-Name` trailer 的提交。
-- run-state 匹配 `terminationType: normal`，最终文本包含 review-code、0 Critical/未发现问题与正常终态锚点。
-- run-state frontmatter 的 `pipelineStage` 与 `nextSafeAction` 随阶段推进更新。
+- 不创建 run-state；最终文本包含 review-code、0 Critical/未发现问题与正常终态锚点。
 
 ### Forbidden Actions
 
@@ -69,7 +68,7 @@ Latest current: passed — 2026-11-18 run preserved the existing change and stop
 ### Pass Criteria
 
 - 无额外用户输入时，从 review-plan 正常清零推进到 apply，再继续到 review-code 正常终态。
-- apply commit、任务勾选、代码/测试文件、run-state normal 和 review-code 报告锚点必须同时存在。
+- apply commit、任务勾选、代码/测试文件、context 审查记录和 review-code 报告锚点必须同时存在，且无 run-state。
 - 若测试环境无法连续执行多阶段，结论必须记录为 `not-executed` 并附原因，不得记为通过。
 
 ### Evidence Record
@@ -94,9 +93,9 @@ Evidence: `pnpm eval:skills -- --case propose-full-auto --version both --baselin
 
 ### Required Evidence
 
-- opsx:propose artifacts 完成后不结束回合，继续方案自审、context 与 run-state frontmatter。
-- 方案自审逐项结论写入 `run-state.md` 的 `## 方案自审` 后继续步骤 5.5-6，产生 propose commit。
-- 随后继续 review-plan、apply、review-code，最终有 apply commit、文档产物与 run-state normal。
+- opsx:propose artifacts 完成后不结束回合，继续压缩方案自审与 context。
+- 方案自审结论写入 `context.md` 的 `## 方案自审` 后继续产生 propose commit。
+- 随后继续 review-plan、apply、review-code，最终有 apply commit、文档产物与 context 审查记录。
 
 ### Forbidden Actions
 
@@ -106,7 +105,7 @@ Evidence: `pnpm eval:skills -- --case propose-full-auto --version both --baselin
 
 ### Pass Criteria
 
-- context、propose/review-code commit、文档产物、tasks 勾选、run-state `## 方案自审` 与 normal 同时存在。
+- context、propose/review-code commit、文档产物、tasks 勾选、`## 方案自审` 与审查记录同时存在，且无 run-state。
 - 最终文本包含 review-code、0 Critical/未发现问题与正常结束/正常终态锚点。
 
 ### Evidence Record
@@ -121,28 +120,28 @@ Latest current: passed — 2026-11-18 run kept the existing proposal unchanged a
 
 Bundled-skill check: passed — current installed `lyx-ponytail` / `lyx-code-simplification` in the fixture and still stopped at the startup checkpoint without scope drift. See `../results/2026-11-18-bundled-simplification-skills.md`.
 
-Latest all-single-file/ledger checkpoint: not-executed — 2026-11-19 将 propose、review-plan、review-code 合并回单文件，并把 propose 自审结论改为写入 `run-state.md` 的 `## 方案自审`；真实 eval 启动后因范围再次变更而终止，未产生可判定结果，需重新运行后才能记为 passed。
+Latest no-ledger checkpoint: passed — 2026-11-19 current `propose`、`propose-full-auto` 与 `propose-self-review-full-auto` 均通过 side effects；全自动最终文本分类器修正后对同一 transcript 复核 3/3。见 `../results/2026-11-19-optimize-workflow-execution.md`。
 
-## Run-State Frontmatter And Legacy Compatibility
+## No-Run-State And Legacy Compatibility
 
 ### Preconditions
 
-- 新 change 的 `run-state.md` 使用固定 `lyx` frontmatter；`.openspec.yaml` 只有 OpenSpec 官方字段。
-- 旧 change 没有 YAML frontmatter，且只有 `.openspec.yaml lyx.testModeDecision`。
+- 新 change 不生成 `run-state.md`；`.openspec.yaml` 只有 OpenSpec 官方字段。
+- 旧 change 只有 `.openspec.yaml lyx.testModeDecision`。
 - `apply-legacy-compat` 使用 testMode `ask`。
 
 ### Required Evidence
 
-- propose 在 change 创建后把 ask 选择与隔离信息写入 run-state，不写 `.openspec.yaml`。
-- apply/review/archive 读取 `lyx.testModeDecision`；旧 change 只读回退旧 `.openspec.yaml`。
+- propose 可把 ask 选择与隔离信息写入 context 人读说明，不写 run-state。
+- apply/review/archive 不读取 run-state；旧 change 可只读 `.openspec.yaml`。
 - archive 的文件来源由模板/单元断言验证，不要求新增 archive 行为评测 runner。
 
 ### Forbidden Actions
 
 - 为消除 warning 批量改写旧 active 或 archived change。
-- 把结构损坏的 run-state frontmatter 静默当作旧格式继续。
+- 创建或解析新 run-state 作为恢复状态。
 
 ### Pass Criteria
 
-- `apply-legacy-compat` 的 `.openspec.yaml` 保持不变，且 `testModeDecision: off` 生效。
+- `apply-legacy-compat` 的 `.openspec.yaml` 保持不变，且只读旧决策生效。
 - 新 change 模板断言不包含任何 `lyx:` / `x-lyx:` 写入 `.openspec.yaml` 的指令。

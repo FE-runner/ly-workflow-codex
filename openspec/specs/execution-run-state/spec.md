@@ -2,7 +2,7 @@
 
 ## Purpose
 
-为每个活跃 OpenSpec change 提供可跨压缩、中断和用户回合恢复的磁盘运行账本，记录阶段状态、机械裁决和新鲜验证证据。
+定义 lyx 全自动流程的非持久执行状态边界：状态只在同一未中断回合内传递，跨回合恢复依赖 Git、tasks、context、commit trailer 与审查快照，不创建 run-state 账本。
 
 ## Requirements
 

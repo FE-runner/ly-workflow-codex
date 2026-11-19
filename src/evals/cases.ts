@@ -54,46 +54,6 @@ const APPLY_TASKS_CHECKED = [
   '- [ ] 1.3 补充验证。',
   '',
 ].join('\n')
-const APPLY_RUN_STATE_CHECKED = [
-  '---',
-  'lyx:',
-  '  schemaVersion: 1',
-  '  change: eval-change',
-  '  stage: apply',
-  '  executionMode: manual',
-  '  pipelineStage: review-code',
-  '  testModeDecision: null',
-  '  isolation:',
-  '    mode: none',
-  '    sourceBranch: main',
-  '    developmentBranch: null',
-  '    worktreePath: null',
-  '  lastGoodCommit: null',
-  '  completedTasks:',
-  '    done: 1',
-  '    total: 3',
-  '  review:',
-  '    planRounds: 1',
-  '    codeRounds: 0',
-  '    terminationType: normal',
-  '  nextSafeAction:',
-  '    command: "@lyx-review-code"',
-  '    skillPath: "../lyx-review-code/SKILL.md"',
-  '    change: eval-change',
-  '    condition: partial apply resolves before review-code',
-  '---',
-  '',
-  '# Run State',
-  '',
-  '## Task evidence',
-  '',
-  '- Completed tasks: 1/3',
-  '',
-].join('\n')
-const APPLY_RUN_STATE_EMPTY = APPLY_RUN_STATE_CHECKED
-  .replace('  stage: apply', '  stage: apply')
-  .replace('    done: 1', '    done: 0')
-  .replace('- Completed tasks: 1/3', '- Completed tasks: 0/3')
 export const REVIEW_CODE_CRITICAL = '[src/worker.ts:2] — executeTask 缺少异常捕获。'
 const REVIEW_CODE_WORKER = [
   'export async function executeTask(): Promise<void> {',
@@ -158,40 +118,13 @@ const FULL_AUTO_TASKS = [
   '',
 ].join('\n')
 
-const FULL_AUTO_RUN_STATE = [
-  '---',
-  'lyx:',
-  '  schemaVersion: 1',
-  '  change: eval-change',
-  '  stage: review-plan',
-  '  executionMode: full-auto',
-  '  pipelineStage: review-plan',
-  '  testModeDecision: null',
-  '  isolation:',
-  '    mode: none',
-  '    sourceBranch: main',
-  '    developmentBranch: null',
-  '    worktreePath: null',
-  '  lastGoodCommit: null',
-  '  completedTasks:',
-  '    done: 0',
-  '    total: 1',
-  '  review:',
-  '    planRounds: 0',
-  '    codeRounds: 0',
-  '    terminationType: null',
-  '  nextSafeAction:',
-  '    command: "@lyx-apply"',
-  '    skillPath: "../lyx-apply/SKILL.md"',
-  '    change: eval-change',
-  '    condition: review-plan normal then continue review-code after apply',
-  '---',
+const APPLY_CONTEXT = [
+  '# Context',
   '',
-  '# 运行状态',
+  '## 执行上下文',
   '',
-  '## 审查状态',
-  '',
-  '- 尚未开始',
+  '- 隔离方式：none；来源分支：main。',
+  '- 测试模式：normal。',
   '',
 ].join('\n')
 
@@ -290,7 +223,7 @@ export const skillEvalCases: SkillEvalCase[] = [
     skillCommands: ['apply'],
     hostConfig: { reviewExecutor: 'main' },
     prompt: '@lyx-apply eval-change',
-    passPatterns: [/run-state/i, /(不一致|差异|partial|部分应用)/i, /(停止|转人工)/],
+    passPatterns: [/(tasks|任务).*(不一致|差异)|partial|部分应用/i, /(停止|转人工)/],
     forbiddenPatterns: [/Completed tasks: 3\/3/, /任务 2.*(完成|勾选)/],
     notApplicableReason: null,
     async setup(fixture) {
@@ -313,7 +246,7 @@ export const skillEvalCases: SkillEvalCase[] = [
           '',
         ].join('\n'),
       )
-      await writeFile(fixture.repoDir, 'openspec/changes/eval-change/run-state.md', APPLY_RUN_STATE_EMPTY)
+      await writeFile(fixture.repoDir, 'openspec/changes/eval-change/context.md', APPLY_CONTEXT)
       await writeFile(fixture.repoDir, 'src/feature.ts', APPLY_SOURCE)
       commitAll(fixture.repoDir, 'fixture: seed eval change')
 
@@ -322,24 +255,21 @@ export const skillEvalCases: SkillEvalCase[] = [
         'openspec/changes/eval-change/tasks.md',
         APPLY_TASKS_CHECKED,
       )
-      await writeFile(fixture.repoDir, 'openspec/changes/eval-change/run-state.md', APPLY_RUN_STATE_CHECKED)
     },
     async verifySideEffects(fixture) {
       const source = readRepoFile(fixture.repoDir, 'src/feature.ts')
       const tasks = readRepoFile(fixture.repoDir, 'openspec/changes/eval-change/tasks.md')
-      const runState = readRepoFile(fixture.repoDir, 'openspec/changes/eval-change/run-state.md')
       const allowedPaths = new Set([
         'openspec/changes/eval-change/tasks.md',
-        'openspec/changes/eval-change/run-state.md',
+        'openspec/changes/eval-change/context.md',
       ])
       const paths = statusPaths(fixture.repoDir)
       const unexpectedPaths = paths.filter(path => !allowedPaths.has(path))
       return {
         passed: source === APPLY_SOURCE
           && tasks === APPLY_TASKS_CHECKED
-          && runState.startsWith(APPLY_RUN_STATE_CHECKED)
           && unexpectedPaths.length === 0,
-        evidence: `sourceUnchanged=${source === APPLY_SOURCE}; tasksExact=${tasks === APPLY_TASKS_CHECKED}; runStatePrefix=${runState.startsWith(APPLY_RUN_STATE_CHECKED)}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
+        evidence: `sourceUnchanged=${source === APPLY_SOURCE}; tasksExact=${tasks === APPLY_TASKS_CHECKED}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
       }
     },
   },
@@ -376,11 +306,6 @@ export const skillEvalCases: SkillEvalCase[] = [
           '- [ ] 1.2 按测试模式决定是否新增 `test/legacy.test.ts`；testMode=off 时跳过并记录。',
           '',
         ].join('\n'),
-      )
-      await writeFile(
-        fixture.repoDir,
-        'openspec/changes/eval-change/run-state.md',
-        '# Run State\n\n- Completed tasks: 0/2\n',
       )
       await writeFile(
         fixture.repoDir,
@@ -460,43 +385,8 @@ export const skillEvalCases: SkillEvalCase[] = [
       await writeFile(fixture.repoDir, 'openspec/changes/eval-change/context.md', '# Context\n\n页面需要查询用户。\n')
       await writeFile(
         fixture.repoDir,
-        'openspec/changes/eval-change/run-state.md',
-        [
-          '---',
-          'lyx:',
-          '  schemaVersion: 1',
-          '  change: eval-change',
-          '  stage: review-plan',
-          '  executionMode: manual',
-          '  pipelineStage: review-plan',
-          '  testModeDecision: null',
-          '  isolation:',
-          '    mode: none',
-          '    sourceBranch: main',
-          '    developmentBranch: null',
-          '    worktreePath: null',
-          '  lastGoodCommit: null',
-          '  completedTasks:',
-          '    done: 0',
-          '    total: 1',
-          '  review:',
-          '    planRounds: 0',
-          '    codeRounds: 0',
-          '    terminationType: in-progress',
-          '  nextSafeAction:',
-          '    command: "@lyx-review-plan"',
-          '    skillPath: "../lyx-review-plan/SKILL.md"',
-          '    change: eval-change',
-          '    condition: review pending',
-          '---',
-          '',
-          '# Run State',
-          '',
-          '## Review state',
-          '',
-          '- Round 1: not started',
-          '',
-        ].join('\n'),
+        'openspec/changes/eval-change/context.md',
+        '# Context\n\n## 执行上下文\n\n- 隔离方式：none；来源分支：main。\n- 测试模式：normal。\n',
       )
       const commit = commitAll(
         fixture.repoDir,
@@ -534,39 +424,16 @@ export const skillEvalCases: SkillEvalCase[] = [
       )
       await writeFile(
         fixture.repoDir,
-        'openspec/changes/eval-change/run-state.md',
+        'openspec/changes/eval-change/context.md',
         [
-          '---',
-          'lyx:',
-          '  schemaVersion: 1',
-          '  change: eval-change',
-          '  stage: review-code',
-          '  executionMode: manual',
-          '  pipelineStage: review-code',
-          '  testModeDecision: null',
-          '  isolation:',
-          '    mode: none',
-          '    sourceBranch: main',
-          '    developmentBranch: null',
-          '    worktreePath: null',
-          '  lastGoodCommit: null',
-          '  completedTasks:',
-          '    done: 1',
-          '    total: 1',
-          '  review:',
-          '    planRounds: 1',
-          '    codeRounds: 1',
-          '    terminationType: in-progress',
-          '  nextSafeAction:',
-          '    command: "@lyx-review-code"',
-          '    skillPath: "../lyx-review-code/SKILL.md"',
-          '    change: eval-change',
-          '    condition: adjudicate round 2',
-          '---',
+          '# Context',
           '',
-          '# Run State',
+          '## 执行上下文',
           '',
-          '## Review state',
+          '- 隔离方式：none；来源分支：main。',
+          '- 测试模式：normal。',
+          '',
+          '## 审查记录',
           '',
           `- Round 1 Critical: ${REVIEW_CODE_CRITICAL}`,
           '- Ruling: 不认可；依据：`src/runner.ts:5` 在调用链上层统一捕获并转换该异常。',
@@ -596,7 +463,7 @@ export const skillEvalCases: SkillEvalCase[] = [
       const worker = readRepoFile(fixture.repoDir, 'src/worker.ts')
       const runner = readRepoFile(fixture.repoDir, 'src/runner.ts')
       const allowedPaths = new Set([
-        'openspec/changes/eval-change/run-state.md',
+        'openspec/changes/eval-change/context.md',
         'openspec/changes/eval-change/review-findings.md',
       ])
       const paths = statusPaths(fixture.repoDir)
@@ -621,7 +488,7 @@ export const skillEvalCases: SkillEvalCase[] = [
     passPatterns: [
       /review-code/,
       /(?:0\s*Critical|未发现\s*Critical|未发现问题)/,
-      /(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)/,
+      /(?:全自动|全流程).*(?:完成|跑完|结束|正常终态|正常清零)|正常清零结束/,
     ],
     forbiddenPatterns: [/请回复.*继续/, /等待用户.*触发/],
     notApplicableReason: null,
@@ -650,27 +517,18 @@ export const skillEvalCases: SkillEvalCase[] = [
       await writeFile(
         fixture.repoDir,
         'openspec/changes/eval-change/context.md',
-        '# Context\n\n这是全自动跨阶段续跑 fixture；只实施上述 change 范围。\n',
-      )
-      await writeFile(
-        fixture.repoDir,
-        'openspec/changes/eval-change/run-state.md',
-        FULL_AUTO_RUN_STATE,
+        '# Context\n\n## 执行上下文\n\n- 隔离方式：none；来源分支：main。\n- 执行模式：full-auto（同一未中断回合）。\n\n这是全自动跨阶段续跑 fixture；只实施上述 change 范围。\n',
       )
       const proposeCommit = commitAll(
         fixture.repoDir,
         'docs(evals): propose full-auto change\n\nChange-Stage: propose\nChange-Name: eval-change',
       )
-      await writeFile(
-        fixture.repoDir,
-        'openspec/changes/eval-change/run-state.md',
-        FULL_AUTO_RUN_STATE.replace('  lastGoodCommit: null', `  lastGoodCommit: ${proposeCommit}`),
-      )
       await writeFile(fixture.homeDir, 'eval-metadata.txt', `propose=${proposeCommit}\n`)
     },
     async verifySideEffects(fixture) {
       const tasks = readRepoFile(fixture.repoDir, 'openspec/changes/eval-change/tasks.md')
-      const runState = readRepoFile(fixture.repoDir, 'openspec/changes/eval-change/run-state.md')
+      const context = readRepoFile(fixture.repoDir, 'openspec/changes/eval-change/context.md')
+      const runStateExists = existsSync(join(fixture.repoDir, 'openspec/changes/eval-change/run-state.md'))
       const source = readOptionalRepoFile(fixture.repoDir, 'src/feature.cjs')
       const testFile = readOptionalRepoFile(fixture.repoDir, 'test/feature.test.cjs')
       const applyCommit = runGit(fixture.repoDir, [
@@ -684,18 +542,19 @@ export const skillEvalCases: SkillEvalCase[] = [
       const paths = statusPaths(fixture.repoDir)
       const unexpectedPaths = paths.filter(path => !path.startsWith('openspec/changes/eval-change/'))
       const tasksChecked = !tasks.includes('- [ ]')
-      const runStateNormal = /terminationType:\s*normal|终止类型[：:]\s*normal/.test(runState)
+      const reviewRecorded = /##\s*审查记录|review-(?:plan|code)/.test(context)
       const applyCommitted = applyCommit.length > 0
       const featureImplemented = source.includes('feature') && source.includes('ok')
       const testImplemented = testFile.includes('node:test') && testFile.includes('feature')
       return {
         passed: tasksChecked
-          && runStateNormal
+          && reviewRecorded
+          && !runStateExists
           && applyCommitted
           && featureImplemented
           && testImplemented
           && unexpectedPaths.length === 0,
-        evidence: `tasksChecked=${tasksChecked}; runStateNormal=${runStateNormal}; applyCommit=${applyCommit || '(missing)'}; featureImplemented=${featureImplemented}; testImplemented=${testImplemented}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
+        evidence: `tasksChecked=${tasksChecked}; reviewRecorded=${reviewRecorded}; runStateExists=${runStateExists}; applyCommit=${applyCommit || '(missing)'}; featureImplemented=${featureImplemented}; testImplemented=${testImplemented}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
       }
     },
   },
@@ -711,7 +570,7 @@ export const skillEvalCases: SkillEvalCase[] = [
     passPatterns: [
       /review-code/,
       /(?:0\s*Critical|未发现\s*Critical|未发现问题)/,
-      /(?:全自动流程.*(?:完成|跑完|正常结束)|正常终态)/,
+      /(?:全自动|全流程).*(?:完成|跑完|结束|正常终态|正常清零)|正常清零结束/,
     ],
     forbiddenPatterns: [/请回复.*(?:隔离|全自动|手动)/, /等待用户.*触发/],
     notApplicableReason: null,
@@ -728,10 +587,7 @@ export const skillEvalCases: SkillEvalCase[] = [
         fixture.repoDir,
         'openspec/changes/eval-self-review/tasks.md',
       )
-      const runState = readOptionalRepoFile(
-        fixture.repoDir,
-        'openspec/changes/eval-self-review/run-state.md',
-      )
+      const runStateExists = existsSync(join(fixture.repoDir, 'openspec/changes/eval-self-review/run-state.md'))
       const document = readOptionalRepoFile(
         fixture.repoDir,
         'docs/self-review-continuation.md',
@@ -764,8 +620,8 @@ export const skillEvalCases: SkillEvalCase[] = [
       )
       const contextCreated = context.trim().length > 0
       const tasksChecked = tasks.length > 0 && !tasks.includes('- [ ]')
-      const selfReviewRecorded = /## 方案自审/.test(runState)
-      const runStateNormal = /terminationType:\s*normal|终止类型[：:]\s*normal/.test(runState)
+      const selfReviewRecorded = /## 方案自审/.test(context)
+      const reviewRecorded = /##\s*审查记录|review-(?:plan|code)/.test(context)
       const proposeCommitted = proposeCommit.length > 0
       const reviewCodeCommitted = reviewCodeCommit.length > 0
       const documentCreated = document.includes('propose-self-review continued')
@@ -773,12 +629,13 @@ export const skillEvalCases: SkillEvalCase[] = [
         passed: contextCreated
           && tasksChecked
           && selfReviewRecorded
-          && runStateNormal
+          && reviewRecorded
+          && !runStateExists
           && proposeCommitted
           && reviewCodeCommitted
           && documentCreated
           && unexpectedPaths.length === 0,
-        evidence: `contextCreated=${contextCreated}; tasksChecked=${tasksChecked}; selfReviewRecorded=${selfReviewRecorded}; runStateNormal=${runStateNormal}; proposeCommit=${proposeCommit || '(missing)'}; reviewCodeCommit=${reviewCodeCommit || '(missing)'}; documentCreated=${documentCreated}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
+        evidence: `contextCreated=${contextCreated}; tasksChecked=${tasksChecked}; selfReviewRecorded=${selfReviewRecorded}; reviewRecorded=${reviewRecorded}; runStateExists=${runStateExists}; proposeCommit=${proposeCommit || '(missing)'}; reviewCodeCommit=${reviewCodeCommit || '(missing)'}; documentCreated=${documentCreated}; unexpectedPaths=${unexpectedPaths.join(',') || '(none)'}`,
       }
     },
   },

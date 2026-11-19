@@ -12,9 +12,9 @@
 
 ## Required Evidence
 
-- 读取 `run-state.md` frontmatter 并以 git diff 核对审查范围。
+- 读取 `context.md`、apply commit trailer，并以 git diff 核对审查范围。
 - 对误报给出文件路径、行号或可执行命令组成的可核验依据。
-- 逐字记录审查 subagent 原文与主会话裁决。
+- 正常轮记录数量和修复文件，终止时展示审查 subagent 原文与裁决。
 - 第二轮相同 Critical 再次被拒绝时触发驳回硬线。
 
 ## Forbidden Actions
@@ -27,7 +27,7 @@
 
 - 首次误报裁决包含可核验依据。
 - 第二轮相同发现再次出现时停止自动修复并报告驳回硬线。
-- run-state frontmatter 与正文记录审查轮次、终止类型和统一提交状态。
+- context `## 审查记录` 记录审查轮次、终止类型和统一提交状态，且不创建 run-state。
 
 ## Evidence Record
 
@@ -37,6 +37,8 @@ Modified: passed — 消费固定第二轮报告，同一误报再次被拒后�
 
 Evidence: 2026-10-31 real runner, 8/8 overall; see `../results/2026-10-31.md` and `/tmp/lyx-skill-evals-2026-10-31/summary.json`.
 
-Latest current: passed — 2026-11-18 run read run-state frontmatter, consumed the fixed round-two report, and stopped at the rejection hardline with verifiable evidence. See `../results/2026-11-18-run-state-metadata.md`.
+Latest current: passed — consumed the fixed round-two report and stopped at the rejection hardline with verifiable evidence.
 
 Bundled-skill check: passed — current fixture installed `lyx-ponytail` / `lyx-code-simplification`; review-code still produced no style-only findings and stopped at the rejection hardline. See `../results/2026-11-18-bundled-simplification-skills.md`.
+
+Latest no-ledger checkpoint: passed — 2026-11-19 current run consumed the fixed round-two report, stopped at the rejection hardline, and did not create run-state. See `../results/2026-11-19-optimize-workflow-execution.md`.

@@ -88,9 +88,9 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     }
 
     const propose = readMain('propose.md')
-    expect(propose).toContain('### 0. 启动恢复（创建方案前）')
-    expect(propose).toContain('## 运行账本与证据')
-    expect(propose).toContain('方案自审逐项结论 MUST 写入')
+    expect(propose).toContain('### 0. 启动检查（创建方案前）')
+    expect(propose).toContain('## 执行上下文与证据')
+    expect(propose).toContain('压缩结论写入 context.md')
     expect(propose).toContain('SHALL NOT 作为独立 assistant 消息输出')
   })
 
@@ -107,7 +107,7 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(proposeMain).toContain('Planning boundary')
     expect(proposeMain).toContain('自审收口非终态')
     expect(proposeMain).toContain('## 方案自审')
-    expect(proposeMain).toContain('propose-self-review')
+    expect(proposeMain).toContain('## 执行上下文')
 
     expect(reviewPlanMain).toContain('lyx-apply/SKILL.md')
     expect(reviewPlanMain).toContain('完整读取同级 `lyx-apply/SKILL.md`')
@@ -119,9 +119,9 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
 
     expect(read('propose')).toContain('**下一阶段 bundle 读取协议（SHALL）**')
     expect(read('propose')).toContain('Planning boundary 从属规则（SHALL）')
-    expect(read('propose')).toContain('### 0. 启动恢复（创建方案前）')
+    expect(read('propose')).toContain('### 0. 启动检查（创建方案前）')
     expect(read('review-plan')).toContain('**apply bundle 读取（SHALL）**')
-    expect(read('propose')).toContain('下一阶段命令、同级 skill 路径、change 参数和继续条件')
+    expect(read('propose')).toContain('同一未中断全自动回合')
   })
 
   it('workflow templates load lyx-wrapped simplification skills with host-specific paths', () => {
@@ -519,11 +519,11 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(propose).toContain('SHALL NOT 生成测试文件、测试修改或测试命令任务')
     expect(propose).toContain('字段缺失、空白或非法时按 `normal` 处理')
     expect(propose).toContain('配置为 `ask` 时')
-    expect(propose).toContain('lyx.testModeDecision')
+    expect(propose).not.toContain('写入 `lyx.testModeDecision`')
     expect(propose).toContain('用户取消或环境无法交互时停止')
   })
 
-  it('workflow bundles carry run-state, implementer-readiness, debugging and evidence contracts', () => {
+  it('workflow bundles carry context, batching, implementer-readiness and evidence contracts', () => {
     const propose = read('propose.md')
     const apply = read('apply.md')
     const fix = read('fix.md')
@@ -531,14 +531,15 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     const reviewPlan = read('review-plan.md')
     const reviewCode = read('review-code.md')
 
-    expect(propose).toContain('已完成任务: <done>/<total>')
+    expect(propose).toContain('## 执行上下文')
     expect(propose).toContain('实施就绪')
     expect(propose).toContain('文件路径或可检索定位锚点')
 
-    expect(apply).toContain('启动恢复（SHALL）')
+    expect(apply).toContain('启动核对（SHALL）')
+    expect(apply).toContain('验证批次')
     expect(apply).toContain('裁决：<选择>')
     expect(apply).toContain('命令 + 退出码 + 结果摘要')
-    expect(apply).toContain('run-state.md')
+    expect(apply).toContain('## 实施说明')
 
     expect(reviewPlan).toContain('实施可执行性检查（SHALL）')
     expect(reviewPlan).toContain('命令 + 退出码 + 结果摘要')
@@ -546,8 +547,8 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
 
     expect(fix).toContain('连续 3 次修复仍未通过验证')
     expect(fix).toContain('架构、接口或原方案需要调整')
-    expect(archive).toContain('final testMode')
-    expect(archive).toContain('archive-ready')
+    expect(archive).toContain('最终 testMode')
+    expect(archive).toContain('## 执行上下文')
     expect(archive).toContain('命令 + 退出码 + 结果摘要')
   })
 
@@ -557,11 +558,9 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(apply).toContain('测试专用任务跳过、输出 `[跳过] <任务>（testMode=off）`')
     expect(apply).toContain('`- [x]` 且注明 `（testMode=off，已跳过）`')
     expect(apply).toContain('混合任务只跳过测试部分')
-    expect(apply).toContain('配置为 `ask` 时读取目标 change')
-    expect(apply).toContain('run-state.md` frontmatter `lyx.testModeDecision`')
-    expect(apply).toContain('继承并实际消费的 dirty `run-state.md` 决策')
+    expect(apply).toContain('优先复用同一未中断全自动回合')
+    expect(apply).toContain('SHALL NOT 写入 run-state')
     expect(apply).toContain('proposal/tasks 没有测试任务或测试执行计划')
-    expect(apply).toContain('非法枚举字符串')
 
     const archive = read('archive.md')
     expect(archive).toContain('testMode = "off"')
@@ -570,10 +569,9 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(archive).toContain('仍执行类型检查')
     expect(archive).toContain('SHALL NOT 执行 `build` / 生产构建')
     expect(archive).toContain('字段缺失、空白或非法时按 `normal` 处理')
-    expect(archive).toContain('配置为 `ask` 时读取目标 change')
-    expect(archive).toContain('run-state frontmatter `lyx.testModeDecision`')
-    expect(archive).toContain('继承 dirty run-state 决策')
-    expect(archive).toContain('最终决策来自 change 元数据')
+    expect(archive).toContain('本次 archive 调用询问一次')
+    expect(archive).toContain('旧 `.openspec.yaml lyx.testModeDecision` 为合法值时 MAY 只读复用')
+    expect(archive).toContain('选择只在本次调用内使用')
   })
 
   it('explore convergence hint routes small changes to fix and others to propose', () => {
@@ -668,35 +666,34 @@ describe.each(listRegisteredHosts())('%s host template invariants', (host) => {
     expect(propose).toContain('ISOLATION_SOURCE_BRANCH')
     expect(propose).toContain('DEVELOPMENT_BRANCH')
     expect(propose).toContain('WORKTREE_PATH')
-    expect(propose).toContain('run-state.md')
-    expect(propose).toContain('lyx.executionMode: full-auto')
+    expect(propose).toContain('同一未中断全自动回合')
+    expect(propose).toContain('SHALL NOT 创建、读取或更新 `run-state.md`')
     expect(propose).not.toContain('写入 `.openspec.yaml` 的 `lyx:`')
-    expect(propose).toContain('sourceBranch')
-    expect(propose).toContain('developmentBranch')
-    expect(propose).toContain('worktreePath')
+    expect(propose).toContain('来源分支')
+    expect(propose).toContain('开发分支')
+    expect(propose).toContain('worktree 绝对路径')
     expect(propose).toContain('detached HEAD')
     expect(propose).toContain('已保留、未清理')
 
     const archive = read('archive.md')
     expect(archive).toContain('归档后分支收尾')
-    expect(archive).toContain('run-state.md` frontmatter 的 `lyx.isolation`')
-    expect(archive).toContain('旧 change 没有 YAML frontmatter 时 MAY 只读回退')
-    expect(archive).toContain('sourceBranch')
-    expect(archive).toContain('developmentBranch')
+    expect(archive).toContain('当前会话保留的 propose 隔离选择')
+    expect(archive).toContain('归档后 `context.md` 的 `## 执行上下文`')
+    expect(archive).toContain('来源分支')
+    expect(archive).toContain('开发分支')
     expect(archive).toContain('worktreePath')
     expect(archive).toContain('git -C "<targetWorktree>" merge --no-ff "<developmentBranch>"')
     expect(archive).toContain('git -C "<targetWorktree>" worktree remove "<worktreePath>"')
     expect(archive).toContain('git -C "<targetWorktree>" branch -d "<developmentBranch>"')
     expect(archive).toContain('git -C "<targetWorktree>" worktree remove "<worktreePath>"')
     expect(archive).toContain('SHALL NOT 自动 `git push`')
-    expect(archive).toContain('sourceBranch` 为 `null`')
-    expect(archive).toContain('run-state 与旧 `.openspec.yaml` 都缺少 isolation metadata')
+    expect(archive).toContain('当前会话与 `context.md` 都缺少隔离信息')
     expect(archive).toContain('checkout / 切回 `targetBranch` 失败')
     expect(archive).toContain('`targetBranch` SHALL NOT 等于 `developmentBranch`')
     expect(archive.indexOf('展示确认前完成一致性校验')).toBeLessThan(archive.indexOf('### 3. 展示收尾提示'))
 
     const worktree = read('worktree.md')
-    expect(worktree).toContain(t('手动 `@lyx-worktree add` 不强制记录该 metadata'))
+    expect(worktree).toContain('不创建 run-state')
   })
 
   it('no template contains wrapper/lite/routing residue', () => {
