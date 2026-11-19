@@ -33,7 +33,7 @@
 
 ## 6. Specs, docs, and behavior evidence
 
-- [x] 6.1 Update `openspec/specs/execution-run-state/spec.md` Purpose/overview wording so the capability describes session-scoped state after this change while preserving the delta removal/addition contract; verify `openspec validate --changes optimize-workflow-execution` passes.
+- [x] 6.1 Update the delta Purpose/overview wording and the main spec Purpose only; leave main requirements for archive `Sync now`; verify `openspec validate --changes optimize-workflow-execution` passes.
 - [x] 6.2 Update `README.md`, `README.zh-CN.md`, `AGENTS.md`, `CLAUDE.md`, and `templates/CLAUDE.md` to describe no run-state, context-based execution metadata, current-call ask decisions, quiet full-auto reporting, batched verification, and cheap worktree baseline; verify both languages and both host descriptions agree.
 - [x] 6.3 Update `CHANGELOG.md`, `docs/skill-behavior-evals.md`, `evals/skills/propose.md`, `evals/skills/apply.md`, `evals/skills/review-plan.md`, and `evals/skills/review-code.md` with the breaking change and evidence scenarios; run affected real evals and record `evals/results/2026-11-19-optimize-workflow-execution.md`.
 

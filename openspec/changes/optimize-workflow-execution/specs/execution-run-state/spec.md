@@ -39,7 +39,7 @@
 ## ADDED Requirements
 
 ### Requirement: 新 change 不创建 run-state.md
-`@lyx-propose`、`@lyx-apply`、`@lyx-review-plan`、`@lyx-review-code` 与 `@lyx-archive` SHALL NOT 为新建或新进入的 change 创建、更新或删除 `run-state.md`。存量 `run-state.md` MAY 留在仓库中供历史查看，但新流程 SHALL NOT 将其作为执行状态、恢复状态、测试模式或分支收尾的输入。
+`@lyx-propose`、`@lyx-apply`、`@lyx-review-plan`、`@lyx-review-code` 与 `@lyx-archive` SHALL NOT 为新建或新进入的 change 创建、更新或删除 `run-state.md`。存量 `run-state.md` MAY 留在仓库中供历史查看，但新流程 SHALL NOT 将其作为执行状态、恢复状态或分支收尾的输入。旧 `.openspec.yaml lyx.testModeDecision` 是唯一例外：它可由 `test-mode` 能力在旧 change 上只读复用，但不得改写。
 
 #### Scenario: propose 创建新 change
 - **WHEN** 用户运行 `@lyx-propose`

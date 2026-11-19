@@ -19,14 +19,14 @@
 ## ADDED Requirements
 
 ### Requirement: 审查-修复循环、复用与终止条件
-当某一轮审查发现至少一个 Critical 时, `/ly:review-code` 与 `/ly:review-plan` 都必须（SHALL）由当前会话针对该轮全部 Critical 逐条裁决（见「Critical 裁决：认可即修复、不认可必须附可核验依据」）并执行认可部分的修复, 修复完成后必须（SHALL）自动进入下一轮审查。**第 2 轮起 SHALL 优先复用首轮审查 subagent**（Codex `send_input` / Claude `SendMessage`），并向它发送本轮修复说明、上一轮全部 Critical 逐字原文、`影响落地=是` 的 Warning 逐字原文、路径清单和 `context.md` 路径。只有复用失败（会话丢失、续跑报错或宿主不支持）时才 SHALL 重新 spawn 一个全新审查 subagent（非 fork，只携带 TASK），并在本轮报告说明失败原因。不要求用户手动触发。`/ly:review-code` 的修复对象是审查范围指向的应用代码文件（含为验证修复而必须新增/调整的测试文件）；`/ly:review-plan` 的修复对象是该 change 自己的 `proposal.md`/`design.md`/`tasks.md`以及该 change 目录下的 delta spec 文件（`specs/**/*.md`）——例如"spec 未覆盖 proposal 的 What Changes"这类 Critical, 修复方式就是编辑对应的 delta spec 文件, 不属于修复对象之外的私改。两个命令的每轮修复允许改动"当前轮 Critical 报告直接指向的条目"以及"修复该 Critical 所必需的直接依赖条目"（例如一个跨 artifact/跨文件的一致性问题, 需要同步改动多处才能真正修好）, 但不得借机重构、格式化或改动与该 Critical 无关的内容；命中"必需依赖"用时, 本轮报告必须（SHALL）逐项说明每处改动与该 Critical 的关联性。每轮修复完成后必须（SHALL）记录本轮实际改动的文件清单（含修改的 delta spec 文件, 如适用）。`/ly:review-code` 每轮修复后, 若项目存在对应的验证命令（测试/类型检查/构建）, 必须（SHALL）运行与该轮改动范围相称的验证, 验证失败必须作为停止条件处理；`/ly:review-plan` 每轮修复后必须（SHALL）运行 `openspec validate --changes <change-name>` 作为验证步骤, 验证失败同样作为停止条件。循环必须（SHALL）持续到满足以下任一终止条件, 并受一个全局轮数上限的兜底约束（见「全局轮数上限作为最后兜底」）：
+当某一轮审查发现至少一个 Critical 时, `/ly:review-code` 与 `/ly:review-plan` 都必须（SHALL）由当前会话针对该轮全部 Critical 逐条裁决（见「Critical 裁决：认可即修复、不认可必须附可核验依据」）并执行认可部分的修复, 修复完成后必须（SHALL）自动进入下一轮审查。**第 2 轮起 SHALL 优先复用首轮审查 subagent**，并向它发送本轮修复说明、上一轮全部 Critical 逐字原文、`影响落地=是` 的 Warning 逐字原文、路径清单和 `context.md` 路径。只有复用失败时才 SHALL 重新 spawn 一个非 fork 审查 subagent，并在本轮报告说明失败原因。`/ly:review-code` 的修复对象是审查范围指向的代码与必要测试；它 SHALL NOT 在循环内运行慢测试、类型检查或构建，SHALL 只确认修复落盘，完整慢验证由 archive 门禁执行一次。`/ly:review-plan` 的修复对象是该 change 的 artifacts 与 delta spec，每轮修复后 SHALL 运行 `openspec validate --changes <change-name>`，失败即停止。循环持续到正常清零或任一终止条件；全局轮数上限为 5 轮。
 
 **消费判据（四象限）**：每条 Warning 按 `可自动修复` 与 `影响落地` 两根轴决定处置——`可自动修复=是` 且 `影响落地=是` → 与 Critical 一并在本循环内修复，**不限轮次**，并参与正常清零；`可自动修复=是` 且 `影响落地=否` → 不自动修，落快照；`可自动修复=否` 且 `影响落地=是` → 立即停止循环转人工，SHALL NOT 静默落快照；两者皆否 → 落快照。不再存在"只消费首轮"或"降级为否"的路径。下列终止条件 2-6 SHALL 仍以 Critical 为唯一判定对象；条件 7-9 专门约束 `影响落地=是` 的条目。
 
 1. 某一轮审查 Critical 数为 0 **且所有 `影响落地=是` 的 Warning 都已自动修复**（正常清零）。`影响落地=否` 的条目 SHALL NOT 参与本项判定；`可自动修复=否` 且 `影响落地=是` 的条目按条件 8 停止，不进入清零
 2. 熔断：同一个 Critical（以"文件路径 + 问题类型 + 定位锚点（`/ly:review-code` 为函数名/路由/调用点；`/ly:review-plan` 为 artifact 内的具体条目/章节）"三者共同判定为同一问题, 不要求问题描述文字完全一致）在相邻两轮审查中都判定仍存在——即上一轮判定为 Critical 并已尝试修复的问题, 在紧接的下一轮复审中仍被判定未解决。若 当前会话 在上一轮对它的判断是"不认可"（未修复）, 相邻两轮再次出现 SHALL NOT 走熔断而走"驳回硬线"（见条件 5）
 3. 无法安全自动修复：某个 Critical 的修复需要产品/业务决策、依赖当前会话不具备的外部凭据、会改变已发布的公开 API 或接口契约, 或 当前会话 判断当前上下文不足以给出确认性修复——命中时不做猜测性修改
-4. 修复后验证失败：`/ly:review-code` 该轮修复后运行的测试/类型检查/构建未通过, 或 `/ly:review-plan` 该轮修复后 `openspec validate` 未通过
+4. 修复后验证失败：`/ly:review-plan` 该轮修复后 `openspec validate` 未通过，或修复文件无法落盘。`/ly:review-code` 不在循环内运行测试、类型检查或构建；其慢验证由 archive 门禁执行。
 5. **驳回硬线**（二选一命中即触发）：（a）逐条口径——当前会话 对某个 Critical 判断为不认可（附可核验依据）, 该 Critical 在下一轮审查中仍被提出, 且 当前会话 依然不认可；（b）整轮口径——连续 2 轮审查中, 当前会话 对当轮**全部** Critical 均不认可（零认可、零修复, 即使各轮 Critical 的判同键互不相同）——整轮口径防的是"主会话系统性驳回一切发现"的裁决失效, 命中任一口径立即停止循环, 报告并列展示审查 subagent 各轮原始发现与 当前会话 各轮可核验依据, 判定需要人工介入, 不得继续自动修复或自动放弃
 6. 审查对象类型持续系统性误判:连续 3 轮（含本轮）审查中每一轮的全部 Critical 都被 当前会话 判定为同一大类系统性误判——即审查 agent 反复以"该轮 Critical 所依据的类型不属于当前命令的审查范畴"为由被 当前会话 判定不认可（例如 `/ly:review-plan` 连续 3 轮的 Critical 均以"代码库尚未实现该方案条目"为理由），不要求这 3 轮之间 Critical 的文件/类别/锚点互相一致, 只要求"判定为不认可的原因类型"在这 3 轮中一致
 7. **影响项熔断**：同一条 `影响落地=是` 的 Warning（判同键采用与上一条 Critical 相同的三元组：文件路径 + 问题类别 + 定位锚点）在相邻两轮审查中仍被判定存在 → 立即停止循环转人工；影响项 SHALL NOT 被降级为「否」或静默放行
@@ -54,7 +54,7 @@
 - **THEN** 命令如实报告该提交及其影响，仍以固定基线重新计算审查范围，不静默忽略，也不仅因此自动终止
 
 #### Scenario: 一轮修复后 Critical 清零（review-code）
-- **WHEN** `/ly:review-code` 第一轮审查发现 2 个 Critical, 当前会话 修复后自动触发第二轮审查, 第二轮 Critical 数为 0, 且两轮修复后的验证均通过
+- **WHEN** `/ly:review-code` 第一轮发现 2 个 Critical，主会话修复并将改动落盘后触发第二轮，第二轮 Critical 数为 0
 - **THEN** 循环在第二轮结束, 命令报告"本次已自动修复 2 个 Critical", 列出第二轮的 Warning/Info, 不再触发第三轮
 
 #### Scenario: 一轮修复后 Critical 清零（review-plan）
@@ -86,8 +86,8 @@
 - **THEN** 命令不做猜测性修改, 立即停止循环, 报告 Critical 原因及无法安全修复的理由
 
 #### Scenario: 修复后验证失败, 触发停止
-- **WHEN** review-code 某一轮修复后运行测试失败；或 review-plan 该轮修复后 `openspec validate` 报错
-- **THEN** 命令停止循环, 不再继续下一轮, 报告本轮改动文件及验证失败的具体错误
+- **WHEN** review-plan 该轮修复后 `openspec validate` 报错，或任一审查修复文件无法落盘
+- **THEN** 命令停止循环, 不再继续下一轮, 报告本轮改动文件及失败的具体错误
 
 #### Scenario: 循环中途 Warning/Info 变化不影响终止判定
 - **WHEN** 某一轮 Critical 清零、所有 `影响落地=是` 的条目已解决, 但 `影响落地=否` 的 Warning 数量较上一轮增加

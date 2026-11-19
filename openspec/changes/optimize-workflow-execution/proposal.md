@@ -18,7 +18,7 @@
 - 同一全自动回合不再执行每阶段完整恢复扫描；新用户回合只从当前 Git、`tasks.md`、`context.md` 和审查快照读取必要事实。
 - worktree baseline 默认改为低成本可用性检查（依赖状态 + typecheck/项目声明的 smoke check），不默认运行完整测试套件；完整测试留给 archive 门禁。
 - `testMode = ask` 决策改为同一未中断全自动回合内复用；新的直接命令调用、新用户回合或中断后重新询问。显式配置 `normal` / `off` 仍是推荐的无交互路径。
-- 更新 lifecycle 模板、宿主产物、模板断言、行为评测、README、AGENTS、CLAUDE 和主 spec 的对称说明。
+- 更新 lifecycle 模板、宿主产物、模板断言、行为评测、README、AGENTS、CLAUDE；主 spec 的 Purpose 同步说明，Requirements 由归档 `Sync now` 合并。
 
 ## Capabilities
 

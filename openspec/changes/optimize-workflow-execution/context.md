@@ -42,6 +42,7 @@
 ## 审查记录
 
 - review-plan：4 轮正常清零；第 1 轮 3 Critical + 1 影响落地 Warning，第 2 轮 2 Critical + 2 影响落地 Warning，第 3 轮 1 影响落地 Warning，第 4 轮无 Critical / 无影响落地 Warning。
+- review-code：3 轮正常清零；第 1 轮 2 Critical + 4 影响落地 Warning，第 2 轮 1 Critical + 1 影响落地 Warning，第 3 轮无 Critical / 无影响落地 Warning。
 
 ## 实施说明
 

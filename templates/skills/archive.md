@@ -23,7 +23,7 @@ argument-hint: '[<change-name>]'
 配置为 `normal` / `off` 时直接作为最终模式。配置为 `ask` 时，旧 `.openspec.yaml lyx.testModeDecision` 为合法值时 MAY 只读复用且不写回；否则本次 archive 调用询问一次。选择只在本次调用内使用，SHALL NOT 写入 run-state。用户取消或环境无法交互时停止，不执行验证或归档。
 
 - 最终模式为 `normal`：对当前工作区执行一次项目验证，覆盖测试 / 类型检查两类。
-- 最终模式为 `testMode = "off"`：跳过测试类别，仍执行类型检查，并在报告中明确注明“testMode=off，测试已跳过”；来源为配置时注明宿主默认或项目配置来源，来源为 `ask` 决策时注明“最终决策来自 change 元数据”。
+- 最终模式为 `testMode = "off"`：跳过测试类别，仍执行类型检查，并在报告中明确注明“testMode=off，测试已跳过”。来源必须如实区分：项目配置、宿主默认、旧 `.openspec.yaml lyx.testModeDecision` 只读复用或本次 archive 调用询问。
 - SHALL NOT 执行 `build` / 生产构建；项目提供 `scripts.build` 时也跳过并在报告中注明生产构建不在归档门禁范围。
 
 - 按项目实际提供的脚本选择（例如 `package.json` 的 `scripts.test` / `scripts.typecheck`，或项目 README/AGENTS.md 声明的等价命令）。
