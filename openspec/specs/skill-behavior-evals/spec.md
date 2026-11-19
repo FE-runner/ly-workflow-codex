@@ -65,7 +65,7 @@
 - **THEN** 被测 agent 开始询问必需决策（按模板顺序通常先问隔离方式），未获确认前不写目标 change 目录；停在第一个未决问题即通过，不要求单轮问完全部问题或完成后续确认/commit
 
 ### Requirement: 评测结果形成仓库内可审计报告
-实际执行 baseline/current 评测后，仓库 SHALL 保存精简报告，列出运行命令、运行环境、每个 case/version 的 passed/failed/not-executed 状态和关键证据，并把 baseline/current 结论与报告引用回写到四个场景文件的 `Evidence Record`。原始 transcript MAY 保存在临时目录，但 SHALL NOT 提交凭据、完整环境、cookie 或无关的用户数据。实现该评测的 change SHALL 在 apply 阶段实际运行四个场景的两个版本，并在 `run-state.md` 记录命令、退出码、通过/失败数量和失败原因。
+实际执行 baseline/current 评测后，仓库 SHALL 保存精简报告，列出运行命令、运行环境、每个 case/version 的 passed/failed/not-executed 状态和关键证据，并把 baseline/current 结论与报告引用回写到四个场景文件的 `Evidence Record`。原始 transcript MAY 保存在临时目录，但 SHALL NOT 提交凭据、完整环境、cookie 或无关的用户数据。实现该评测的 change SHALL 在 apply 阶段运行本 change 修改过的 propose / apply / review-plan / review-code fixture 对应场景的两个版本；环境不可用时按既有规则记录 `not-executed` 与原因。证据 SHALL 写入最终报告、场景 `Evidence Record` 或阶段 commit 正文；SHALL NOT 创建或更新 `run-state.md`。
 
 #### Scenario: 八个评测单元全部执行
 - **WHEN** 四个场景分别运行 baseline 与 current
@@ -75,21 +75,28 @@
 - **WHEN** current 版本任一场景未满足通过条件
 - **THEN** 报告标记 failed，记录原始关键输出与失败原因，并停止宣称该行为已通过
 
-### Requirement: 全自动跨阶段续跑具备真实行为评测
-行为评测运行器 SHALL 支持一个场景安装并发现多个 `lyx-*` skill bundle。仓库 SHALL 至少维护一个全自动连续性场景，从 review-plan 正常清零开始，验证同一执行回合实际推进到 apply 并继续到 review-code；仅断言模板文本或阶段命令名称 SHALL NOT 视为通过。
+### Requirement: 全自动无账本流水线具备行为评测
+行为评测运行器 SHALL 至少维护一个不包含 `run-state.md` 的全自动场景：fixture 只提供 propose commit、tasks、context 与正常清零所需的审查输入，验证同一回合实际执行 review-plan → apply → review-code。评测 SHALL 同时检查最终终态、apply commit、review-code 结果和不存在新 run-state，但 SHALL NOT 要求中间阶段重复输出完整报告。
 
-#### Scenario: review-plan 自动推进完整流水线
-- **WHEN** fixture 已包含全自动 run-state、propose 阶段 commit 与可正常实施的 tasks，运行全自动连续性场景
-- **THEN** 被测 agent 在同一回合完成 review-plan、apply 阶段 commit 和 review-code，且最终报告与 fixture 副作用证明后两个阶段实际执行
+#### Scenario: 无 run-state 连续完成
+- **WHEN** fixture 包含完整 artifacts、tasks 和阶段 commit，但不包含 run-state
+- **THEN** 被测 agent 在同一回合完成受测流水线，生成预期的 apply/review 结果，且没有创建 run-state
 
-#### Scenario: 停在阶段报告时评测失败
-- **WHEN** 被测 agent 输出 review-plan 清零报告后结束，没有创建 apply 改动或 apply 阶段 commit
-- **THEN** 该场景判为 failed，并记录缺失的 apply 与 review-code 证据
+#### Scenario: 中间输出保持安静
+- **WHEN** 全自动路径正常跨阶段
+- **THEN** 评测允许每个中间阶段只输出一行状态，只要求一份最终报告承载关键结论
 
-#### Scenario: 环境无法调用模型时不算通过
-- **WHEN** Codex 调用缺失、超时、认证失败或最终输出为空
-- **THEN** 该场景标记为 not-executed，保留原因，不把静态断言当作全自动续跑通过
+#### Scenario: 停在中间报告时失败
+- **WHEN** agent 只输出 review-plan 清零摘要而未继续 apply
+- **THEN** 场景 failed，并报告缺失的 apply 证据
 
-#### Scenario: propose 自审后继续外部流水线
-- **WHEN** 空仓库中用户一次确认“留在当前分支 + 全自动”，运行 propose 自审连续性场景
-- **THEN** opsx artifacts 不作为终态；方案自审逐项结论写入 `run-state.md` 的 `## 方案自审` 且不发送独立自审消息，current 在同一回合产生 context、propose commit 并继续 review-plan、apply、review-code 到 run-state normal
+### Requirement: 多轮审查复用具备行为评测
+评测 SHALL 覆盖第 2 轮 review-plan 或 review-code 优先复用同一子代理的路径。fixture SHALL 提供首轮报告和复用失败可选分支，验证默认复用、复用失败后才重新 spawn，并保留增量 TASK 内容。
+
+#### Scenario: 第二轮优先复用
+- **WHEN** 首轮审查结束且存在 Critical 修复
+- **THEN** 评测要求第二轮 trace 出现 `send_input` / `SendMessage`，而不是新的 spawn
+
+#### Scenario: 复用失败后回退
+- **WHEN** fixture 声明复用错误
+- **THEN** 评测允许重新 spawn，并要求报告复用失败原因

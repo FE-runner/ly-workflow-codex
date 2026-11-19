@@ -271,133 +271,6 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 - **WHEN** 审查 subagent spawn 前读取 `~/.codex/lyx/config.toml` 失败（缺文件或解析错误）
 - **THEN** 命令明确提示"无法读取配置, 请运行 `lycx doctor` 检查", 按"配置状态未知"处理, SHALL NOT 按"未配置"静默继承回退
 
-### Requirement: 审查-修复循环与终止条件（review-code / review-plan 共用）
-当某一轮审查发现至少一个 Critical 时, `/ly:review-code` 与 `/ly:review-plan` 都必须（SHALL）由当前会话针对该轮全部 Critical 逐条裁决（见「Critical 裁决：认可即修复、不认可必须附可核验依据」）并执行认可部分的修复, 修复完成后必须（SHALL）自动进入下一轮审查——**第 2 轮起重新 spawn 一个全新审查 subagent（非 fork，只携带 TASK；TASK 仍按增量语义携带上一轮全部 Critical 逐字原文 + 路径清单 + 该 change 目录下 `context.md` 的路径引用）**。主会话 SHALL 不依赖"跨轮续聊"假设：子 agent 会话随主会话回合结构而存在，回合结束即失去访问能力，因此每轮都以独立 spawn + 同轮 wait 执行，SHALL NOT 假定上一轮 spawn 的 subagent 仍可被调用。不要求用户手动触发。`/ly:review-code` 的修复对象是审查范围指向的应用代码文件（含为验证修复而必须新增/调整的测试文件）；`/ly:review-plan` 的修复对象是该 change 自己的 `proposal.md`/`design.md`/`tasks.md`以及该 change 目录下的 delta spec 文件（`specs/**/*.md`）——例如"spec 未覆盖 proposal 的 What Changes"这类 Critical, 修复方式就是编辑对应的 delta spec 文件, 不属于修复对象之外的私改。两个命令的每轮修复允许改动"当前轮 Critical 报告直接指向的条目"以及"修复该 Critical 所必需的直接依赖条目"（例如一个跨 artifact/跨文件的一致性问题, 需要同步改动多处才能真正修好）, 但不得借机重构、格式化或改动与该 Critical 无关的内容；命中"必需依赖"用时, 本轮报告必须（SHALL）逐项说明每处改动与该 Critical 的关联性。每轮修复完成后必须（SHALL）记录本轮实际改动的文件清单（含修改的 delta spec 文件, 如适用）。`/ly:review-code` 每轮修复后, 若项目存在对应的验证命令（测试/类型检查/构建）, 必须（SHALL）运行与该轮改动范围相称的验证, 验证失败必须作为停止条件处理；`/ly:review-plan` 每轮修复后必须（SHALL）运行 `openspec validate --changes <change-name>` 作为验证步骤, 验证失败同样作为停止条件。循环必须（SHALL）持续到满足以下任一终止条件, 并受一个全局轮数上限的兜底约束（见「全局轮数上限作为最后兜底」）：
-
-**消费判据（四象限）**：每条 Warning 按 `可自动修复` 与 `影响落地` 两根轴决定处置——`可自动修复=是` 且 `影响落地=是` → 与 Critical 一并在本循环内修复，**不限轮次**，并参与正常清零；`可自动修复=是` 且 `影响落地=否` → 不自动修，落快照；`可自动修复=否` 且 `影响落地=是` → 立即停止循环转人工，SHALL NOT 静默落快照；两者皆否 → 落快照。不再存在"只消费首轮"或"降级为否"的路径。下列终止条件 2-6 SHALL 仍以 Critical 为唯一判定对象；条件 7-9 专门约束 `影响落地=是` 的条目。
-
-1. 某一轮审查 Critical 数为 0 **且所有 `影响落地=是` 的 Warning 都已自动修复**（正常清零）。`影响落地=否` 的条目 SHALL NOT 参与本项判定；`可自动修复=否` 且 `影响落地=是` 的条目按条件 8 停止，不进入清零
-2. 熔断：同一个 Critical（以"文件路径 + 问题类型 + 定位锚点（`/ly:review-code` 为函数名/路由/调用点；`/ly:review-plan` 为 artifact 内的具体条目/章节）"三者共同判定为同一问题, 不要求问题描述文字完全一致）在相邻两轮审查中都判定仍存在——即上一轮判定为 Critical 并已尝试修复的问题, 在紧接的下一轮复审中仍被判定未解决。若 当前会话 在上一轮对它的判断是"不认可"（未修复）, 相邻两轮再次出现 SHALL NOT 走熔断而走"驳回硬线"（见条件 5）
-3. 无法安全自动修复：某个 Critical 的修复需要产品/业务决策、依赖当前会话不具备的外部凭据、会改变已发布的公开 API 或接口契约, 或 当前会话 判断当前上下文不足以给出确认性修复——命中时不做猜测性修改
-4. 修复后验证失败：`/ly:review-code` 该轮修复后运行的测试/类型检查/构建未通过, 或 `/ly:review-plan` 该轮修复后 `openspec validate` 未通过
-5. **驳回硬线**（二选一命中即触发）：（a）逐条口径——当前会话 对某个 Critical 判断为不认可（附可核验依据）, 该 Critical 在下一轮审查中仍被提出, 且 当前会话 依然不认可；（b）整轮口径——连续 2 轮审查中, 当前会话 对当轮**全部** Critical 均不认可（零认可、零修复, 即使各轮 Critical 的判同键互不相同）——整轮口径防的是"主会话系统性驳回一切发现"的裁决失效, 命中任一口径立即停止循环, 报告并列展示审查 subagent 各轮原始发现与 当前会话 各轮可核验依据, 判定需要人工介入, 不得继续自动修复或自动放弃
-6. 审查对象类型持续系统性误判:连续 3 轮（含本轮）审查中每一轮的全部 Critical 都被 当前会话 判定为同一大类系统性误判——即审查 agent 反复以"该轮 Critical 所依据的类型不属于当前命令的审查范畴"为由被 当前会话 判定不认可（例如 `/ly:review-plan` 连续 3 轮的 Critical 均以"代码库尚未实现该方案条目"为理由），不要求这 3 轮之间 Critical 的文件/类别/锚点互相一致, 只要求"判定为不认可的原因类型"在这 3 轮中一致
-7. **影响项熔断**：同一条 `影响落地=是` 的 Warning（判同键采用与上一条 Critical 相同的三元组：文件路径 + 问题类别 + 定位锚点）在相邻两轮审查中仍被判定存在 → 立即停止循环转人工；影响项 SHALL NOT 被降级为「否」或静默放行
-8. **不可自动修的影响项**：某条 Warning `可自动修复=否` 且 `影响落地=是` → 立即停止循环转人工，SHALL NOT 落快照后继续执行
-9. **第 3 轮起新增影响项**：第 3 轮及以后审查中新出现 `影响落地=是` 的 Warning（其判同键不在前两轮出现过的集合中） → 立即停止循环转人工
-
-出现终止条件 2-9 中任一条时, 命令必须（SHALL）立即停止循环, 在报告中明确指出触发的具体条件、涉及的问题（文件、类别、锚点、判断依据）, 并说明需要人工介入, 不得继续自动修复；这些条件时命令 SHALL NOT 提交任何改动（见下方）——已产生的改动留在工作区交由人工处理。**终止报告的末尾 SHALL 附"下一步可用命令指引"**（如：可用 `@lyx-review-plan <change-name>` 重跑审查；`@lyx-apply` 暂不实施——按当前终止原因；改动保留在工作区，可先 `git diff` 查看），供用户在"断在明确节点、人工自行触发下一步"口径下续接。循环期间的 Warning 与 Info 发现不参与循环终止判定（`影响落地=是` 的 Warning 例外：它们参与条件 1 的正常清零判定，并触发条件 7-9）, 只在循环结束后的最终报告列出最后一轮的结果, 不跨轮次合并。
-
-**下一轮 TASK 保持增量传递语义**：每一轮修复后, 下一轮任务必须（SHALL）包含上一轮全部 Critical 的逐字原文, 以及"本轮改动文件 + 上一轮全部 Critical 指向的文件"的路径清单（`/ly:review-plan` 场景下含 delta spec 文件）——即使某条未修改, 其指向的文件路径也要纳入, 否则审查 agent 无法读取当前内容判断问题是否仍存在。**上一轮 `影响落地=是` 的 Warning 条目 SHALL 同样以逐字原文进入下一轮 TASK**（见「审查发现的影响落地标注」）。**每一轮 TASK（含第 2 轮起）必须（SHALL）同时保持该 change 目录下 `context.md` 的路径引用**——非 fork spawn 每轮都是全新子代理、无任何历史记忆，缺少该引用即彻底失去软上下文通道（见 `review-context-artifact` 能力「审查与实施 subagent 经 context.md 获取软上下文」）；`context.md` 仍只作背景引用，不计入"路径清单"所指的修复对象范围。若某条上一轮 Critical 位置字段缺失可解析路径, 命令必须保守处理（一般是将该轮已知的兜底路径集合纳入清单, 不得静默丢弃）。若上一轮某条 Critical 指向的文件被删除或重命名, 路径清单改用新路径并说明状态变化。命令必须（SHALL）指示审查 agent 自行读取路径当前内容, 判断:（a）上轮各 Critical 是否已解决；（b）本轮改动是否引入新问题。未被"本轮改动"和"上一轮任一 Critical 指向"覆盖的文件 SHALL NOT 重新整段传入。**非 fork spawn 不携带任何会话历史**——上一轮 Critical 的逐字原文与路径清单是审查 agent 判断"问题是否已解决"的唯一依据, 必须显式传, 避免审查 agent 依据模糊记忆断言。
-
-**报告逐轮展示审查 agent 原始发现**：`/ly:review-code`/`/ly:review-plan` 的每一轮审查调用（包括首轮 Critical 为 0 不进入循环的情况）都必须在报告中包含独立区块, 逐字展示该轮审查 subagent 返回的原始 Critical/Warning/Info 内容（不经概括、改写或合并）, 并与 当前会话 对该轮每条 Critical 的裁决（认可/不认可及可核验依据）并排列出（若该轮无 Critical, 只展示原文）。该区块必须在该轮审查调用返回后于本轮报告呈现。
-
-**报告格式**: 循环终止原因、总轮数、已修复的 Critical 摘要（含每轮改动文件清单）、最后一轮 Warning/Info。仅当全程无任何 Critical/Warning/Info 时才可以使用"未发现问题"表述；只要发现并修复过 Critical, 报告必须明确"本次已自动修复 N 个 Critical"。每条 Critical 摘要用相关人员易懂的语言概括问题与已做改动, 逐字原文区块作为补充材料并存。`影响落地=是` 的条目 SHALL 在报告中单独列出结果（已修 / 触发停止转人工及依据）；被当前会话覆盖过任一标注的条目须逐条留痕。
-
-**审查修复循环期间不提交，快照提交为独立例外**：每一轮修复完成、验证通过后, SHALL NOT 立即为审查修复执行 git commit——改动保持在当前状态, 直到循环正常清零后由主会话统一提交一次（见「循环结束后统一提交, `--no-commit` 关闭最终提交」）；`review-findings.md` 按 `review-findings-snapshot` 的「快照提交」规则，在正常清零或任一非正常终止后独立提交；`--no-commit` 传入时统一提交与快照提交都不执行。循环期间发生任何非快照的中途提交（无论主会话手滑或外部因素）SHALL 如实报告，并仍以固定基线重新计算 `git diff <固定SHA>` 说明该中途 commit 是否落在审查范围内（核对 ≠ 替换基线），但不以此自动进入终止条件。
-
-#### Scenario: 第二轮重新 spawn 审查 subagent
-- **WHEN** `/ly:review-plan` 第一轮发现 Critical 并修复，进入第二轮
-- **THEN** 主会话重新 spawn 一个全新审查 subagent（非 fork, 只携带 TASK），TASK 增量携带第一轮全部 Critical 逐字原文、原路径清单与该 change 目录下 `context.md` 的路径引用，不假定第一轮 subagent 仍存活
-
-#### Scenario: 终止报告附下一步指引
-- **WHEN** `/ly:review-plan` 因熔断终止
-- **THEN** 终止报告在终止详情后列出下一步可用命令（如 `@lyx-review-plan <change-name>` 重跑），并说明改动保留在工作区、可先 `git diff` 查看
-
-#### Scenario: 循环期间发生意外提交
-- **WHEN** 审查-修复循环期间工作区出现一次非本循环统一提交的中途 commit
-- **THEN** 命令如实报告该提交及其影响（仍以固定基线重新计算 `git diff <固定SHA>`，核对该中途 commit 是否落在审查范围内，核对不等于替换基线），不静默忽略，也不仅因此自动终止
-
-#### Scenario: 一轮修复后 Critical 清零（review-code）
-- **WHEN** `/ly:review-code` 第一轮审查发现 2 个 Critical, 当前会话 修复后自动触发第二轮审查, 第二轮 Critical 数为 0, 且两轮修复后的验证均通过
-- **THEN** 循环在第二轮结束, 命令报告"本次已自动修复 2 个 Critical", 列出第二轮的 Warning/Info, 不再触发第三轮
-
-#### Scenario: 一轮修复后 Critical 清零（review-plan）
-- **WHEN** `/ly:review-plan` 第一轮审查在 `design.md` 发现 1 个 Critical（如"未注明范围"）, 当前会话 修改 `design.md` 后自动触发第二轮, `openspec validate` 通过, 第二轮 Critical 数为 0
-- **THEN** 循环在第二轮结束, 命令报告"本次已自动修复 1 个 Critical", 列出最后一轮 Warning/Info
-
-#### Scenario: 修复对象包含 delta spec 文件
-- **WHEN** `/ly:review-plan` 某一轮审查发现的 Critical 是"spec 的 Requirement 未覆盖 proposal 的 What Changes"（锚定在 `specs/<capability>/spec.md`）, 当前会话 判断认可
-- **THEN** 修复该 Critical 的方式是编辑该 delta spec 文件补对 Requirement/Scenario, 这被记录在改动文件清单中, 不视为走出修复对象范围
-
-#### Scenario: 修复后问题转移到不同文件或不同类别, 循环继续
-- **WHEN** 第一轮审查在 `a.ts` 发现一个"空指针"类 Critical, 当前会话 修复后, 第二轮审查在 `a.ts` 发现一个不同的“未处理异常”类 Critical（问题类型不同）
-- **THEN** 命令视为新问题, 不判定熔断, 继续处理新 Critical 并触发下一轮
-
-#### Scenario: 同一文件内两个独立的同类问题不被误判为熔断
-- **WHEN** 第一轮审查在 `c.ts` 的 `handleLogin` 发现“SQL 注入”类 Critical, 当前会话 修复后第二轮在同一 `c.ts` 但 `handleSearch`（不同锚点）又发现一条“SQL 注入”类 Critical
-- **THEN** 命令视为新问题（锚点不同）, 不判定熔断, 继续处理
-
-#### Scenario: 同一问题连续两轮未解决, 触发熔断
-- **WHEN** 第一轮审查在 `b.ts` 的 `parseInput` 判定“SQL 注入”类 Critical, 当前会话 认可并尝试修复, 第二轮在同一 `b.ts` 同一 `parseInput` 仍判同一条“SQL 注入”未解决
-- **THEN** 命令立即停止循环, 报告标注该问题文件/类别/锚点及两轮判定, 需要人工介入
-
-#### Scenario: 熔断场景同样适用于 review-plan
-- **WHEN** review-plan 第一轮审查判定 `proposal.md` 的“Purposes”章节与 tasks.md 不一致类 Critical, 当前会话 认可并修改后, 第二轮在同一章节与类别仍然判定存在
-- **THEN** 命令立即停止循环, 报告该问题所在 artifact/章节/类别及两轮判定, 转人工
-
-#### Scenario: Critical 需要业务决策, 判定为无法安全自动修复
-- **WHEN** 某一轮 Critical 是"该接口未做权限校验", 但修复方式依赖产品未明确的权限模型
-- **THEN** 命令不做猜测性修改, 立即停止循环, 报告 Critical 原因及“无法安全修复”的理由, 以及建议的人工方向
-
-#### Scenario: 修复后验证失败, 触发停止
-- **WHEN** review-code 某一轮修复后运行测试失败；或 review-plan 该轮修复后 `openspec validate` 报错
-- **THEN** 命令停止循环, 不再继续下一轮, 报告本轮改动文件, 及验证失败的具体错误, 需要人工介入
-
-#### Scenario: 循环中途 Warning/Info 变化不影响终止判定
-- **WHEN** 某一轮 Critical 清零、所有 `影响落地=是` 的条目已解决, 但 `影响落地=否` 的 Warning 数量较上一轮增加
-- **THEN** 循环仍按正常清零在该轮结束, 最终报告只列出最后一轮的 Warning, 不合并此前轮
-
-#### Scenario: 修复范围扩展到必需的依赖条目, 并说明关联性
-- **WHEN** review-plan 的一个 Critical “proposal.md 的 Impact 章节与 tasks.md 任务不一致”, 该 Critical 锚定 proposal.md, 但真正修复需同时改 `tasks.md`
-- **THEN** 当前会话 同时改 proposal.md 和 tasks.md, 本轮报告逐项说明改动与 Critical 的关联, 不视为违反修复范围
-
-#### Scenario: 连续 3 轮同类系统性误判, 触发新终止条件
-- **WHEN** review-plan 连续 3 轮的 Critical 都以“代码库尚未实现该方案条目”为理由（各轮具体任务不同）, 当前会话 每轮不认可并说明“方案阶段正常状态”
-- **THEN** 命令在第 3 轮后停止, 报告"审查对象类型持续系统性误判", 列出 3 轮原文与判定理由, 转人工（如检查角色提示词是否需要调整）
-
-#### Scenario: 系统性误判类别不连续, 不触发新终止条件
-- **WHEN** 第一、三轮 Critical 均以“代码库尚未实现”而被判不认可, 但第二轮是一条被认可并修复的真实文档缺陷
-- **THEN** 不触发“持续系统性误判”（未连续 3 轮), 循环按原有终止条件继续判定
-
-#### Scenario: 连续 2 轮全部驳回, 触发驳回硬线（整轮口径）
-- **WHEN** review-code 连续 2 轮审查中, 当前会话 对当轮全部 Critical 均不认可（第 1 轮 2 条、第 2 轮 1 条, 判同键互不相同, 每条均附可核验依据）
-- **THEN** 触发"驳回硬线"终止条件（整轮口径）, 立即停止循环, 报告并列展示 2 轮原文与 2 轮可核验依据, 说明需要人工裁决, SHALL NOT 进入第 3 轮
-
-#### Scenario: 部分认可部分驳回时不触发整轮口径
-- **WHEN** 连续 2 轮审查中, 每轮当前会话都认可并修复了至少 1 条 Critical（其余不认可）
-- **THEN** "驳回硬线"整轮口径不触发（未出现"全部驳回"轮）；被驳回条目若复现且再被驳回, 由逐条口径判定
-
-#### Scenario: 第二轮 TASK 路径清单覆盖改动文件与全部上一轮 Critical 指向的文件
-- **WHEN** review-code 第一轮 3 个 Critical, 当前会话 认可并修复 2 个（涉及 a.ts/b.ts）, 不认可第 3 个（指向 c.ts 未改动）
-- **THEN** 第二轮 TASK 包含: 该 3 条 Critical 逐字原文及路径清单 a.ts、b.ts、c.ts；其它未被本轮改动和未由任何上一轮 Critical 指向的文件不整体传入, 审查 agent 自行读取这 3 个文件判断前 2 条是否已解决、第 3 条是否存在
-
-#### Scenario: 跨文件/范围性 Critical 的路径列出全部相关文件
-- **WHEN** review-plan 第一轮“proposal.md Impact 与 tasks.md 范围不一致”（不存在单个目标文件）
-- **THEN** 该 Critical 的位置字段列出 proposal.md 与 tasks.md 两个路径；第二轮路径清单必须同时包含两个, 不取其一
-
-#### Scenario: Critical 位置字段缺失可解析路径, 保守纳入全部 artifact
-- **WHEN** 某轮一条 Critical 缺失可解析路径（角色提示词未被遵守）
-- **THEN** 命令不得静默丢弃, 必须将该 change 目录全部 artifact/delta spec 路径统一纳入下一轮路径清单, 并在报告中说明“该条 Critical 缺少路径, 已扩大范围”
-
-#### Scenario: 每轮报告展示 Codex 原始发现与 当前会话 判定的并排对照
-- **WHEN** 某轮返回 2 个 Critical: 当前会话 认可第 1 个并修改 `design.md`, 不认可第 2 个（附可核验依据）
-- **THEN** 本轮报告“逐字原文”区块展示 2 条原文, 并排展示 当前会话 对每条裁决及依据, 用户直接对照
-
-#### Scenario: 第 2 轮重新 spawn 全新审查 subagent
-- **WHEN** `/ly:review-plan` 第 2 轮重新 spawn 一个全新审查 subagent（非 fork, 无会话历史）
-- **THEN** TASK 仍包含上一轮全部 Critical 逐字原文 + 路径清单 + `context.md` 路径引用（增量），不整段重新传入基线 artifact 全文；上一轮原文是审查 agent 判断"问题是否已解决"的唯一依据, SHALL NOT 因 TASK 精简而省略
-
-#### Scenario: 首轮 Critical 为 0 但存在影响项时进入验证轮
-
-- **WHEN** 首轮 Critical 数为 0 且存在 1 条 `影响落地=是` 且 `可自动修复=是` 的 Warning，当前会话修复该条后进入下一轮
-- **THEN** 下一轮按正常清零判定（Critical 为 0 且所有影响项已解决）结束循环，并在报告与统一提交中体现该条修复
-
-#### Scenario: 首轮影响项在次轮仍存在时停止转人工
-
-- **WHEN** 首轮 1 条 `影响落地=是` 条目经修复后，下一轮审查仍判定其存在，且 Critical 数为 0（无其他 Critical）
-- **THEN** 触发条件 7（影响项熔断），循环停止转人工；该条 SHALL NOT 被降级为「否」，也不再以正常清零结束
-
 ### Requirement: 全局轮数上限作为最后兜底
 `/ly:review-code` 与 `/ly:review-plan` 的审查-修复循环必须（SHALL）设置一个全局轮数上限（默认 5 轮）。达到该上限时, 无论熔断/驳回硬线/审查对象类型持续系统性误判等信号是否已触发, 命令必须（SHALL）立即停止循环, 报告"已达到全局轮数上限, 停止自动化, 转人工介入", 并附完整轮次轨迹（每轮 Critical 摘要）。该上限 SHALL NOT 作为正常场景下的主要终止信号, 仅用于兜底防止其余终止条件因某种原因未生效而导致的真正无限循环。**清零优先于轮数上限**：轮数上限的判定必须（SHALL）发生在"本轮审查结果确认为非清零"之后——若第 N 轮（包括恰好第 5 轮）审查结果本身是 Critical 清零, 命令必须（SHALL）按正常清零处理并输出清零报告, SHALL NOT 因为该轮恰好命中轮数上限而报告为"达到全局轮数上限"。
 
@@ -412,61 +285,6 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 #### Scenario: 第 5 轮恰好清零, 按清零处理不报达到上限
 - **WHEN** 循环第 1-4 轮各自发现新的 Critical 并修复, 第 5 轮审查 Critical 数为 0
 - **THEN** 命令报告本次已自动修复的 Critical 数量, 按正常清零结束, SHALL NOT 报告"已达到全局轮数上限"
-
-### Requirement: 循环结束后统一提交, `--no-commit` 关闭最终提交
-`/ly:review-code` 与 `/ly:review-plan` 默认（不传任何标志）在循环执行期间 SHALL NOT 提交——每一轮修复完成后只运行验证（`/ly:review-code` 为测试/类型检查/构建；`/ly:review-plan` 为 `openspec validate`），不执行 git commit，改动保持在工作区（修复改动一律留在工作区未暂存状态；审查目标本身的原始改动可能已由编排方 `/ly:propose`、`/ly:apply` 暂存，命令 SHALL NOT 主动改变文件的 staged 状态）。仅当循环以"正常清零"结束（某一轮 Critical 数为 0 且所有 `影响落地=是` 的 Warning 已解决）时，命令必须（SHALL）在输出报告之前对**审查目标全部文件**执行一次统一提交：先 `git add` 审查目标范围内的全部文件（`/ly:review-code` 为审查范围圈定的全部代码文件及本轮新写入或本轮开始时尚未提交、本轮实际消费的 `run-state.md` 决策；`/ly:review-plan` 为目标 change 目录下的 `proposal.md`/`design.md`/`tasks.md`、全部 delta spec 文件及同一口径的 `run-state.md`），再执行一次 commit（仅暂存并提交这些文件，不做范围外的 `git add`）。
-
-统一提交的 commit message SHALL 采用 `commit-conventions` 定义的结构：CC 前缀为 `fix(<scope>): <subject>`，subject 含目标标识与总轮次说明（例如"review-plan 反馈修复（2 轮）"），末尾带 trailer——`/ly:review-plan` 用 `Change-Stage: review-plan-fix`，`/ly:review-code` 用 `Change-Stage: review-code-fix`，两者均带 `Change-Name: <change-name>`。
-
-当 `run-state.md` 仅因记录 `ask` 决策而修改时，该文件属于审查阶段统一提交的强制辅助目标，即使它不在普通代码 diff 或 artifact 清单中。若本轮没有 Critical/Warning 修复，但 run-state 决策被新写入，SHALL 创建一次仅包含该实际状态修改的 commit，SHALL NOT 以“无实际改动”为由跳过。
-
-**审查目标原始改动的提交归属**：`/ly:review-code` 的审查目标是**审查范围圈定的全部文件**——有 apply 阶段 commit 时为该 commit 的差异（`git show <commit>`）叠加循环期间未提交的修复；仅在无 apply 阶段 commit 的退化场景下才是"当前工作区尚未提交的变更"（`git diff HEAD` 圈定的范围）。两种场景下，循环产生的修复都是在原始内容之上的修正，清零后的统一提交本来就应同时包含"原始内容"与"审查修正"，二者是同一个待提交单元，不需要也不应该被拆开。同样地，`/ly:review-plan` 的审查目标（该 change 的 artifact 与 delta spec 文件）允许在循环开始前处于未暂存或已暂存状态（`/ly:propose` 编排下产物已暂存、独立运行时可能未暂存）。**因此 `review-plan` 场景下不再存在任何"循环开始前已脏的文件被跳过提交"的隔离逻辑**——propose 产物是合法审查对象不是无关脏文件，用户手工编辑的 artifact 同样属于审查目标内容，一并提交；删除对"循环开始前未提交状态文件"的 `git status --porcelain` 预检查和隔离跳过行为。
-
-若循环从未认可并实际修复任何 Critical/Warning，且没有 `run-state.md` 决策写入或消费，SHALL NOT 创建空 commit；仅发现 Warning 但未认可修复、也未写入/消费决策时，不发生实际改动，同样不得创建空 commit。**仅修复 Warning 条目而不含任何 Critical 修复时，同样 MUST 执行这次统一提交**——判据是"是否发生实际文件改动"，不是"是否修过 Critical"。若循环以其余任一终止条件结束（熔断、无法安全修复、验证失败、驳回硬线、审查对象类型持续系统性误判）或达到全局轮数上限，命令 SHALL NOT 提交，已产生的改动（含已写入的决策）保持在工作区未提交状态，交由人工核实后自行决定是否提交——这些场景本身已经需要人工介入，不适合先自动提交半成品。当编排方（`/ly:propose` 或 `/ly:apply`）按自身规则决定对这类非清零终止的改动是否提交（见 `ly-propose-flow`、`ly-lifecycle-commands` 能力中的手动模式询问规则）时，是编排方层面在循环结束后对暂存区做提交决策，SHALL NOT 被理解为 review 循环自身的行为；循环自身的约束始终是"非清零 SHALL NOT 提交"。若"正常清零"后的这次统一提交本身执行失败（Git hook 拒绝、身份未配置、锁文件冲突等），必须（SHALL）在报告中如实说明该失败，视为"循环已清零, 但统一提交失败"的独立结果——循环本身不重新进入下一轮（因为已经清零, 没有下一轮的意义），但报告必须明确指出还需要人工手动完成这次提交。传入可选标志 `--no-commit` 时，命令 SHALL NOT 执行这次最终统一提交（不管循环以何种方式结束），已写入的决策保留为 dirty 并在报告中说明，后续同一 change 可复用。
-
-#### Scenario: review-plan 场景下, 编排方暂存的产物与循环修复一并统一提交
-- **WHEN** `/ly:propose` 将 `openspec/changes/<change-name>/` 下的产物 `git add` 暂存后调用 `/ly:review-plan <change-name>`; 循环期间因某条 Critical 修复了 `design.md` 与一份 delta spec, 最终清零
-- **THEN** 清零后的统一提交先 `git add` 该 change 目录下的全部 artifact 与 delta spec 文件（含编排方已暂存的产物与循环的修复改动）, 再执行一次 commit——产物与修复作为同一待提交单元一并提交, 不存在"循环开始前已脏被跳过"的隔离, commit message 带 `Change-Stage: review-plan-fix` trailer
-
-#### Scenario: review-code 场景下, 被审查的原始改动与修复一并提交
-- **WHEN** 用户在触发 `/ly:review-code` 前已有未提交的代码改动（这正是本次的审查对象), 循环期间修复了其中一个 Critical 后清零
-- **THEN** 统一提交时先把审查范围内全部文件 `git add`（用户原始改动 + 循环期间修复一并暂存）, 再执行 commit——二者作为同一份改动一起提交, 不做隔离——这是 `/ly:review-code` 的正常预期行为, commit message 带 `Change-Stage: review-code-fix` trailer
-
-#### Scenario: 正常清零后统一提交一次
-- **WHEN** 用户（或编排该命令的上层流程）执行 `/ly:review-plan <change-name>`（不带任何标志）, 第一轮发现 1 个 Critical 并修复、`openspec validate` 通过, 第二轮 Critical 数为 0
-- **THEN** 循环期间（第一轮修复后）不执行任何 commit; 第二轮清零后, 命令 `git add` 该 change 目录全部 artifact 与 delta spec 文件, 在输出报告之前统一提交, 提交信息形如 `fix(openspec): review-plan 反馈修复（1 轮）` 并带 `Change-Stage: review-plan-fix` / `Change-Name: <change-name>` trailer
-
-#### Scenario: 带 --no-commit 时不做最终提交
-- **WHEN** 用户执行 `/ly:review-code --no-commit`, 循环修复了若干 Critical 后清零结束
-- **THEN** 命令不执行任何 commit（循环期间和清零后都不提交）, 修改的文件保持在工作区未提交状态
-
-#### Scenario: 循环以非清零终止条件结束, 循环自身不提交已产生的改动
-- **WHEN** `/ly:review-code` 第一轮修复 1 个 Critical 后, 第二轮审查判定该问题仍存在（触发熔断）
-- **THEN** 循环自身不提交第一轮的改动, 已修改的文件保持在工作区未提交状态, 报告中说明需要人工核实是否保留这次修复; 是否提交改由编排方（`/ly:propose`/`/ly:apply` 手动模式）按自身规则询问用户后决定
-
-#### Scenario: 本轮无实际改动, 不创建空 commit
-- **WHEN** 循环从未有任何 Critical 或标注为「是」的 Warning 被 当前会话 判定为认可（因而从未发生实际文件改动), 最终以某种方式清零或终止
-- **THEN** 命令不执行 commit, 不产生空提交
-
-#### Scenario: 清零后的统一提交本身失败
-- **WHEN** 循环第二轮清零, 命令尝试执行统一提交, 但因 pre-commit hook 拒绝或 Git 身份未配置导致 commit 失败
-- **THEN** 命令不重新进入循环（因为已经清零), 在报告中如实说明这次统一提交失败的原始错误信息, 并指出需要人工手动完成提交
-
-#### Scenario: 仅自动修复「是」条目时同样统一提交
-- **WHEN** 首轮 Critical 数为 0、存在 2 条标注为「是」的 Warning, 当前会话修复后第 2 轮复审确认已解决并按正常清零结束
-- **THEN** 命令 MUST 执行统一提交（判据是发生了实际文件改动），提交信息带该命令对应的 `Change-Stage` trailer 与 `Change-Name: <change-name>`, SHALL NOT 因"没有修过 Critical"而跳过提交
-
-#### Scenario: 仅写入 ask 决策时提交元数据
-- **WHEN** review 在 `ask` 下写入 run-state `testModeDecision`，本轮没有其他 Critical/Warning 修复
-- **THEN** 正常清零后创建仅含 `run-state.md` 决策修改的统一 commit
-
-#### Scenario: no-commit 或非清零时决策保持 dirty
-- **WHEN** review 写入决策后以 `--no-commit` 或非清零终止结束
-- **THEN** 决策文件保持未提交，报告说明 dirty 状态，后续同一 change 可复用
-
-#### Scenario: 恢复正常清零时提交历史 dirty 决策
-- **WHEN** 前次 review 非清零终止留下 dirty 决策，本次 review 读取该决策后正常清零
-- **THEN** 统一提交范围包含 `run-state.md`，即使本次没有新写入决策
 
 ### Requirement: 审查执行者可切换（main / subagent）
 
@@ -654,63 +472,12 @@ review-plan 与 review-code 两个审查关卡 SHALL 各 spawn **1 个**审查 s
 - **WHEN** 审查者把某条 Warning 标注为 `影响落地：否`，当前会话依据"该条会导致验收场景失败"覆盖为「是」
 - **THEN** 报告逐条列出该条目、原标注「否」、覆盖后取值「是」与上述理由
 
-### Requirement: review 在 ask 模式下使用 change 决策
-
-`@lyx-review-plan` 与 `@lyx-review-code` SHALL 在开始测试相关判级前解析 effective 配置 `testMode` 与目标 change 的 run-state `testModeDecision`。effective 配置为 `ask` 且决策为 `normal` / `off` 时，审查 SHALL 使用该决策；目标 change 没有 YAML frontmatter 时，MAY 只读回退 `.openspec.yaml` 的 `lyx.testModeDecision`。决策缺失、为 `null` 或为非法枚举字符串时，命令 SHALL 询问一次 `normal` / `off` 并把选择持久化到 run-state 后再审查。结构非法时停止并要求人工修复。
-
-最终决策为 `off` 时，审查 SHALL 继续遵守无测试模式例外；最终决策为 `normal` 时，测试风险策略照常适用。任何因 `ask` 写入 `run-state.md` 的审查命令，在正常清零成功路径 SHALL 把该文件纳入统一 commit；若本轮没有审查修复，但决策元数据被新写入，SHALL 为该实际改动创建一次 commit。`--no-commit`、非清零终止或 commit 失败时，决策允许保留为 dirty 并由报告说明，后续同一 change 可复用。
-
-新字段以 run-state frontmatter 为主；旧 `.openspec.yaml` 只在兼容回退时读取，SHALL NOT 被审查流程改写。run-state frontmatter 不可读或 YAML 解析失败时，审查 SHALL 在询问/写入/测试相关判级前停止并要求人工修复，SHALL NOT 将文件当作字段缺失覆盖。需要回退旧 `.openspec.yaml` 时，该文件不可读或解析失败同样 SHALL 阻断。
-
-#### Scenario: review 使用已保存 off
-- **WHEN** effective 配置为 `ask`，run-state 保存 `testModeDecision: "off"`
-- **THEN** review-plan / review-code 不产生测试缺失类发现，也不重复询问
-
-#### Scenario: review 使用已保存 normal
-- **WHEN** effective 配置为 `ask`，run-state 保存 `testModeDecision: "normal"`
-- **THEN** review 按风险测试策略判定测试相关发现
-
-#### Scenario: review 补问并提交决策
-- **WHEN** effective 配置为 `ask`，change 缺少决策，用户在 review-plan 中选择 `off`
-- **THEN** review 写入 run-state 的 `testModeDecision: "off"`，并在正常清零时把 `run-state.md` 纳入统一 commit
-
-#### Scenario: 无其他修复时仍提交决策
-- **WHEN** review-code 在 `ask` 下补问并写入决策，但本轮没有 Critical 或其他修复
-- **THEN** 命令仍提交仅含 `run-state.md` 决策修改的阶段 commit，使工作区恢复干净
-
-#### Scenario: 旧活跃 change 只读回退
-- **WHEN** run-state 没有 `testModeDecision`，目标旧 change 的 `.openspec.yaml` 保存 `lyx.testModeDecision = "off"`
-- **THEN** review 使用 `off`，且不修改 `.openspec.yaml`
-
-#### Scenario: review 未获得回答时停止
-- **WHEN** effective 配置为 `ask` 且决策缺失，用户取消或环境无法交互
-- **THEN** 审查在输出任何测试缺失类发现前停止，不默认按 normal / off 继续
-
-#### Scenario: run-state 不可读时停止
-- **WHEN** effective 配置为 `ask` 且目标 change 的 run-state frontmatter 不可读或解析失败
-- **THEN** review 停止，不询问后覆盖文件，不输出测试相关判级
-
-#### Scenario: YAML 不可读时停止
-- **WHEN** effective 配置为 `ask`，run-state 缺少决策且需要回退读取旧 `.openspec.yaml`，但该文件不可读或解析失败
-- **THEN** review 停止，不询问后覆盖文件，不输出测试相关判级
-
-#### Scenario: no-commit 保留决策
-- **WHEN** review 以 `--no-commit` 运行并写入 run-state 决策
-- **THEN** 决策保留为 dirty 文件，报告未提交状态，后续可复用
-
 ### Requirement: review-plan 检查实施可执行性
 `@lyx-review-plan` SHALL 审查 tasks 是否足以让一个无会话历史的实施者直接开始：文件或定位锚点、接口、验证命令、预期结果和独立审查边界必须明确。含糊任务或缺失验证属于方案审查发现；若文档自身无法给出答案且需要产品决策，SHALL 不得判为机械可自动修复。
 
 #### Scenario: 新实施者无法判断接口
 - **WHEN** tasks 提到一个跨模块接口但 proposal/design 未定义其参数或返回结构
 - **THEN** review-plan 报告影响落地的发现，并要求在方案中补齐接口
-
-### Requirement: 审查关卡读取 run-state 作为恢复事实
-review-plan 与 review-code 在开始和每轮循环前 SHALL 读取 `run-state.md` 中当前阶段、基线 commit、最近轮次和未决项，并用 git 事实核对。若账本与 git 不一致，命令 SHALL 在报告中说明并以 git 为准继续或停止；SHALL NOT 把账本当作用来替代真实 diff 的内容。
-
-#### Scenario: run-state 的 headCommit 过旧
-- **WHEN** run-state 记录的 HEAD 与当前 HEAD 不一致
-- **THEN** 审查报告说明差异，按既有基线锚定规则重新核对，不静默覆盖旧记录
 
 ### Requirement: 审查报告记录新鲜验证证据
 review-plan 与 review-code 的报告 SHALL 为正常清零和终止结论提供本轮可核验证据：执行的校验命令、退出码、关键输出摘要、审查基线和轮次。依赖 subagent 自报成功时，主会话 SHALL 核对 diff、文件清单或命令结果后再声明完成。慢测试仍由 archive 统一执行，审查阶段 SHALL NOT 声称没有运行的测试已经通过。
@@ -736,3 +503,171 @@ review-plan 与 review-code 的报告 SHALL 为正常清零和终止结论提供
 #### Scenario: 无具体简化收益不造发现
 - **WHEN** 本次 diff 已清晰可读，只是审查者偏爱另一种等价写法
 - **THEN** 不形成 Critical、Warning 或 Info，SHALL NOT 为证明已使用 skill 而制造纯风格发现
+
+### Requirement: 审查-修复循环、复用与终止条件
+当某一轮审查发现至少一个 Critical 时, `/ly:review-code` 与 `/ly:review-plan` 都必须（SHALL）由当前会话针对该轮全部 Critical 逐条裁决（见「Critical 裁决：认可即修复、不认可必须附可核验依据」）并执行认可部分的修复, 修复完成后必须（SHALL）自动进入下一轮审查。**第 2 轮起 SHALL 优先复用首轮审查 subagent**，并向它发送本轮修复说明、上一轮全部 Critical 逐字原文、`影响落地=是` 的 Warning 逐字原文、路径清单和 `context.md` 路径。只有复用失败时才 SHALL 重新 spawn 一个非 fork 审查 subagent，并在本轮报告说明失败原因。`/ly:review-code` 的修复对象是审查范围指向的代码与必要测试；它 SHALL NOT 在循环内运行慢测试、类型检查或构建，SHALL 只确认修复落盘，完整慢验证由 archive 门禁执行一次。`/ly:review-plan` 的修复对象是该 change 的 artifacts 与 delta spec，每轮修复后 SHALL 运行 `openspec validate --changes <change-name>`，失败即停止。循环持续到正常清零或任一终止条件；全局轮数上限为 5 轮。
+
+**消费判据（四象限）**：每条 Warning 按 `可自动修复` 与 `影响落地` 两根轴决定处置——`可自动修复=是` 且 `影响落地=是` → 与 Critical 一并在本循环内修复，**不限轮次**，并参与正常清零；`可自动修复=是` 且 `影响落地=否` → 不自动修，落快照；`可自动修复=否` 且 `影响落地=是` → 立即停止循环转人工，SHALL NOT 静默落快照；两者皆否 → 落快照。不再存在"只消费首轮"或"降级为否"的路径。下列终止条件 2-6 SHALL 仍以 Critical 为唯一判定对象；条件 7-9 专门约束 `影响落地=是` 的条目。
+
+1. 某一轮审查 Critical 数为 0 **且所有 `影响落地=是` 的 Warning 都已自动修复**（正常清零）。`影响落地=否` 的条目 SHALL NOT 参与本项判定；`可自动修复=否` 且 `影响落地=是` 的条目按条件 8 停止，不进入清零
+2. 熔断：同一个 Critical（以"文件路径 + 问题类型 + 定位锚点（`/ly:review-code` 为函数名/路由/调用点；`/ly:review-plan` 为 artifact 内的具体条目/章节）"三者共同判定为同一问题, 不要求问题描述文字完全一致）在相邻两轮审查中都判定仍存在——即上一轮判定为 Critical 并已尝试修复的问题, 在紧接的下一轮复审中仍被判定未解决。若 当前会话 在上一轮对它的判断是"不认可"（未修复）, 相邻两轮再次出现 SHALL NOT 走熔断而走"驳回硬线"（见条件 5）
+3. 无法安全自动修复：某个 Critical 的修复需要产品/业务决策、依赖当前会话不具备的外部凭据、会改变已发布的公开 API 或接口契约, 或 当前会话 判断当前上下文不足以给出确认性修复——命中时不做猜测性修改
+4. 修复后验证失败：`/ly:review-plan` 该轮修复后 `openspec validate` 未通过，或修复文件无法落盘。`/ly:review-code` 不在循环内运行测试、类型检查或构建；其慢验证由 archive 门禁执行。
+5. **驳回硬线**（二选一命中即触发）：（a）逐条口径——当前会话 对某个 Critical 判断为不认可（附可核验依据）, 该 Critical 在下一轮审查中仍被提出, 且 当前会话 依然不认可；（b）整轮口径——连续 2 轮审查中, 当前会话 对当轮**全部** Critical 均不认可（零认可、零修复, 即使各轮 Critical 的判同键互不相同）——整轮口径防的是"主会话系统性驳回一切发现"的裁决失效, 命中任一口径立即停止循环, 报告并列展示审查 subagent 各轮原始发现与 当前会话 各轮可核验依据, 判定需要人工介入, 不得继续自动修复或自动放弃
+6. 审查对象类型持续系统性误判:连续 3 轮（含本轮）审查中每一轮的全部 Critical 都被 当前会话 判定为同一大类系统性误判——即审查 agent 反复以"该轮 Critical 所依据的类型不属于当前命令的审查范畴"为由被 当前会话 判定不认可（例如 `/ly:review-plan` 连续 3 轮的 Critical 均以"代码库尚未实现该方案条目"为理由），不要求这 3 轮之间 Critical 的文件/类别/锚点互相一致, 只要求"判定为不认可的原因类型"在这 3 轮中一致
+7. **影响项熔断**：同一条 `影响落地=是` 的 Warning（判同键采用与上一条 Critical 相同的三元组：文件路径 + 问题类别 + 定位锚点）在相邻两轮审查中仍被判定存在 → 立即停止循环转人工；影响项 SHALL NOT 被降级为「否」或静默放行
+8. **不可自动修的影响项**：某条 Warning `可自动修复=否` 且 `影响落地=是` → 立即停止循环转人工，SHALL NOT 落快照后继续执行
+9. **第 3 轮起新增影响项**：第 3 轮及以后审查中新出现 `影响落地=是` 的 Warning（其判同键不在前两轮出现过的集合中） → 立即停止循环转人工
+
+出现终止条件 2-9 中任一条时, 命令必须（SHALL）立即停止循环, 在报告中明确指出触发的具体条件、涉及的问题（文件、类别、锚点、判断依据）, 并说明需要人工介入, 不得继续自动修复；这些条件时命令 SHALL NOT 提交任何改动（见下方）——已产生的改动留在工作区交由人工处理。**终止报告的末尾 SHALL 附"下一步可用命令指引"**（如：可用 `@lyx-review-plan <change-name>` 重跑审查；`@lyx-apply` 暂不实施——按当前终止原因；改动保留在工作区，可先 `git diff` 查看），供用户在"断在明确节点、人工自行触发下一步"口径下续接。循环期间的 Warning 与 Info 发现不参与循环终止判定（`影响落地=是` 的 Warning 例外：它们参与条件 1 的正常清零判定，并触发条件 7-9）, 只在循环结束后的最终报告列出最后一轮的结果, 不跨轮次合并。
+
+**下一轮 TASK 保持增量传递语义**：每一轮修复后, 下一轮任务必须（SHALL）包含上一轮全部 Critical 的逐字原文, 以及"本轮改动文件 + 上一轮全部 Critical 指向的文件"的路径清单（`/ly:review-plan` 场景下含 delta spec 文件）——即使某条未修改, 其指向的文件路径也要纳入, 否则审查 agent 无法读取当前内容判断问题是否仍存在。**上一轮 `影响落地=是` 的 Warning 条目 SHALL 同样以逐字原文进入下一轮 TASK**。复用失败而重新 spawn 时，每一轮 TASK SHALL 继续保持该 change 目录下 `context.md` 的路径引用；`context.md` 只作背景引用，不计入"路径清单"所指的修复对象范围。若某条上一轮 Critical 位置字段缺失可解析路径, 命令必须保守处理（一般是将该轮已知的兜底路径集合纳入清单, 不得静默丢弃）。若上一轮某条 Critical 指向的文件被删除或重命名, 路径清单改用新路径并说明状态变化。命令必须（SHALL）指示审查 agent 自行读取路径当前内容, 判断:（a）上轮各 Critical 是否已解决；（b）本轮改动是否引入新问题。未被"本轮改动"和"上一轮任一 Critical 指向"覆盖的文件 SHALL NOT 重新整段传入。
+
+**报告保持安静但有证据**：正常运行轮只 SHALL 记录轮次、Critical/Warning/Info 数量、修复文件清单和验证结果，不要求在终端逐字复制审查 subagent 全部原文。最终报告 SHALL 汇总最后一轮分级发现、每轮 Critical 修复摘要、审查基线和验证命令；触发终止条件时 SHALL 立即展示终止条件、相关原文和当前会话裁决依据。SHALL NOT 为展示完整历史而重复生成大段 Markdown；完整原文 MAY 保留在工具原始输出或临时 transcript 中。
+
+**审查修复循环期间不提交，快照提交为独立例外**：每一轮修复完成、验证通过后, SHALL NOT 立即为审查修复执行 git commit——改动保持在当前状态, 直到循环正常清零后由主会话统一提交一次（见「循环结束后统一提交, `--no-commit` 关闭最终提交」）；`review-findings.md` 按 `review-findings-snapshot` 的「快照提交」规则，在正常清零或任一非正常终止后独立提交；`--no-commit` 传入时统一提交与快照提交都不执行。循环期间发生任何非快照的中途提交（无论主会话手滑或外部因素）SHALL 如实报告，并仍以固定基线重新计算 `git diff <固定SHA>` 说明该中途 commit 是否落在审查范围内（核对 ≠ 替换基线），但不以此自动进入终止条件。
+
+#### Scenario: 第二轮优先复用审查 subagent
+- **WHEN** `/ly:review-plan` 第一轮发现 Critical 并修复，进入第二轮
+- **THEN** 主会话先通过 `send_input` / `SendMessage` 复用首轮 subagent，并发送增量 TASK；只有复用失败才重新 spawn，并在报告说明原因
+
+#### Scenario: 终止报告附下一步指引
+- **WHEN** `/ly:review-plan` 因熔断终止
+- **THEN** 终止报告在终止详情后列出下一步可用命令（如 `@lyx-review-plan <change-name>` 重跑），并说明改动保留在工作区、可先 `git diff` 查看
+
+#### Scenario: 循环期间发生意外提交
+- **WHEN** 审查-修复循环期间工作区出现一次非本循环统一提交的中途 commit
+- **THEN** 命令如实报告该提交及其影响，仍以固定基线重新计算审查范围，不静默忽略，也不仅因此自动终止
+
+#### Scenario: 一轮修复后 Critical 清零（review-code）
+- **WHEN** `/ly:review-code` 第一轮发现 2 个 Critical，主会话修复并将改动落盘后触发第二轮，第二轮 Critical 数为 0
+- **THEN** 循环在第二轮结束, 命令报告"本次已自动修复 2 个 Critical", 列出第二轮的 Warning/Info, 不再触发第三轮
+
+#### Scenario: 一轮修复后 Critical 清零（review-plan）
+- **WHEN** `/ly:review-plan` 第一轮审查在 `design.md` 发现 1 个 Critical, 当前会话 修改 `design.md` 后自动触发第二轮, `openspec validate` 通过, 第二轮 Critical 数为 0
+- **THEN** 循环在第二轮结束, 命令报告"本次已自动修复 1 个 Critical", 列出最后一轮 Warning/Info
+
+#### Scenario: 修复对象包含 delta spec 文件
+- **WHEN** `/ly:review-plan` 某一轮审查发现的 Critical 是 spec 的 Requirement 未覆盖 proposal 的 What Changes, 当前会话 判断认可
+- **THEN** 修复该 Critical 的方式是编辑该 delta spec 文件补对 Requirement/Scenario, 这被记录在改动文件清单中, 不视为走出修复对象范围
+
+#### Scenario: 修复后问题转移到不同文件或不同类别, 循环继续
+- **WHEN** 第一轮审查在 `a.ts` 发现一个"空指针"类 Critical, 当前会话 修复后, 第二轮审查在 `a.ts` 发现一个不同的“未处理异常”类 Critical
+- **THEN** 命令视为新问题, 不判定熔断, 继续处理新 Critical 并触发下一轮
+
+#### Scenario: 同一文件内两个独立的同类问题不被误判为熔断
+- **WHEN** 第一轮审查在 `c.ts` 的 `handleLogin` 发现“SQL 注入”类 Critical, 当前会话 修复后第二轮在同一 `c.ts` 但 `handleSearch` 又发现一条“SQL 注入”类 Critical
+- **THEN** 命令视为新问题（锚点不同）, 不判定熔断, 继续处理
+
+#### Scenario: 同一问题连续两轮未解决, 触发熔断
+- **WHEN** 第一轮审查在 `b.ts` 的 `parseInput` 判定“SQL 注入”类 Critical, 当前会话 认可并尝试修复, 第二轮仍判同一条“SQL 注入”未解决
+- **THEN** 命令立即停止循环, 报告标注该问题文件/类别/锚点及两轮判定, 需要人工介入
+
+#### Scenario: 熔断场景同样适用于 review-plan
+- **WHEN** review-plan 第一轮判定 `proposal.md` 的章节与 tasks.md 不一致类 Critical, 当前会话 认可并修改后, 第二轮仍判定存在
+- **THEN** 命令立即停止循环, 报告该问题所在 artifact/章节/类别及两轮判定, 转人工
+
+#### Scenario: Critical 需要业务决策, 判定为无法安全自动修复
+- **WHEN** 某一轮 Critical 是"该接口未做权限校验", 但修复方式依赖产品未明确的权限模型
+- **THEN** 命令不做猜测性修改, 立即停止循环, 报告 Critical 原因及无法安全修复的理由
+
+#### Scenario: 修复后验证失败, 触发停止
+- **WHEN** review-plan 该轮修复后 `openspec validate` 报错，或任一审查修复文件无法落盘
+- **THEN** 命令停止循环, 不再继续下一轮, 报告本轮改动文件及失败的具体错误
+
+#### Scenario: 循环中途 Warning/Info 变化不影响终止判定
+- **WHEN** 某一轮 Critical 清零、所有 `影响落地=是` 的条目已解决, 但 `影响落地=否` 的 Warning 数量较上一轮增加
+- **THEN** 循环仍按正常清零在该轮结束, 最终报告只列出最后一轮的 Warning
+
+#### Scenario: 修复范围扩展到必需的依赖条目, 并说明关联性
+- **WHEN** review-plan 的 Critical 锚定 proposal.md, 但真正修复需同时改 `tasks.md`
+- **THEN** 当前会话 同时改 proposal.md 和 tasks.md, 本轮报告逐项说明改动与 Critical 的关联
+
+#### Scenario: 连续 3 轮同类系统性误判, 触发新终止条件
+- **WHEN** review-plan 连续 3 轮的 Critical 都以“代码库尚未实现该方案条目”为理由, 当前会话 每轮不认可并说明“方案阶段正常状态”
+- **THEN** 命令在第 3 轮后停止, 报告"审查对象类型持续系统性误判", 列出 3 轮摘要与判定理由, 转人工
+
+#### Scenario: 系统性误判类别不连续, 不触发新终止条件
+- **WHEN** 第一、三轮 Critical 均以“代码库尚未实现”而被判不认可, 但第二轮是一条被认可并修复的真实文档缺陷
+- **THEN** 不触发“持续系统性误判”, 循环按原有终止条件继续判定
+
+#### Scenario: 连续 2 轮全部驳回, 触发驳回硬线（整轮口径）
+- **WHEN** review-code 连续 2 轮审查中, 当前会话 对当轮全部 Critical 均不认可且每条均附可核验依据
+- **THEN** 触发"驳回硬线"终止条件, 立即停止循环, 报告并列展示 2 轮原文与依据
+
+#### Scenario: 部分认可部分驳回时不触发整轮口径
+- **WHEN** 连续 2 轮审查中, 每轮当前会话都认可并修复了至少 1 条 Critical
+- **THEN** "驳回硬线"整轮口径不触发, 被驳回条目若复现且再被驳回, 由逐条口径判定
+
+#### Scenario: 第二轮 TASK 路径清单覆盖改动文件与全部上一轮 Critical 指向的文件
+- **WHEN** review-code 第一轮 3 个 Critical, 当前会话 认可并修复 2 个（涉及 a.ts/b.ts）, 不认可第 3 个（指向 c.ts）
+- **THEN** 第二轮 TASK 包含 3 条 Critical 逐字原文及路径清单 a.ts、b.ts、c.ts
+
+#### Scenario: 跨文件/范围性 Critical 的路径列出全部相关文件
+- **WHEN** review-plan 第一轮为 proposal.md Impact 与 tasks.md 范围不一致
+- **THEN** 该 Critical 的位置字段列出 proposal.md 与 tasks.md 两个路径；第二轮路径清单同时包含两个
+
+#### Scenario: Critical 位置字段缺失可解析路径, 保守纳入全部 artifact
+- **WHEN** 某轮一条 Critical 缺失可解析路径
+- **THEN** 命令将该 change 目录全部 artifact/delta spec 路径纳入下一轮路径清单, 并在报告说明已扩大范围
+
+#### Scenario: 正常轮报告保持安静
+- **WHEN** 某轮返回 2 个 Critical 和 3 个 Warning，均为修复或快照可处理
+- **THEN** 报告记录数量和最终结果，不在正常中间输出中逐字复制全部 Warning/Info
+
+#### Scenario: 复用失败后重新 spawn
+- **WHEN** `/ly:review-plan` 第 2 轮尝试复用首轮 subagent 但续跑失败
+- **THEN** 命令重新 spawn（非 fork，只携带 TASK），并在报告说明复用失败原因；TASK 仍包含上一轮 Critical 原文、路径清单与 context.md 引用
+
+#### Scenario: 首轮 Critical 为 0 但存在影响项时进入验证轮
+- **WHEN** 首轮 Critical 数为 0 且存在 `影响落地=是` 且 `可自动修复=是` 的 Warning，当前会话修复该条后进入下一轮
+- **THEN** 下一轮按正常清零判定结束循环，并在报告与统一提交中体现该条修复
+
+#### Scenario: 首轮影响项在次轮仍存在时停止转人工
+- **WHEN** 影响项修复后下一轮审查仍判定其存在，且 Critical 数为 0
+- **THEN** 触发影响项熔断，循环停止转人工
+
+### Requirement: review ask 决策使用当前调用
+review-plan 与 review-code 在 effective 配置为 `ask` 时 SHALL 优先复用同一未中断全自动回合已有的 `normal` / `off` 选择；没有可复用选择时 SHALL 询问一次，并在当前审查循环及正常清零提交内复用。命令 SHALL NOT 写入 run-state；新的直接命令调用、新用户回合或中断后 SHALL 重新询问。显式项目或宿主配置优先；旧 `.openspec.yaml lyx.testModeDecision` MAY 只读兼容但不改写。
+
+#### Scenario: 同一循环复用选择
+- **WHEN** effective 配置为 `ask`，用户在 review-code 第一轮选择 `off`
+- **THEN** 后续轮次继续使用 `off`，不重复询问
+
+#### Scenario: 新 review 调用重新询问
+- **WHEN** 用户稍后重新调用 `@lyx-review-code`
+- **THEN** 命令重新解析配置，并在仍为 ask 时重新询问
+
+### Requirement: 审查证据不依赖运行账本
+review-plan 与 review-code SHALL 在最终报告记录审查基线、轮次、最后一轮发现数量、修复文件和验证结果。正常运行轮 SHALL NOT 要求把每轮全部原文写入磁盘或重复输出；触发终止条件时 SHALL 展示相关原文与裁决依据。命令 SHALL NOT 创建 run-state 或其他审查状态文件。
+
+#### Scenario: 正常清零
+- **WHEN** 审查在第二轮清零
+- **THEN** 最终报告包含基线、两轮数量和修复文件，不创建 run-state
+
+#### Scenario: 终止
+- **WHEN** 审查触发驳回硬线
+- **THEN** 报告展示涉及 Critical 的原始文本和每轮裁决依据
+
+### Requirement: 审查正常清零后统一提交实际差异
+review-plan 与 review-code SHALL 在循环期间保持修复未提交；仅在正常清零时对审查目标内实际变化的文件执行一次统一提交。review-plan 的目标是该 change 的 artifacts 与 delta spec，review-code 的目标是审查范围代码与循环修复；`review-findings.md` 继续按快照规则独立提交。命令 SHALL NOT 因 ask 选择、run-state 或其他不存在状态文件创建额外 commit。非正常终止时 SHALL NOT 提交审查修复；`--no-commit` 时统一提交和快照提交均跳过。提交使用 `Change-Stage: review-plan-fix` 或 `Change-Stage: review-code-fix` trailer，并校验 `git show --name-only` 不超出目标范围。
+
+#### Scenario: review-plan 正常清零提交 artifacts
+- **WHEN** review-plan 修复了 design 和 delta spec 后清零
+- **THEN** 只提交该 change 的 artifacts 与 delta spec，不创建 run-state
+
+#### Scenario: review-code 正常清零提交代码修复
+- **WHEN** review-code 修复 Critical 后清零
+- **THEN** 只提交审查范围内的代码与必要测试修复
+
+#### Scenario: 本轮无实际变化
+- **WHEN** 审查正常清零但没有认可任何修复或 artifact 改动
+- **THEN** 不创建空 commit
+
+#### Scenario: 非清零终止
+- **WHEN** 审查触发驳回硬线、熔断或调用失败
+- **THEN** 修复改动留在工作区，不提交审查修复
+
+#### Scenario: no-commit
+- **WHEN** 用户传入 `--no-commit`
+- **THEN** 不执行统一提交或快照提交

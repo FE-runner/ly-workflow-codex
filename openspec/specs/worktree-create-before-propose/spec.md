@@ -103,47 +103,6 @@ worktree baseline 失败时，SHALL 报告失败摘要并询问用户：选择"�
 - **WHEN** 用户在 `~/.ly/worktrees/<项目名>/feature/login`（分支 `feature/login`）内 `opsx:propose` 生成的 change 名是 `add-user-auth`
 - **THEN** worktree 目录与分支保持 `feature/login` 不变，不因 change 名而重命名；change 产物 `openspec/changes/add-user-auth/` 落在该 worktree 内，apply/review 均在该 worktree 内完成
 
-### Requirement: propose 创建隔离时捕获并持久化 isolation metadata
-
-`/ly:propose` SHALL 在创建 worktree 或切新分支前捕获本次隔离信息，至少包含：
-
-- `isolation`: `worktree` / `branch` / `none`
-- `sourceBranch`: propose 开始时所在分支
-- `developmentBranch`: 本次开发分支；`isolation = none` 时可为空
-- `worktreePath`: worktree 绝对路径；仅 `isolation = worktree` 时存在
-
-捕获发生在隔离动作之前，因为 worktree/branch 动作早于 `opsx:propose` 生成 change 目录。待 `opsx:propose` 生成 change 并确认真实 change 名后，命令 SHALL 在初始化 `run-state.md` 时把捕获的 isolation metadata 写入其固定 YAML frontmatter，并随 change artifacts 一起提交。`isolation = none` 时 SHALL 仍记录 `sourceBranch` 与 `isolation: none`，便于后续判断无需收尾。该 metadata SHALL NOT 写入 `.openspec.yaml`。
-
-若隔离动作成功但 change 生成失败，命令 SHALL 报告已创建的隔离环境状态，SHALL NOT 自动合并或删除。若 propose 开始时处于 detached HEAD，命令 SHALL 停止并要求用户切到命名分支后再运行。
-
-#### Scenario: worktree 模式捕获后持久化完整 metadata
-- **WHEN** 用户选择隔离 worktree，来源分支为 `main`，开发分支为 `feature/login`，worktree 路径为 `/Users/ly/.ly/worktrees/project/feature/login`
-- **THEN** 命令在隔离前捕获这些值，并在 change 名确认后、propose commit 前把 `isolation: worktree`、`sourceBranch: main`、`developmentBranch: feature/login`、`worktreePath: /Users/ly/.ly/worktrees/project/feature/login` 写入 `run-state.md`
-
-#### Scenario: branch 模式记录来源和开发分支
-- **WHEN** 用户选择本项目切新分支，来源分支为 `main`，开发分支为 `feature/login`
-- **THEN** run-state 记录 `isolation: branch`、`sourceBranch: main`、`developmentBranch: feature/login`，不记录 `worktreePath`
-
-#### Scenario: none 模式记录无需收尾
-- **WHEN** 用户选择留在当前分支
-- **THEN** run-state 记录 `isolation: none` 与 `sourceBranch`，后续 archive SHALL NOT 提示合并或清理
-
-#### Scenario: 隔离成功但 change 生成失败
-- **WHEN** 用户选择隔离 worktree 且 worktree 创建成功，但 `opsx:propose` 未生成 change
-- **THEN** 命令报告已创建的 worktree 与分支，SHALL NOT 自动合并或删除
-
-#### Scenario: 已在 worktree 内发起 propose
-- **WHEN** 用户在某个 linked worktree 内运行 `/ly:propose`
-- **THEN** 命令在 run-state 记录 `isolation: worktree`、当前分支为 `developmentBranch`、当前 worktree 为 `worktreePath`；若无法确定 `sourceBranch`，run-state 标记来源缺失，archive 阶段要求用户选择目标分支或跳过
-
-#### Scenario: detached HEAD 下停止
-- **WHEN** 用户在 detached HEAD 状态运行 `/ly:propose`
-- **THEN** 命令停止并要求用户切到命名分支后再运行
-
-#### Scenario: .openspec.yaml 不承载隔离字段
-- **WHEN** propose 为新 change 写入 isolation metadata
-- **THEN** `.openspec.yaml` 只包含 OpenSpec 官方字段，不包含 `lyx:` 或 `x-lyx:`
-
 ### Requirement: 隔离 worktree 选项在无提交仓库中不可用
 
 `@lyx-propose` 在呈现隔离方式三选一之前 SHALL 执行 `git rev-parse --verify HEAD >/dev/null 2>&1`；无提交（unborn branch）时 SHALL 禁用"隔离 worktree"选项（或显式标注不可用），并在提示中说明需先创建 baseline commit 及恢复路径，SHALL NOT 把必然失败的选项当作可用选项呈现。SHALL NOT 因此禁用"本项目切新分支"与"留在当前分支"。本 Requirement 对「propose 在创建方案前询问一次是否切隔离 worktree，从当前分支切入」中的三选一呈现为权威：unborn 时该项标注不可用，其余两项照常。
@@ -171,3 +130,33 @@ worktree baseline 失败时，SHALL 报告失败摘要并询问用户：选择"�
 
 - **WHEN** 用户选择"本项目切新分支"且工作区有未提交改动，并选择 WIP commit
 - **THEN** 提交首行沿用 `chore(wip): 切分支前暂存工作区改动`
+
+### Requirement: propose 将隔离上下文记录到 context.md
+`@lyx-propose` SHALL 在 change 名确认后把当前隔离方式、来源分支、开发分支和 worktree 路径（如适用）作为人类可读条目写入 `context.md` 的 `## 执行上下文`。该 section SHALL 不包含 YAML frontmatter、阶段机、commit 队列或 next action。`isolation = none` 时 SHALL 记录来源分支和“无需收尾”。信息缺失时 SHALL 写“未知”并在报告说明，不得猜测。
+
+#### Scenario: worktree 隔离写入 context
+- **WHEN** 用户选择隔离 worktree，来源分支 `main`，开发分支 `feature/login`
+- **THEN** `context.md` 记录隔离方式、来源分支、开发分支与 worktree 绝对路径
+
+#### Scenario: 留当前分支写入 context
+- **WHEN** 用户选择留在当前分支
+- **THEN** `context.md` 记录 `isolation: none` 与当前来源分支，并注明归档无需自动清理
+
+#### Scenario: context 缺失隔离信息
+- **WHEN** 旧 change 没有执行上下文
+- **THEN** archive 不猜测来源分支，要求用户选择目标分支或跳过收尾
+
+### Requirement: worktree baseline 默认执行轻量检查
+worktree 创建并复制环境文件后，baseline SHALL 默认只验证依赖可用性，并运行项目提供的 typecheck 或明确声明的 smoke 命令；SHALL NOT 默认运行完整测试套件。项目没有 typecheck 或 smoke 命令时 SHALL 记录“未提供轻量 baseline”并继续，完整测试由 archive 门禁负责。用户显式要求完整 baseline 时 MAY 运行测试命令。
+
+#### Scenario: 项目提供 typecheck
+- **WHEN** 新 worktree 创建完成且项目定义 `typecheck`
+- **THEN** 只运行依赖可用性检查与 typecheck，不默认运行 `test`
+
+#### Scenario: 项目只有 test 脚本
+- **WHEN** 新 worktree 没有 typecheck 或 smoke 命令，只定义完整 `test`
+- **THEN** 默认记录轻量 baseline 不可用并继续，不自动运行完整测试
+
+#### Scenario: 用户要求完整 baseline
+- **WHEN** 用户显式要求完整 baseline
+- **THEN** 命令可运行测试套件，并把结果作为已知风险输入
